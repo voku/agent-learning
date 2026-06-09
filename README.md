@@ -190,3 +190,22 @@ Or use the local `Makefile`:
 ```bash
 make phpstan
 ```
+
+### CLI
+
+The Composer binary exposes the package workflow without requiring IT-Portal classes:
+
+```bash
+vendor/bin/agent-learning validate --root infra/doc/agent-learning
+vendor/bin/agent-learning prepare --root infra/doc/agent-learning --ticket ITPNG-1234
+vendor/bin/agent-learning proposal-validate --root infra/doc/agent-learning --proposal proposal.2026-06-08.001.json
+```
+
+`--root` may point either to the learning root itself or to a project root containing one of these directories:
+
+* `infra/doc/agent-learning`
+* `.agent-learning`
+* `docs/agent-learning`
+* `agent-learning`
+
+Zero-byte `.json` files are treated as extraction placeholders and skipped. Non-empty finding, proposal, and history records are validated strictly.
