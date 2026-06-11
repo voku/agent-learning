@@ -4,7 +4,7 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
-## [Unreleased]
+## [0.0.2] - 2026-06-11
 
 ### Added
 
