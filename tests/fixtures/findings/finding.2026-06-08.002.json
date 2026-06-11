@@ -15,7 +15,7 @@
     }
   ],
   "hypothesis": "A resolver that accepts either a project root or the learning root makes the package reusable.",
-  "validated_conclusion": "The resolver accepts common learning root locations and explicit roots without depending on IT-Portal classes.",
+  "validated_conclusion": "The resolver accepts common learning root locations and explicit roots without depending on consuming-project classes.",
   "confidence": "medium",
   "validation_status": "validated",
   "status": "validated",

@@ -45,6 +45,24 @@ final class AgentLearningProjectTest extends TestCase
         (new FindingLifecycle())->assertPathMatchesStatus($finding, $file, $root);
     }
 
+    public function testProposalRepositoryRejectsStatusDirectoryMismatch(): void
+    {
+        $root = $this->createLearningRoot();
+        $file = $root . '/proposals/approved/proposal.2026-06-08.003.json';
+        $proposal = json_decode((string)file_get_contents(__DIR__ . '/fixtures/proposals/proposal.2026-06-08.001.json'), true, 512, JSON_THROW_ON_ERROR);
+        $proposal['id'] = 'proposal.2026-06-08.003';
+        $proposal['status'] = 'candidate';
+        $proposal['approved_by'] = null;
+        $proposal['approved_at'] = null;
+        file_put_contents($file, json_encode($proposal, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+
+        $findings = (new FindingRepository())->loadValidated($root);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('must be stored under proposals/candidate');
+        (new ProposalRepository())->loadAll($root, $findings);
+    }
+
     public function testCliValidateCommandHandlesFixtureProject(): void
     {
         $root = $this->createLearningRoot();
@@ -59,6 +77,52 @@ final class AgentLearningProjectTest extends TestCase
 
         self::assertSame(0, $exitCode, implode("\n", $output));
         self::assertStringContainsString('Validated agent learning root:', implode("\n", $output));
+    }
+
+    public function testCliPrepareSelectsSeveralTasksDeterministically(): void
+    {
+        $root = $this->createLearningRoot();
+        mkdir($root . '/templates', 0777, true);
+        file_put_contents($root . '/templates/consolidation-prompt.md', "# Agent Learning Consolidation Prompt Addendum\n\nReturn machine-readable JSON.");
+        $outputFile = $root . '/selected-consolidation-input.md';
+        $command = escapeshellarg(PHP_BINARY)
+            . ' '
+            . escapeshellarg(__DIR__ . '/../bin/agent-learning')
+            . ' prepare --root '
+            . escapeshellarg($root)
+            . ' --task PROJECT-1234 --task TODO@agent-learning --output '
+            . escapeshellarg($outputFile)
+            . ' 2>&1';
+
+        exec($command, $output, $exitCode);
+
+        self::assertSame(0, $exitCode, implode("\n", $output));
+        self::assertStringContainsString('Selected findings: 2', implode("\n", $output));
+        self::assertStringContainsString('finding.2026-06-08.001 (PROJECT-1234)', implode("\n", $output));
+        self::assertStringContainsString('finding.2026-06-08.002 (TODO@agent-learning)', implode("\n", $output));
+
+        $prompt = (string)file_get_contents($outputFile);
+        self::assertStringContainsString('Task/scope: `task=PROJECT-1234, task=TODO@agent-learning`', $prompt);
+        self::assertStringContainsString('### finding.2026-06-08.001', $prompt);
+        self::assertStringContainsString('### finding.2026-06-08.002', $prompt);
+        self::assertStringContainsString('# Agent Learning Consolidation Prompt Addendum', $prompt);
+    }
+
+    public function testCliPrepareFailsOnEmptySelectionByDefault(): void
+    {
+        $root = $this->createLearningRoot();
+        $command = escapeshellarg(PHP_BINARY)
+            . ' '
+            . escapeshellarg(__DIR__ . '/../bin/agent-learning')
+            . ' prepare --root '
+            . escapeshellarg($root)
+            . ' --task PROJECT-9999'
+            . ' 2>&1';
+
+        exec($command, $output, $exitCode);
+
+        self::assertSame(1, $exitCode, implode("\n", $output));
+        self::assertStringContainsString('prepare selection matched no validated findings', implode("\n", $output));
     }
 
     private function createLearningRoot(): string

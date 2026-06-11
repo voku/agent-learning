@@ -60,7 +60,7 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 * [EvidenceValidator](src/EvidenceValidator.php): Inspects list of evidence objects to ensure required fields for each type exist.
 * [JsonlValidator](src/JsonlValidator.php): Parses and validates JSON Lines log formats.
 * [RedactionGuard](src/RedactionGuard.php): Scans all content for credentials, secrets, or sensitive configuration keys to prevent accidental leaks.
-* [DecisionRecorder](src/DecisionRecorder.php): Validates log consistency of the decision history.
+* [DecisionHistoryValidator](src/DecisionHistoryValidator.php): Validates log consistency of the decision history.
 
 ### Utilities & Infrastructure
 * [ConsolidationPromptBuilder](src/ConsolidationPromptBuilder.php): Assembles validated findings and rejected proposals history into a structured LLM consolidation prompt.
@@ -75,12 +75,16 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 ### Finding Validation
 1. **Finding ID**: Must match `finding.YYYY-MM-DD.NNN`.
 2. **Created At**: Must be a valid ISO 8601/Atom timestamp string.
-3. **Task ID**: Must match the configured task ID pattern (passed via `$taskIdPattern` to the [FindingValidator](file:///home/moellekenl/PhpstormProjects/IT-Portal/packages/agent-learning/src/FindingValidator.php) constructor; defaults to `'/^(ITPNG-\d+|TODO@[\w:\/.-]+)$/'`).
+3. **Task ID**: Must match the configured task ID pattern (passed via `$taskIdPattern` to the [FindingValidator](src/FindingValidator.php) constructor; defaults to `'/^(?:[A-Z][A-Z0-9_-]*-\d+|TODO@[\w:\/.-]+)$/'`).
 4. **Observation/Hypothesis Separation**: Both must be non-empty strings and cannot be identical.
 5. **Confidence**: Must be one of `low`, `medium`, or `high`.
 6. **Validation Status**: Must be one of `unverified`, `validated`, or `invalidated`.
 7. **Lifecycle Enforcements**:
-   - A `validated` finding status requires `validation_status=validated`.
+   - `candidate` requires `validation_status=unverified`.
+   - `validated` and `consolidated` require `validation_status=validated`.
+   - `invalidated` requires `validation_status=invalidated`.
+   - `superseded` and `rejected` require `validation_status=validated` or `validation_status=invalidated`.
+   - `archived` preserves the prior validation state and may use any supported `validation_status`.
    - A `validation_status=validated` finding requires a non-empty `validated_conclusion`.
    - The `validated_conclusion` must not be identical to the hypothesis.
 
@@ -95,9 +99,14 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
    - `DELETE` action requires `old` wording.
    - `REPLACE` action requires both `old` and `new` wording.
 6. **Status Constraints**:
+   - Proposal `action` describes the requested durable change (`ADD`, `DELETE`, `REPLACE`, `REJECT`, `NO_DURABLE_LEARNING`).
+   - Proposal `status` describes the human lifecycle decision (`candidate`, `approved`, `rejected`, `applied`).
+   - Durable actions (`ADD`, `DELETE`, `REPLACE`) may be `candidate`, `approved`, `rejected`, or `applied`.
+   - `REJECT` and `NO_DURABLE_LEARNING` may only be `candidate` or `rejected`.
    - `APPROVED` or `APPLIED` proposal requires `approved_by` and `approved_at` timestamp.
    - `REJECTED` proposal or a `REJECT` action requires a non-empty `reason`.
-7. **Scope Broader Check**: If proposal `scope` includes entries not present in the referenced findings, a `scope_justification` must be provided.
+7. **Lifecycle Directory Check**: Proposal files under `proposals/<status>/` must embed the same `status` value.
+8. **Scope Broader Check**: If proposal `scope` includes entries not present in the referenced findings, a `scope_justification` must be provided.
 
 ### Redaction Constraints
 All keys and values are checked using [RedactionGuard](src/RedactionGuard.php) against secret assignment patterns. Any matches of standard credential assignments (e.g. `password`, `token`, `api_key`, `ms-Mcs-AdmPwd` patterns) throw a validation exception.
@@ -110,7 +119,7 @@ All keys and values are checked using [RedactionGuard](src/RedactionGuard.php) a
 ```json
 {
   "id": "finding.2026-06-08.001",
-  "task_id": "ITPNG-1234",
+  "task_id": "PROJECT-1234",
   "session": "session_abc123",
   "created_at": "2026-06-08T10:00:00+00:00",
   "created_by": "agent_alpha",
@@ -146,7 +155,7 @@ All keys and values are checked using [RedactionGuard](src/RedactionGuard.php) a
   "created_at": "2026-06-08T11:30:00+00:00",
   "action": "REPLACE",
   "target_type": "skill",
-  "target": "itp-form-validation",
+  "target": "form-validation",
   "scope": [
     "lib/framework/forms"
   ],
@@ -193,13 +202,16 @@ make phpstan
 
 ### CLI
 
-The Composer binary exposes the package workflow without requiring IT-Portal classes:
+The Composer binary exposes the package workflow without requiring consuming-project classes:
 
 ```bash
 vendor/bin/agent-learning validate --root infra/doc/agent-learning
-vendor/bin/agent-learning prepare --root infra/doc/agent-learning --ticket ITPNG-1234
+vendor/bin/agent-learning prepare --root infra/doc/agent-learning --task PROJECT-1234 --task GH-158
+vendor/bin/agent-learning prepare --root infra/doc/agent-learning --finding finding.2026-06-08.001 --scope src/Auth --since 2026-06-01
 vendor/bin/agent-learning proposal-validate --root infra/doc/agent-learning --proposal proposal.2026-06-08.001.json
 ```
+
+`prepare` prints the selected finding IDs before writing the prompt. Empty selections fail unless `--allow-empty` is passed. If `templates/consolidation-prompt.md` exists under the learning root, its content is appended to the generated consolidation input as a project-specific prompt addendum.
 
 `--root` may point either to the learning root itself or to a project root containing one of these directories:
 

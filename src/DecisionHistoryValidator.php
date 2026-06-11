@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning;
 
-final class DecisionRecorder
+final class DecisionHistoryValidator
 {
     public function __construct(
         private readonly JsonlValidator $jsonlValidator = new JsonlValidator(),

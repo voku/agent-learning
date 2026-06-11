@@ -23,7 +23,7 @@ final class FindingValidator
         private readonly FindingParser $parser = new FindingParser(),
         private readonly EvidenceValidator $evidenceValidator = new EvidenceValidator(),
         private readonly RedactionGuard $redactionGuard = new RedactionGuard(),
-        private readonly string $taskIdPattern = '/^(ITPNG-\d+|TODO@[\w:\/.-]+)$/',
+        private readonly string $taskIdPattern = '/^(?:[A-Z][A-Z0-9_-]*-\d+|TODO@[\w:\/.-]+)$/',
     ) {
     }
 
@@ -62,9 +62,7 @@ final class FindingValidator
         if (!in_array($finding->validationStatus, self::VALIDATION_STATUS, true)) {
             throw new ValidationException($file, $line, $finding->id, 'unsupported validation_status');
         }
-        if ($finding->status === FindingStatus::VALIDATED && $finding->validationStatus !== 'validated') {
-            throw new ValidationException($file, $line, $finding->id, 'validated finding requires validation_status=validated');
-        }
+        $this->assertLifecycleCombination($finding, $file, $line);
         if ($finding->validationStatus === 'validated' && ($finding->validatedConclusion === null || trim($finding->validatedConclusion) === '')) {
             throw new ValidationException($file, $line, $finding->id, 'validated finding requires validated_conclusion');
         }
@@ -73,5 +71,28 @@ final class FindingValidator
         }
 
         $this->evidenceValidator->validate($finding->evidence, $file, $line, $finding->id);
+    }
+
+    private function assertLifecycleCombination(Finding $finding, string $file, ?int $line): void
+    {
+        $allowedValidationStatuses = match ($finding->status) {
+            FindingStatus::CANDIDATE => ['unverified'],
+            FindingStatus::VALIDATED, FindingStatus::CONSOLIDATED => ['validated'],
+            FindingStatus::INVALIDATED => ['invalidated'],
+            FindingStatus::SUPERSEDED, FindingStatus::REJECTED => ['validated', 'invalidated'],
+            FindingStatus::ARCHIVED => self::VALIDATION_STATUS,
+        };
+
+        if (!in_array($finding->validationStatus, $allowedValidationStatuses, true)) {
+            throw new ValidationException(
+                $file,
+                $line,
+                $finding->id,
+                'finding status '
+                . $finding->status->value
+                . ' cannot use validation_status='
+                . $finding->validationStatus
+            );
+        }
     }
 }

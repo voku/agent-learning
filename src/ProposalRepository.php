@@ -11,6 +11,7 @@ final class ProposalRepository
 {
     public function __construct(
         private readonly ProposalValidator $validator = new ProposalValidator(),
+        private readonly ProposalLifecycle $lifecycle = new ProposalLifecycle(),
     ) {
     }
 
@@ -22,9 +23,10 @@ final class ProposalRepository
     public function loadAll(string $root, array $findingsById): array
     {
         $proposals = [];
-        foreach (['candidate', 'approved', 'rejected', 'applied'] as $statusDirectory) {
+        foreach ($this->lifecycle->directories() as $statusDirectory) {
             foreach ($this->jsonFiles($root . '/proposals/' . $statusDirectory) as $file) {
                 $proposal = $this->validator->validateFile($file, $findingsById);
+                $this->lifecycle->assertPathMatchesStatus($proposal, $file, $root);
                 if (isset($proposals[$proposal->id])) {
                     throw new ValidationException($file, null, $proposal->id, 'duplicate proposal ID');
                 }

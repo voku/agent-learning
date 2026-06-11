@@ -11,6 +11,7 @@ final class FindingRepository
 {
     public function __construct(
         private readonly FindingValidator $validator = new FindingValidator(),
+        private readonly FindingLifecycle $lifecycle = new FindingLifecycle(),
     ) {
     }
 
@@ -22,6 +23,7 @@ final class FindingRepository
         $findings = [];
         foreach ($this->jsonFiles($root . '/findings/validated') as $file) {
             $finding = $this->validator->validateFile($file);
+            $this->lifecycle->assertPathMatchesStatus($finding, $file, $root);
             if (isset($findings[$finding->id])) {
                 throw new ValidationException($file, null, $finding->id, 'duplicate finding ID');
             }

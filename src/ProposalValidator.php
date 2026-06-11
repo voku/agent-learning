@@ -47,6 +47,7 @@ final class ProposalValidator
         if ($proposal->sourceFindings === []) {
             throw new ValidationException($file, $line, $proposal->id, 'proposal requires source findings');
         }
+        $this->assertActionStatusCombination($proposal, $file, $line);
         if ($proposal->action !== Action::NO_DURABLE_LEARNING) {
             if ($proposal->targetType === null || $proposal->target === null) {
                 throw new ValidationException($file, $line, $proposal->id, 'durable proposal requires target_type and target');
@@ -72,6 +73,9 @@ final class ProposalValidator
         }
         if (($proposal->status === ProposalStatus::APPROVED || $proposal->status === ProposalStatus::APPLIED) && ($proposal->approvedBy === null || $proposal->approvedAt === null)) {
             throw new ValidationException($file, $line, $proposal->id, 'approved proposal requires approved_by and approved_at');
+        }
+        if ($proposal->approvedAt !== null && DateTimeImmutable::createFromFormat(DateTimeInterface::ATOM, $proposal->approvedAt) === false) {
+            throw new ValidationException($file, $line, $proposal->id, 'malformed timestamp field: approved_at');
         }
         if (($proposal->status === ProposalStatus::REJECTED || $proposal->action === Action::REJECT) && trim($proposal->reason) === '') {
             throw new ValidationException($file, $line, $proposal->id, 'rejected proposal requires a reason');
@@ -103,6 +107,34 @@ final class ProposalValidator
     {
         if ($proposal->status !== ProposalStatus::APPROVED) {
             throw new ValidationException($file, null, $proposal->id, 'candidate or non-approved proposal cannot be treated as active');
+        }
+    }
+
+    private function assertActionStatusCombination(Proposal $proposal, string $file, ?int $line): void
+    {
+        $allowedStatuses = match ($proposal->action) {
+            Action::ADD, Action::DELETE, Action::REPLACE => [
+                ProposalStatus::CANDIDATE,
+                ProposalStatus::APPROVED,
+                ProposalStatus::REJECTED,
+                ProposalStatus::APPLIED,
+            ],
+            Action::NO_DURABLE_LEARNING, Action::REJECT => [
+                ProposalStatus::CANDIDATE,
+                ProposalStatus::REJECTED,
+            ],
+        };
+
+        if (!in_array($proposal->status, $allowedStatuses, true)) {
+            throw new ValidationException(
+                $file,
+                $line,
+                $proposal->id,
+                'proposal action '
+                . $proposal->action->value
+                . ' cannot use status='
+                . $proposal->status->value
+            );
         }
     }
 }

@@ -12,10 +12,10 @@
   ],
   "old": "Learning roots must always live under infra/doc/agent-learning.",
   "new": null,
-  "reason": "That rule is too broad for non-IT-Portal projects.",
+  "reason": "That rule is too broad for projects with different documentation layouts.",
   "boundary": "The rejection only applies to portable package defaults.",
   "validation": [
-    "Validate an explicit non-IT-Portal learning root."
+    "Validate an explicit alternate learning root."
   ],
   "status": "rejected",
   "proposed_by": "agent_alpha",
