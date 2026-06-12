@@ -35,69 +35,163 @@ final class ProposalValidator
         if (preg_match('/^proposal\.\d{4}-\d{2}-\d{2}\.\d{3}$/', $proposal->id) !== 1) {
             throw new ValidationException($file, $line, $proposal->id, 'proposal id must match proposal.YYYY-MM-DD.NNN');
         }
+
         if (DateTimeImmutable::createFromFormat(DateTimeInterface::ATOM, $proposal->createdAt) === false) {
             throw new ValidationException($file, $line, $proposal->id, 'malformed timestamp field: created_at');
         }
+
         foreach (['mutations', 'changes', 'targets'] as $field) {
             $value = $proposal->raw[$field] ?? null;
             if (is_array($value) && count($value) > 1) {
                 throw new ValidationException($file, $line, $proposal->id, 'proposal contains several mutations in field: ' . $field);
             }
         }
+
         if ($proposal->sourceFindings === []) {
             throw new ValidationException($file, $line, $proposal->id, 'proposal requires source findings');
         }
+
         $this->assertActionStatusCombination($proposal, $file, $line);
         if ($proposal->action !== Action::NO_DURABLE_LEARNING) {
-            if ($proposal->targetType === null || $proposal->target === null) {
+            if (
+                $proposal->targetType === null
+                ||
+                $proposal->target === null
+            ) {
                 throw new ValidationException($file, $line, $proposal->id, 'durable proposal requires target_type and target');
             }
+
             if ($proposal->scope === []) {
                 throw new ValidationException($file, $line, $proposal->id, 'durable proposal requires exact scope');
             }
-            if ($proposal->boundary === null || trim($proposal->boundary) === '') {
+
+            if (
+                $proposal->boundary === null
+                ||
+                trim($proposal->boundary) === ''
+            ) {
                 throw new ValidationException($file, $line, $proposal->id, 'durable proposal requires known boundary');
             }
+
             if ($proposal->validation === []) {
                 throw new ValidationException($file, $line, $proposal->id, 'durable proposal requires validation list');
             }
         }
-        if ($proposal->action === Action::ADD && ($proposal->new === null || trim($proposal->new) === '')) {
+
+        if (
+            $proposal->action === Action::ADD
+            &&
+            (
+                $proposal->new === null
+                ||
+                trim($proposal->new) === ''
+            )
+        ) {
             throw new ValidationException($file, $line, $proposal->id, 'ADD proposal requires new wording');
         }
-        if ($proposal->action === Action::DELETE && ($proposal->old === null || trim($proposal->old) === '')) {
+
+        if (
+            $proposal->action === Action::DELETE
+            &&
+            (
+                $proposal->old === null
+                ||
+                trim($proposal->old) === ''
+            )
+        ) {
             throw new ValidationException($file, $line, $proposal->id, 'DELETE proposal requires old wording');
         }
-        if ($proposal->action === Action::REPLACE && (($proposal->old === null || trim($proposal->old) === '') || ($proposal->new === null || trim($proposal->new) === ''))) {
+
+        if (
+            $proposal->action === Action::REPLACE
+            &&
+            (
+                (
+                    $proposal->old === null
+                    ||
+                    trim($proposal->old) === ''
+                )
+                ||
+                (
+                    $proposal->new === null
+                    ||
+                    trim($proposal->new) === ''
+                )
+            )
+        ) {
             throw new ValidationException($file, $line, $proposal->id, 'REPLACE proposal requires old and new wording');
         }
-        if (($proposal->status === ProposalStatus::APPROVED || $proposal->status === ProposalStatus::APPLIED) && ($proposal->approvedBy === null || $proposal->approvedAt === null)) {
+
+        if (
+            (
+                $proposal->status === ProposalStatus::APPROVED
+                ||
+                $proposal->status === ProposalStatus::APPLIED
+            )
+            &&
+            (
+                $proposal->approvedBy === null
+                ||
+                $proposal->approvedAt === null
+            )
+        ) {
             throw new ValidationException($file, $line, $proposal->id, 'approved proposal requires approved_by and approved_at');
         }
-        if ($proposal->approvedAt !== null && DateTimeImmutable::createFromFormat(DateTimeInterface::ATOM, $proposal->approvedAt) === false) {
+
+        if (
+            $proposal->approvedAt !== null
+            &&
+            DateTimeImmutable::createFromFormat(DateTimeInterface::ATOM, $proposal->approvedAt) === false
+        ) {
             throw new ValidationException($file, $line, $proposal->id, 'malformed timestamp field: approved_at');
         }
-        if (($proposal->status === ProposalStatus::REJECTED || $proposal->action === Action::REJECT) && trim($proposal->reason) === '') {
+
+        if (
+            (
+                $proposal->status === ProposalStatus::REJECTED
+                ||
+                $proposal->action === Action::REJECT
+            )
+            && trim($proposal->reason) === ''
+        ) {
             throw new ValidationException($file, $line, $proposal->id, 'rejected proposal requires a reason');
         }
 
         $evidenceScope = [];
         foreach ($proposal->sourceFindings as $findingId) {
             $finding = $findingsById[$findingId] ?? null;
-            if ($findingsById !== [] && !$finding instanceof Finding) {
+            if (
+                $findingsById !== []
+                &&
+                !$finding instanceof Finding
+            ) {
                 throw new ValidationException($file, $line, $proposal->id, 'invalid reference to finding: ' . $findingId);
             }
+
             if ($finding instanceof Finding) {
-                if ($finding->status !== FindingStatus::VALIDATED || $finding->validationStatus !== 'validated') {
+                $isValidatedStatus = $finding->status === FindingStatus::VALIDATED
+                                     ||
+                                     $finding->status === FindingStatus::CONSOLIDATED;
+                if (
+                    !$isValidatedStatus
+                    ||
+                    $finding->validationStatus !== 'validated') {
                     throw new ValidationException($file, $line, $proposal->id, 'source finding is not validated: ' . $findingId);
                 }
+
                 foreach ($finding->scope as $scope) {
                     $evidenceScope[$scope] = true;
                 }
             }
         }
         foreach ($proposal->scope as $scope) {
-            if (!isset($evidenceScope[$scope]) && $findingsById !== [] && trim((string)($proposal->raw['scope_justification'] ?? '')) === '') {
+            if (
+                !isset($evidenceScope[$scope])
+                &&
+                $findingsById !== []
+                &&
+                trim((string)($proposal->raw['scope_justification'] ?? '')) === ''
+            ) {
                 throw new ValidationException($file, $line, $proposal->id, 'proposal scope is broader than source finding evidence without justification: ' . $scope);
             }
         }

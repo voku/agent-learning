@@ -68,6 +68,31 @@ final class ProposalApprovalTest extends TestCase
         $manager->approve($this->root, 'proposal.2026-06-08.001', 'lars');
     }
 
+    public function testApproveProposalWithConsolidatedSourceFinding(): void
+    {
+        // Move the finding to consolidated/ and set status=consolidated, validation_status=validated
+        mkdir($this->root . '/findings/consolidated', 0777, true);
+        $finding = json_decode(
+            (string)file_get_contents($this->root . '/findings/validated/finding.2026-06-08.001.json'),
+            true
+        );
+        $finding['status'] = 'consolidated';
+        $finding['validation_status'] = 'validated';
+        file_put_contents(
+            $this->root . '/findings/consolidated/finding.2026-06-08.001.json',
+            json_encode($finding)
+        );
+        unlink($this->root . '/findings/validated/finding.2026-06-08.001.json');
+
+        // ProposalTransitionManager::approve explicitly accepts CONSOLIDATED source findings (line ~69).
+        // ProposalValidator::validate only accepts status===VALIDATED, causing post-approve validateRepository to reject it.
+        // This test documents the bug: approve rolls back even though the finding is valid consolidated evidence.
+        $manager = new ProposalTransitionManager();
+        $manager->approve($this->root, 'proposal.2026-06-08.001', 'lars');
+
+        self::assertFileExists($this->root . '/proposals/approved/proposal.2026-06-08.001.json');
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {

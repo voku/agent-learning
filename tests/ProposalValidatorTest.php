@@ -74,56 +74,200 @@ final class ProposalValidatorTest extends TestCase
         (new ProposalValidator())->validate($proposal, 'proposal.json');
     }
 
+    public function testInvalidProposalIdThrows(): void
+    {
+        $proposal = $this->createProposal(Action::ADD, ProposalStatus::CANDIDATE, id: 'proposal.invalid');
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('proposal id must match proposal.YYYY-MM-DD.NNN');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testMalformedCreatedAtThrows(): void
+    {
+        $proposal = $this->createProposal(Action::ADD, ProposalStatus::CANDIDATE, createdAt: '2026-06-09');
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('malformed timestamp field: created_at');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testMultipleMutationsThrows(): void
+    {
+        $proposal = $this->createProposal(Action::ADD, ProposalStatus::CANDIDATE, extraRaw: ['mutations' => ['a', 'b']]);
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('proposal contains several mutations in field: mutations');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testNoSourceFindingsThrows(): void
+    {
+        $proposal = $this->createProposal(Action::ADD, ProposalStatus::CANDIDATE, sourceFindings: []);
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('proposal requires source findings');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testDurableProposalMissingTargetTypeThrows(): void
+    {
+        $proposal = $this->createProposal(Action::ADD, ProposalStatus::CANDIDATE, targetType: null);
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('durable proposal requires target_type and target');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testDurableProposalMissingTargetThrows(): void
+    {
+        $proposal = $this->createProposal(Action::ADD, ProposalStatus::CANDIDATE, target: null);
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('durable proposal requires target_type and target');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testDurableProposalMissingScopeThrows(): void
+    {
+        $proposal = $this->createProposal(Action::ADD, ProposalStatus::CANDIDATE, scope: []);
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('durable proposal requires exact scope');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testDurableProposalMissingBoundaryThrows(): void
+    {
+        $proposal = $this->createProposal(Action::ADD, ProposalStatus::CANDIDATE, boundary: '');
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('durable proposal requires known boundary');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testDurableProposalMissingValidationThrows(): void
+    {
+        $proposal = $this->createProposal(Action::ADD, ProposalStatus::CANDIDATE, validation: []);
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('durable proposal requires validation list');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testAddProposalMissingNewWordingThrows(): void
+    {
+        $proposal = $this->createProposal(Action::ADD, ProposalStatus::CANDIDATE, new: '');
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('ADD proposal requires new wording');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testDeleteProposalMissingOldWordingThrows(): void
+    {
+        $proposal = $this->createProposal(Action::DELETE, ProposalStatus::CANDIDATE, old: '');
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('DELETE proposal requires old wording');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testReplaceProposalMissingOldWordingThrows(): void
+    {
+        $proposal = $this->createProposal(Action::REPLACE, ProposalStatus::CANDIDATE, old: '');
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('REPLACE proposal requires old and new wording');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testReplaceProposalMissingNewWordingThrows(): void
+    {
+        $proposal = $this->createProposal(Action::REPLACE, ProposalStatus::CANDIDATE, new: '');
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('REPLACE proposal requires old and new wording');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testMalformedApprovedAtThrows(): void
+    {
+        $proposal = $this->createProposal(Action::ADD, ProposalStatus::APPROVED, approvedAt: '2026-06-09');
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('malformed timestamp field: approved_at');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testRejectedProposalMissingReasonThrows(): void
+    {
+        $proposal = $this->createProposal(Action::ADD, ProposalStatus::REJECTED, reason: '');
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('rejected proposal requires a reason');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    /**
+     * @param list<string> $scope
+     * @param list<string> $sourceFindings
+     * @param list<string> $validation
+     * @param array<string, mixed> $extraRaw
+     */
     private function createProposal(
         Action $action,
         ProposalStatus $status,
         bool $withApprovalMetadata = true,
+        string $id = 'proposal.2026-06-09.001',
+        string $createdAt = '2026-06-09T10:00:00+00:00',
+        ?string $targetType = 'skill',
+        ?string $target = 'agent-learning',
+        array $scope = ['src/'],
+        array $sourceFindings = ['finding.2026-06-09.001'],
+        ?string $old = null,
+        ?string $new = null,
+        string $reason = 'Evidence supports the proposed change.',
+        ?string $boundary = 'Only this package behavior is covered.',
+        array $validation = ['Run composer test.'],
+        ?string $approvedAt = '2026-06-09T11:00:00+00:00',
+        array $extraRaw = [],
     ): Proposal {
         $isDurable = $action !== Action::NO_DURABLE_LEARNING;
         $isApprovedLifecycle = $status === ProposalStatus::APPROVED || $status === ProposalStatus::APPLIED;
         $isRejectedLifecycle = $status === ProposalStatus::REJECTED || $action === Action::REJECT;
-        $old = $action === Action::ADD ? null : 'Old guidance.';
-        $new = $action === Action::DELETE || $action === Action::REJECT ? null : 'New guidance.';
+        
+        $oldWording = $old ?? ($action === Action::ADD ? null : 'Old guidance.');
+        $newWording = $new ?? ($action === Action::DELETE || $action === Action::REJECT ? null : 'New guidance.');
         if ($action === Action::NO_DURABLE_LEARNING) {
-            $old = null;
-            $new = null;
+            $oldWording = null;
+            $newWording = null;
         }
 
+        $raw = [
+            'id' => $id,
+            'created_at' => $createdAt,
+            'action' => $action->value,
+            'target_type' => $isDurable ? $targetType : null,
+            'target' => $isDurable ? $target : null,
+            'scope' => $isDurable ? $scope : [],
+            'source_findings' => $sourceFindings,
+            'old' => $oldWording,
+            'new' => $newWording,
+            'reason' => $isRejectedLifecycle && $reason === 'Evidence supports the proposed change.' ? 'No durable learning is supported by this evidence.' : $reason,
+            'boundary' => $isDurable ? $boundary : null,
+            'validation' => $isDurable ? $validation : [],
+            'status' => $status->value,
+            'proposed_by' => 'agent',
+            'approved_by' => $isApprovedLifecycle && $withApprovalMetadata ? 'maintainer' : null,
+            'approved_at' => $isApprovedLifecycle && $withApprovalMetadata ? $approvedAt : null,
+        ];
+        
+        $raw = array_merge($raw, $extraRaw);
+
         return new Proposal(
-            id: 'proposal.2026-06-09.001',
-            createdAt: '2026-06-09T10:00:00+00:00',
+            id: $id,
+            createdAt: $createdAt,
             action: $action,
-            targetType: $isDurable ? 'skill' : null,
-            target: $isDurable ? 'agent-learning' : null,
-            scope: $isDurable ? ['src/'] : [],
-            sourceFindings: ['finding.2026-06-09.001'],
-            old: $old,
-            new: $new,
-            reason: $isRejectedLifecycle ? 'No durable learning is supported by this evidence.' : 'Evidence supports the proposed change.',
-            boundary: $isDurable ? 'Only this package behavior is covered.' : null,
-            validation: $isDurable ? ['Run composer test.'] : [],
+            targetType: $raw['target_type'],
+            target: $raw['target'],
+            scope: $raw['scope'],
+            sourceFindings: $raw['source_findings'],
+            old: $raw['old'],
+            new: $raw['new'],
+            reason: $raw['reason'],
+            boundary: $raw['boundary'],
+            validation: $raw['validation'],
             status: $status,
             proposedBy: 'agent',
-            approvedBy: $isApprovedLifecycle && $withApprovalMetadata ? 'maintainer' : null,
-            approvedAt: $isApprovedLifecycle && $withApprovalMetadata ? '2026-06-09T11:00:00+00:00' : null,
-            raw: [
-                'id' => 'proposal.2026-06-09.001',
-                'created_at' => '2026-06-09T10:00:00+00:00',
-                'action' => $action->value,
-                'target_type' => $isDurable ? 'skill' : null,
-                'target' => $isDurable ? 'agent-learning' : null,
-                'scope' => $isDurable ? ['src/'] : [],
-                'source_findings' => ['finding.2026-06-09.001'],
-                'old' => $old,
-                'new' => $new,
-                'reason' => $isRejectedLifecycle ? 'No durable learning is supported by this evidence.' : 'Evidence supports the proposed change.',
-                'boundary' => $isDurable ? 'Only this package behavior is covered.' : null,
-                'validation' => $isDurable ? ['Run composer test.'] : [],
-                'status' => $status->value,
-                'proposed_by' => 'agent',
-                'approved_by' => $isApprovedLifecycle && $withApprovalMetadata ? 'maintainer' : null,
-                'approved_at' => $isApprovedLifecycle && $withApprovalMetadata ? '2026-06-09T11:00:00+00:00' : null,
-            ],
+            approvedBy: $raw['approved_by'],
+            approvedAt: $raw['approved_at'],
+            raw: $raw,
         );
     }
 }

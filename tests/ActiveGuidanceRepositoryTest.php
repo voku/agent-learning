@@ -104,6 +104,43 @@ final class ActiveGuidanceRepositoryTest extends TestCase
         self::assertSame(['src/Auth', 'src/Db'], $guidances[0]->scope);
     }
 
+    public function testFailsOnUnsupportedGuidanceType(): void
+    {
+        $file = $this->root . '/unsupported-type.md';
+        file_put_contents($file, "---\nid: test\ntype: magic\n---");
+
+        $repo = new ActiveGuidanceRepository();
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('unsupported guidance type: magic');
+        $repo->loadAll($this->root, ['unsupported-type.md']);
+    }
+
+    public function testFallbackTypesFromFilename(): void
+    {
+        $fileSkill = $this->root . '/my-skills.md';
+        file_put_contents($fileSkill, 'skill info');
+
+        $fileConstraint = $this->root . '/my-constraints.md';
+        file_put_contents($fileConstraint, 'constraint info');
+
+        $fileMemory = $this->root . '/other.md';
+        file_put_contents($fileMemory, 'memory info');
+
+        $repo = new ActiveGuidanceRepository();
+        $guidances = $repo->loadAll($this->root, ['my-skills.md', 'my-constraints.md', 'other.md']);
+
+        self::assertCount(3, $guidances);
+        
+        // Sorted alphabetically by ID: constraint.my-constraints vs other vs skill.my-skills
+        self::assertSame('constraint.my-constraints', $guidances[0]->id);
+        self::assertSame(GuidanceType::CONSTRAINT, $guidances[0]->type);
+
+        self::assertSame('other', $guidances[1]->id);
+        self::assertSame(GuidanceType::MEMORY, $guidances[1]->type);
+
+        self::assertSame('skill.my-skills', $guidances[2]->id);
+        self::assertSame(GuidanceType::SKILL, $guidances[2]->type);
+    }
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {
