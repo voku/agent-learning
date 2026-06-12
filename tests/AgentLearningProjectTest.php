@@ -102,9 +102,9 @@ final class AgentLearningProjectTest extends TestCase
         self::assertStringContainsString('finding.2026-06-08.002 (TODO@agent-learning)', implode("\n", $output));
 
         $prompt = (string)file_get_contents($outputFile);
-        self::assertStringContainsString('Task/scope: `task=PROJECT-1234, task=TODO@agent-learning`', $prompt);
-        self::assertStringContainsString('### finding.2026-06-08.001', $prompt);
-        self::assertStringContainsString('### finding.2026-06-08.002', $prompt);
+        self::assertStringContainsString('"label": "task=PROJECT-1234, task=TODO@agent-learning"', $prompt);
+        self::assertStringContainsString('"id": "finding.2026-06-08.001"', $prompt);
+        self::assertStringContainsString('"id": "finding.2026-06-08.002"', $prompt);
         self::assertStringContainsString('# Agent Learning Consolidation Prompt Addendum', $prompt);
     }
 
@@ -123,6 +123,33 @@ final class AgentLearningProjectTest extends TestCase
 
         self::assertSame(1, $exitCode, implode("\n", $output));
         self::assertStringContainsString('prepare selection matched no validated findings', implode("\n", $output));
+    }
+
+    public function testCliValidateCommandFailsOnUnknownProposalReferenceInOutcomes(): void
+    {
+        $root = $this->createLearningRoot();
+        $outcome = [
+            'id' => 'outcome.2026-06-20.001',
+            'task_id' => 'PROJECT-204',
+            'applied_proposals' => ['proposal.nonexistent'],
+            'guidance_used' => [],
+            'result' => 'successful',
+            'recorded_by' => 'lars',
+            'recorded_at' => '2026-06-20T12:00:00+00:00',
+        ];
+        file_put_contents($root . '/history/outcomes.jsonl', json_encode($outcome) . "\n");
+
+        $command = escapeshellarg(PHP_BINARY)
+            . ' '
+            . escapeshellarg(__DIR__ . '/../bin/agent-learning')
+            . ' validate --root '
+            . escapeshellarg($root)
+            . ' 2>&1';
+
+        exec($command, $output, $exitCode);
+
+        self::assertSame(1, $exitCode, implode("\n", $output));
+        self::assertStringContainsString('outcome references unknown proposal', implode("\n", $output));
     }
 
     private function createLearningRoot(): string

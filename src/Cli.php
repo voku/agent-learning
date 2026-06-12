@@ -30,6 +30,11 @@ final class Cli
                 'validate' => $this->validateCommand($tokens),
                 'prepare' => $this->prepareCommand($tokens),
                 'proposal-validate' => $this->proposalValidateCommand($tokens),
+                'proposal-import' => $this->proposalImportCommand($tokens),
+                'finding-transition' => $this->findingTransitionCommand($tokens),
+                'proposal-approve' => $this->proposalApproveCommand($tokens),
+                'proposal-reject' => $this->proposalRejectCommand($tokens),
+                'proposal-mark-applied' => $this->proposalMarkAppliedCommand($tokens),
                 'help', '--help', '-h' => $this->helpCommand(),
                 default => $this->unknownCommand($command),
             };
@@ -52,6 +57,9 @@ final class Cli
         $findingsById = $this->validateFindings($root, $taskIdPattern);
         $proposalsById = (new ProposalRepository())->loadAll($root, $findingsById);
         (new DecisionHistoryValidator())->validateHistory($root, $proposalsById);
+
+        // Also validate outcomes
+        (new OutcomeRepository())->loadAll($root, $proposalsById);
 
         $this->write(
             'Validated agent learning root: ' . $root . "\n"
@@ -82,10 +90,33 @@ final class Cli
             throw new ValidationException($root, null, null, 'prepare selection matched no validated findings');
         }
 
-        $rejectedHistoryPath = $root . '/history/rejected-proposals.jsonl';
-        $rejectedHistory = is_file($rejectedHistoryPath) ? (string)file_get_contents($rejectedHistoryPath) : '';
+        // Load active guidance files
+        $guidancePaths = $this->stringOptions($parsed['options'], 'guidance');
+        $activeGuidance = (new ActiveGuidanceRepository())->loadAll($root, $guidancePaths);
+
+        // Load and filter rejected proposals
+        $allRejected = (new RejectedGuidanceRepository())->loadAll($root);
+        $findingIds = array_map(static fn(Finding $f) => $f->id, $findings);
+        $rejectedGuidance = (new RejectedGuidanceSelector())->select($allRejected, $selection->scopes, $findingIds);
+
+        // Query relevant outcomes
+        $allOutcomes = (new OutcomeRepository())->loadAll($root);
+        $activeGuidanceIds = array_map(static fn(ActiveGuidance $g) => $g->id, $activeGuidance);
+        $rejectedProposalIds = array_map(static fn(RejectedGuidance $rg) => $rg->proposal->id, $rejectedGuidance);
+        
+        $relevantOutcomes = [];
+        foreach ($allOutcomes as $outcome) {
+            $guidanceUsed = $outcome['guidance_used'] ?? [];
+            $appliedProposals = $outcome['applied_proposals'] ?? [];
+            if (array_intersect($guidanceUsed, $activeGuidanceIds) !== [] || array_intersect($appliedProposals, $rejectedProposalIds) !== []) {
+                $relevantOutcomes[] = $outcome;
+            }
+        }
+
+        $input = new ConsolidationInput($selection, $findings, $activeGuidance, $rejectedGuidance, $relevantOutcomes);
+
         $prompt = $this->appendConsolidationAddendum(
-            (new ConsolidationPromptBuilder())->build($selection->label(), $findings, $rejectedHistory),
+            (new ConsolidationPromptBuilder())->build($input),
             $root,
         );
         $output = $this->stringOption($parsed['options'], 'output') ?? $root . '/consolidation-input.md';
@@ -124,6 +155,137 @@ final class Cli
         return 0;
     }
 
+    /**
+     * @param list<string> $tokens
+     */
+    private function proposalImportCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $input = $this->stringOption($parsed['options'], 'input');
+        if ($input === null) {
+            throw new ValidationException($root, null, null, 'proposal-import requires --input path');
+        }
+
+        $proposalId = (new ProposalImporter())->import($root, $input);
+        $this->write("Imported proposal: " . $proposalId . "\n");
+
+        return 0;
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function findingTransitionCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $findingId = $parsed['arguments'][0] ?? null;
+        $statusVal = $parsed['arguments'][1] ?? null;
+        $actor = $this->stringOption($parsed['options'], 'by');
+
+        if ($findingId === null || trim($findingId) === '') {
+            throw new ValidationException($root, null, null, 'finding-transition requires finding ID argument');
+        }
+        if ($statusVal === null || trim($statusVal) === '') {
+            throw new ValidationException($root, null, null, 'finding-transition requires target status argument');
+        }
+        if ($actor === null || trim($actor) === '') {
+            throw new ValidationException($root, null, null, 'finding-transition requires --by actor option');
+        }
+
+        $status = FindingStatus::tryFrom($statusVal);
+        if ($status === null) {
+            throw new ValidationException($root, null, null, 'unsupported status: ' . $statusVal);
+        }
+
+        (new FindingTransitionManager())->transition($root, $findingId, $status, $actor);
+        $this->write(sprintf("Transitioned finding %s to status %s\n", $findingId, $status->value));
+
+        return 0;
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function proposalApproveCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $proposalId = $parsed['arguments'][0] ?? null;
+        $actor = $this->stringOption($parsed['options'], 'by');
+
+        if ($proposalId === null || trim($proposalId) === '') {
+            throw new ValidationException($root, null, null, 'proposal-approve requires proposal ID argument');
+        }
+        if ($actor === null || trim($actor) === '') {
+            throw new ValidationException($root, null, null, 'proposal-approve requires --by actor option');
+        }
+
+        (new ProposalTransitionManager())->approve($root, $proposalId, $actor);
+        $this->write(sprintf("Approved proposal: %s\n", $proposalId));
+
+        return 0;
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function proposalRejectCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $proposalId = $parsed['arguments'][0] ?? null;
+        $actor = $this->stringOption($parsed['options'], 'by');
+        $reason = $this->stringOption($parsed['options'], 'reason');
+
+        if ($proposalId === null || trim($proposalId) === '') {
+            throw new ValidationException($root, null, null, 'proposal-reject requires proposal ID argument');
+        }
+        if ($actor === null || trim($actor) === '') {
+            throw new ValidationException($root, null, null, 'proposal-reject requires --by actor option');
+        }
+        if ($reason === null || trim($reason) === '') {
+            throw new ValidationException($root, null, null, 'proposal-reject requires --reason option');
+        }
+
+        (new ProposalTransitionManager())->reject($root, $proposalId, $actor, $reason);
+        $this->write(sprintf("Rejected proposal: %s\n", $proposalId));
+
+        return 0;
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function proposalMarkAppliedCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $proposalId = $parsed['arguments'][0] ?? null;
+        $actor = $this->stringOption($parsed['options'], 'by');
+        $commit = $this->stringOption($parsed['options'], 'commit');
+        $validation = $this->stringOption($parsed['options'], 'validation');
+
+        if ($proposalId === null || trim($proposalId) === '') {
+            throw new ValidationException($root, null, null, 'proposal-mark-applied requires proposal ID argument');
+        }
+        if ($actor === null || trim($actor) === '') {
+            throw new ValidationException($root, null, null, 'proposal-mark-applied requires --by actor option');
+        }
+        if ($commit === null || trim($commit) === '') {
+            throw new ValidationException($root, null, null, 'proposal-mark-applied requires --commit option');
+        }
+        if ($validation === null || trim($validation) === '') {
+            throw new ValidationException($root, null, null, 'proposal-mark-applied requires --validation file option');
+        }
+
+        (new ProposalTransitionManager())->apply($root, $proposalId, $actor, $commit, $validation);
+        $this->write(sprintf("Marked proposal applied: %s\n", $proposalId));
+
+        return 0;
+    }
+
     private function helpCommand(): int
     {
         $this->write(
@@ -131,7 +293,12 @@ final class Cli
             . "Commands:\n"
             . "  validate             Validate findings, proposals, and decision history.\n"
             . "  prepare              Build consolidation input for selected validated findings.\n"
-            . "  proposal-validate    Validate one proposal against known findings.\n\n"
+            . "  proposal-validate    Validate one proposal against known findings.\n"
+            . "  proposal-import      Import a consolidation result file as a candidate proposal.\n"
+            . "  finding-transition   Transition a finding to a new state.\n"
+            . "  proposal-approve     Approve a candidate proposal.\n"
+            . "  proposal-reject      Reject a candidate proposal.\n"
+            . "  proposal-mark-applied Mark an approved proposal as applied externally.\n\n"
             . "Options:\n"
             . "  --root PATH              Learning root or project root. Defaults to auto-discovery.\n"
             . "  --task-id-pattern REGEX  Override finding task id validation.\n"
@@ -139,11 +306,17 @@ final class Cli
             . "  --task ID                Task id selector for prepare. Repeatable.\n"
             . "  --ticket ID              Alias for --task.\n"
             . "  --scope PATH             Scope selector for prepare. Repeatable.\n"
+            . "  --guidance PATH          Path to an active guidance file. Repeatable.\n"
             . "  --since YYYY-MM-DD       Include findings created on or after this date.\n"
             . "  --until YYYY-MM-DD       Include findings created on or before this date.\n"
             . "  --allow-empty            Allow prepare to write a prompt with no selected findings.\n"
             . "  --proposal PATH          Proposal path for proposal-validate.\n"
+            . "  --input PATH             Input file for proposal-import.\n"
             . "  --output PATH            Output file for prepare.\n"
+            . "  --by ACTOR               Actor performing the operation.\n"
+            . "  --reason REASON          Reason for proposal rejection.\n"
+            . "  --commit COMMIT          Commit hash or pull request reference.\n"
+            . "  --validation PATH        Path to validation evidence JSON file.\n"
         );
 
         return 0;

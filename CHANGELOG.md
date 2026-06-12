@@ -4,6 +4,19 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.1.0] - 2026-06-12
+
+### Added
+
+- Add Active Guidance modeling and repository to parse/load active guidance files.
+- Add Rejection filtering via a repository and selector to skip proposing previously rejected items.
+- Add structured JSON-based consolidation input prompt formatting inside fenced JSON blocks for secure LLM parsing.
+- Add consolidation result parsing and schema validation supporting concrete result types (`ADD`, `DELETE`, `REPLACE`, `REJECT`, `NO_DURABLE_LEARNING`).
+- Add proposal importer to atomically write candidate proposals.
+- Add transition managers for atomic finding and proposal lifecycle operations (approvals, rejections, application states) with rollback support.
+- Add outcome logging and repository to track applied proposal outcomes.
+- Integrated all new operations into the CLI tool (`proposal-import`, `finding-transition`, `proposal-approve`, `proposal-reject`, `proposal-mark-applied`).
+
 ## [0.0.2] - 2026-06-11
 
 ### Added
