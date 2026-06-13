@@ -169,6 +169,7 @@ final class ProposalValidator
             }
 
             if ($finding instanceof Finding) {
+                // Provenance: finding.2026-06-13.005 (consolidated source findings support)
                 $isValidatedStatus = $finding->status === FindingStatus::VALIDATED
                                      ||
                                      $finding->status === FindingStatus::CONSOLIDATED;

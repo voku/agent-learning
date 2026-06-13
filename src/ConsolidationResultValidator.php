@@ -198,6 +198,7 @@ final class ConsolidationResultValidator
      */
     private function isScopeBroadened(array $proposalScopes, array $findingScopes): bool
     {
+        // Provenance: finding.2026-06-13.001 (disjoint scope checking)
         foreach ($proposalScopes as $ps) {
             $isCovered = false;
             foreach ($findingScopes as $fs) {

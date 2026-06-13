@@ -1,0 +1,24 @@
+{
+  "id": "finding.2026-06-13.004",
+  "task_id": "TODO@cli/outcome-validation",
+  "session": "ac903076-1184-41ad-bad4-6e26b6954b5b",
+  "created_at": "2026-06-13T02:00:00+02:00",
+  "created_by": "antigravity",
+  "scope": [
+    "src/Cli.php"
+  ],
+  "observation": "In the validateCommand of Cli.php, the OutcomeRepository validate method was called but it was not passed the $proposalsById array. This caused outcome records referencing active proposals to fail validation because the repository could not verify whether the referenced proposal actually existed.",
+  "evidence": [
+    {
+      "type": "test_result",
+      "command": "./vendor/bin/phpunit --filter testValidateCommandValidatesOutcomesAgainstProposals",
+      "summary": "The test failed with a ValidationException because the CLI outcome loader couldn't match referenced proposals. Modifying Cli::validateCommand to pass $proposalsById to OutcomeRepository resolved the issue."
+    }
+  ],
+  "hypothesis": "CLI commands that run repository-wide validation must chain and pass parsed references across repositories to maintain referential integrity checks (e.g. validating outcomes against proposals, and proposals against findings).",
+  "validated_conclusion": "When executing repository-wide validations in CLI commands, ensure all parsed models are propagated to downstream loaders. In particular, validate outcomes using the list of parsed proposals to verify that every outcome references a valid proposal.",
+  "confidence": "high",
+  "validation_status": "validated",
+  "status": "validated",
+  "sensitivity": "public"
+}

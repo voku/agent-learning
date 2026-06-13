@@ -1,0 +1,25 @@
+{
+  "id": "finding.2026-06-13.002",
+  "task_id": "TODO@transition/finding-rejected-status",
+  "session": "ac903076-1184-41ad-bad4-6e26b6954b5b",
+  "created_at": "2026-06-13T02:00:00+02:00",
+  "created_by": "antigravity",
+  "scope": [
+    "src/FindingTransitionManager.php",
+    "tests/FindingTransitionTest.php"
+  ],
+  "observation": "When a finding was transitioned to REJECTED via FindingTransitionManager, the validation_status was not updated, leaving it out of sync. This violates the core design invariant where validation_status and status must always align (e.g. status REJECTED must have validation_status 'validated' or 'invalidated', not 'unverified').",
+  "evidence": [
+    {
+      "type": "test_result",
+      "command": "./vendor/bin/phpunit --filter testTransitionToRejectedAlignsValidationStatus",
+      "summary": "The transition tests failed because transitioning a CANDIDATE finding to REJECTED left its validation_status as 'unverified', causing validator checks to reject the finding. Updating the transition manager to transition validation_status to 'invalidated' solved the issue."
+    }
+  ],
+  "hypothesis": "A transition manager must perform atomic updates of both status and validation_status properties to satisfy validation invariants, ensuring that the target status is fully valid for the new validation_status.",
+  "validated_conclusion": "Whenever transitioning a finding status in FindingTransitionManager, always update its validation_status to align with the new status. Specifically, transitioning to REJECTED must change validation_status to 'invalidated' or 'validated' rather than leaving it as 'unverified'.",
+  "confidence": "high",
+  "validation_status": "validated",
+  "status": "validated",
+  "sensitivity": "public"
+}

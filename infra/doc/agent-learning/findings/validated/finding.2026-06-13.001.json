@@ -1,0 +1,25 @@
+{
+  "id": "finding.2026-06-13.001",
+  "task_id": "TODO@validator/disjoint-scope-checking",
+  "session": "ac903076-1184-41ad-bad4-6e26b6954b5b",
+  "created_at": "2026-06-13T02:00:00+02:00",
+  "created_by": "antigravity",
+  "scope": [
+    "src/ConsolidationResultValidator.php",
+    "tests/ConsolidationResultValidatorTest.php"
+  ],
+  "observation": "In the initial scope broadening check, disjoint path extensions (e.g. proposal scope is src/Database but finding scope is src/Auth) were not flagged as broadened because the check only matched if the proposal scope was a prefix of the finding scope. This allowed proposals to silently extend into entirely new, unrelated directories.",
+  "evidence": [
+    {
+      "type": "test_result",
+      "command": "./vendor/bin/phpunit --filter testThrowsOnDisjointScopeWithoutJustification",
+      "summary": "The test failed because ConsolidationResultValidator did not flag the disjoint scope 'src/Database' as broadened compared to the source finding scope 'src/Auth'. After applying the prefix-trailing-slash check, the validator correctly flagged it."
+    }
+  ],
+  "hypothesis": "To block disjoint scopes, any proposed scope must either match the finding scope exactly, be a sub-path under a finding scope, or have the root scope ('/'). If the proposed scope starts with a finding scope but is not followed by a directory separator or doesn't match it, it represents a disjoint or broadened path.",
+  "validated_conclusion": "When validating proposal scopes against source finding scopes in ConsolidationResultValidator, check if the proposed scope starts with the finding scope plus a directory separator (rtrim($fs, '/') . '/'). If a proposed scope is not covered by any finding scope, flag it as broadened, requiring a justification in the reason field of at least 15 characters.",
+  "confidence": "high",
+  "validation_status": "validated",
+  "status": "validated",
+  "sensitivity": "public"
+}

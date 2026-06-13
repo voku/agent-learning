@@ -1,0 +1,25 @@
+{
+  "id": "finding.2026-06-13.003",
+  "task_id": "TODO@repository/frontmatter-regex-newline",
+  "session": "ac903076-1184-41ad-bad4-6e26b6954b5b",
+  "created_at": "2026-06-13T02:00:00+02:00",
+  "created_by": "antigravity",
+  "scope": [
+    "src/ActiveGuidanceRepository.php",
+    "tests/ActiveGuidanceRepositoryTest.php"
+  ],
+  "observation": "The regex used to parse YAML frontmatter in ActiveGuidanceRepository was strictly expecting a trailing newline after the closing ---. This caused guidance files without a final trailing newline after the frontmatter block to fail parsing, ignoring key metadata (such as ID and scope).",
+  "evidence": [
+    {
+      "type": "test_result",
+      "command": "./vendor/bin/phpunit --filter testParsesFrontmatterWithoutTrailingNewline",
+      "summary": "The test failed to parse the ID 'fm-test' from a frontmatter block without a trailing newline. The regex adjustment solved the issue, making the final newline optional."
+    }
+  ],
+  "hypothesis": "Frontmatter parsers should be tolerant of file ends or variations in trailing whitespace. A regex matching frontmatter should check for either a newline or the end of the content after the closing delimiter.",
+  "validated_conclusion": "When parsing file frontmatter using regular expressions, use a pattern that matches the closing delimiter with an optional trailing newline followed by either more content or the end of the file/string (e.g. (?:\\r?\\n|$)).",
+  "confidence": "high",
+  "validation_status": "validated",
+  "status": "validated",
+  "sensitivity": "public"
+}
