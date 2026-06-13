@@ -1,0 +1,25 @@
+{
+  "id": "finding.2026-06-13.006",
+  "task_id": "TODO@distribution/composer-path-repositories",
+  "session": "ac903076-1184-41ad-bad4-6e26b6954b5b",
+  "created_at": "2026-06-13T02:30:00+02:00",
+  "created_by": "antigravity",
+  "scope": [
+    "Makefile",
+    "composer.json"
+  ],
+  "observation": "Calling external tool binaries via absolute host paths (e.g. /home/moellekenl/PhpstormProjects/agent-recall-compiler/bin/agent-recall-compiler) prevents task configurations from being portable across developer machines or containerized environments.",
+  "evidence": [
+    {
+      "type": "manual_verification",
+      "command": "make agent_recall_compile TASK=ITPNG-367",
+      "summary": "By registering the path repository inside composer.json, vendor binaries are compiled into vendor/bin/agent-recall-compiler. Running the compile make target on host runs the symlinked tool successfully."
+    }
+  ],
+  "hypothesis": "Registering local tools as composer path repositories under require-dev allows vendor/bin symlinks to be generated deterministically, enabling tool configuration to reference relative vendor paths instead of absolute host-dependent paths.",
+  "validated_conclusion": "Add path repository configuration to composer.json for local tool integration, and invoke the tool binaries via standard vendor/bin/ paths in the Makefile to maintain workflow reproducibility and portability.",
+  "confidence": "high",
+  "validation_status": "validated",
+  "status": "validated",
+  "sensitivity": "public"
+}
