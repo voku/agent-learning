@@ -37,6 +37,15 @@ final class ProposalFromConsolidationResult
             'approved_at' => null,
         ];
 
+        $targetType = null;
+        $target = null;
+        $scope = [];
+        $old = null;
+        $new = null;
+        $boundary = null;
+        $validation = [];
+        $constraint = null;
+
         if ($result instanceof NoDurableLearningResult) {
             $raw['existing_guidance_id'] = $result->existingGuidanceId;
             $raw['target_type'] = null;
@@ -49,6 +58,15 @@ final class ProposalFromConsolidationResult
         } else {
             // Durable mutation
             /** @var AddResult|DeleteResult|ReplaceResult|RejectResult $result */
+            $targetType = $result->targetType;
+            $target = $result->target;
+            $scope = $result->scope;
+            $old = $result->old;
+            $new = $result->new;
+            $boundary = $result->boundary;
+            $validation = $result->validation;
+            $constraint = $result->constraint;
+
             $raw['target_type'] = $result->targetType;
             $raw['target'] = $result->target;
             $raw['scope'] = $result->scope;
@@ -57,26 +75,33 @@ final class ProposalFromConsolidationResult
             $raw['boundary'] = $result->boundary;
             $raw['validation'] = $result->validation;
             $raw['scope_justification'] = $result->getReason();
+            if ($result->constraint instanceof ConstraintSpecification) {
+                $raw['constraint'] = $result->constraint->toArray();
+            }
+            foreach ($result->promotionGateEvidence as $field => $value) {
+                $raw[$field] = $value;
+            }
         }
 
         return new Proposal(
             $proposalId,
             $createdAtStr,
             $result->getAction(),
-            $raw['target_type'],
-            $raw['target'],
-            $raw['scope'],
-            $raw['source_findings'],
-            $raw['old'],
-            $raw['new'],
-            $raw['reason'],
-            $raw['boundary'],
-            $raw['validation'],
+            $targetType,
+            $target,
+            $scope,
+            $result->getSourceFindings(),
+            $old,
+            $new,
+            $result->getReason(),
+            $boundary,
+            $validation,
             ProposalStatus::CANDIDATE,
             'consolidation',
             null,
             null,
-            $raw
+            $raw,
+            $constraint
         );
     }
 }

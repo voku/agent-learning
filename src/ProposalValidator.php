@@ -12,6 +12,7 @@ final class ProposalValidator
     public function __construct(
         private readonly ProposalParser $parser = new ProposalParser(),
         private readonly RedactionGuard $redactionGuard = new RedactionGuard(),
+        private readonly ConstraintPromotionValidator $constraintPromotionValidator = new ConstraintPromotionValidator(),
     ) {
     }
 
@@ -52,12 +53,18 @@ final class ProposalValidator
         }
 
         $this->assertActionStatusCombination($proposal, $file, $line);
+        if ($proposal->constraint !== null && $proposal->targetType !== GuidanceType::CONSTRAINT->value) {
+            throw new ValidationException($file, $line, $proposal->id, 'constraint specification requires target_type=constraint');
+        }
+
         if ($proposal->action !== Action::NO_DURABLE_LEARNING) {
             if (
                 $proposal->targetType === null
-                ||
-                $proposal->target === null
             ) {
+                throw new ValidationException($file, $line, $proposal->id, 'durable proposal requires target_type and target');
+            }
+
+            if ($proposal->target === null && $proposal->targetType !== GuidanceType::CONSTRAINT->value) {
                 throw new ValidationException($file, $line, $proposal->id, 'durable proposal requires target_type and target');
             }
 
@@ -66,9 +73,13 @@ final class ProposalValidator
             }
 
             if (
-                $proposal->boundary === null
-                ||
-                trim($proposal->boundary) === ''
+                $proposal->constraint === null
+                &&
+                (
+                    $proposal->boundary === null
+                    ||
+                    trim($proposal->boundary) === ''
+                )
             ) {
                 throw new ValidationException($file, $line, $proposal->id, 'durable proposal requires known boundary');
             }
@@ -80,6 +91,8 @@ final class ProposalValidator
 
         if (
             $proposal->action === Action::ADD
+            &&
+            $proposal->constraint === null
             &&
             (
                 $proposal->new === null
@@ -185,6 +198,8 @@ final class ProposalValidator
                 }
             }
         }
+
+        $this->constraintPromotionValidator->validate($proposal, $file, $line, $findingsById);
         foreach ($proposal->scope as $scope) {
             if (
                 !isset($evidenceScope[$scope])

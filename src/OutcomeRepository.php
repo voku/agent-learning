@@ -162,7 +162,18 @@ final class OutcomeRepository
         }
 
         $result = $record['result'] ?? null;
-        $allowedResults = ['successful', 'partially_successful', 'failed', 'unknown'];
+        $allowedResults = [
+            'successful',
+            'partially_successful',
+            'failed',
+            'unknown',
+            'violation_detected',
+            'false_positive',
+            'rule_bypassed',
+            'rule_suppressed',
+            'rule_disabled',
+            'no_violation_observed',
+        ];
         if (!is_string($result) || !in_array($result, $allowedResults, true)) {
             throw new ValidationException($file, $line, $recordId, 'unsupported outcome result: ' . var_export($result, true));
         }

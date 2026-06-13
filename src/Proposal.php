@@ -30,6 +30,7 @@ final readonly class Proposal
         public ?string $approvedBy,
         public ?string $approvedAt,
         public array $raw,
+        public ?ConstraintSpecification $constraint = null,
     ) {
     }
 }

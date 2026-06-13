@@ -14,6 +14,7 @@ final readonly class DeleteResult implements ConsolidationResult
      * @param list<string> $scope
      * @param list<string> $validation
      * @param list<string> $remainingUncertainty
+     * @param array<string, bool|string> $promotionGateEvidence
      */
     public function __construct(
         public array $sourceFindings,
@@ -26,6 +27,8 @@ final readonly class DeleteResult implements ConsolidationResult
         public ?string $boundary,
         public array $validation = [],
         public array $remainingUncertainty = [],
+        public ?ConstraintSpecification $constraint = null,
+        public array $promotionGateEvidence = [],
     ) {
     }
 

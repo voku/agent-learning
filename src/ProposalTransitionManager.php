@@ -331,6 +331,10 @@ final class ProposalTransitionManager
             throw new ValidationException($proposalPath, null, $proposalId, 'proposal is not approved');
         }
 
+        if ($proposal->targetType === GuidanceType::CONSTRAINT->value) {
+            $this->validateConstraintAppliedMetadata($validationData, $validationFilePath, $proposalId);
+        }
+
         $now = new DateTimeImmutable('now');
         $nowStr = $now->format(DateTimeInterface::ATOM);
 
@@ -442,5 +446,34 @@ final class ProposalTransitionManager
         $proposalsById = (new ProposalRepository())->loadAll($root, $findingsById);
         (new DecisionHistoryValidator())->validateHistory($root, $proposalsById);
         (new OutcomeRepository())->loadAll($root, $proposalsById);
+    }
+
+    /**
+     * @param mixed $validationData
+     */
+    private function validateConstraintAppliedMetadata(mixed $validationData, string $file, string $proposalId): void
+    {
+        if (!is_array($validationData)) {
+            throw new ValidationException($file, null, $proposalId, 'constraint applied validation must be a JSON object');
+        }
+
+        foreach (['generated_files', 'tests', 'content_hashes'] as $field) {
+            $value = $validationData[$field] ?? null;
+            if (!is_array($value) || $value === []) {
+                throw new ValidationException($file, null, $proposalId, 'constraint applied validation requires non-empty array: ' . $field);
+            }
+        }
+
+        foreach (['registration_file', 'commit'] as $field) {
+            $value = $validationData[$field] ?? null;
+            if (!is_string($value) || trim($value) === '') {
+                throw new ValidationException($file, null, $proposalId, 'constraint applied validation requires non-empty string: ' . $field);
+            }
+        }
+
+        $validationResult = $validationData['validation_result'] ?? null;
+        if (!is_array($validationResult) || $validationResult === []) {
+            throw new ValidationException($file, null, $proposalId, 'constraint applied validation requires validation_result object');
+        }
     }
 }

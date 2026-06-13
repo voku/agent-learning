@@ -11,6 +11,7 @@ final class ConsolidationResultValidator
 {
     public function __construct(
         private readonly RedactionGuard $redactionGuard = new RedactionGuard(),
+        private readonly ConstraintSpecificationParser $constraintParser = new ConstraintSpecificationParser(),
     ) {
     }
 
@@ -58,6 +59,10 @@ final class ConsolidationResultValidator
             'new',
             'boundary',
             'validation',
+            'constraint',
+            'critical_incident',
+            'critical_incident_justification',
+            'false_positive_risk_justification',
         ];
 
         $allowedKeys = ($action === Action::NO_DURABLE_LEARNING) ? $allowedNoDurable : $allowedDurable;
@@ -124,16 +129,34 @@ final class ConsolidationResultValidator
 
         // Validate Durable Mutation fields
         $targetType = $data['target_type'] ?? null;
-        if (!is_string($targetType) || GuidanceType::tryFrom(strtolower($targetType)) === null) {
+        $guidanceType = is_string($targetType) ? GuidanceType::tryFrom(strtolower($targetType)) : null;
+        if (!is_string($targetType) || $guidanceType === null) {
             throw new ValidationException('', null, null, 'missing or unsupported target_type: ' . var_export($targetType, true));
+        }
+        $targetType = $guidanceType->value;
+
+        $constraint = null;
+        if ($targetType === GuidanceType::CONSTRAINT->value) {
+            $constraintRecord = $data['constraint'] ?? null;
+            if (!is_array($constraintRecord)) {
+                throw new ValidationException('', null, null, 'constraint target_type requires constraint object');
+            }
+            /** @var array<string, mixed> $constraintRecord */
+            $constraint = $this->constraintParser->parse($constraintRecord, 'consolidation-result');
         }
 
         $target = $data['target'] ?? null;
+        if ($target === null && $constraint instanceof ConstraintSpecification) {
+            $target = $constraint->ruleId;
+        }
         if (!is_string($target) || trim($target) === '') {
             throw new ValidationException('', null, null, 'missing or empty target');
         }
 
         $scope = $data['scope'] ?? null;
+        if ($scope === null && $constraint instanceof ConstraintSpecification) {
+            $scope = $constraint->scope;
+        }
         if (!is_array($scope) || $scope === []) {
             throw new ValidationException('', null, null, 'missing or empty scope');
         }
@@ -165,11 +188,19 @@ final class ConsolidationResultValidator
         }
 
         $boundary = $data['boundary'] ?? null;
+        if ($boundary === null && $constraint instanceof ConstraintSpecification) {
+            $boundary = $constraint->allowedBoundaries === []
+                ? 'No allowed boundaries declared for this constraint.'
+                : 'Allowed boundaries are declared in constraint.allowed_boundaries.';
+        }
         if ($boundary !== null && !is_string($boundary)) {
             throw new ValidationException('', null, null, 'boundary must be a string');
         }
 
         $validation = $data['validation'] ?? [];
+        if ($validation === [] && $constraint instanceof ConstraintSpecification) {
+            $validation = $constraint->validationCommands;
+        }
         if (!is_array($validation)) {
             throw new ValidationException('', null, null, 'validation must be an array');
         }
@@ -182,12 +213,38 @@ final class ConsolidationResultValidator
         /** @var list<string> $validationList */
         $validationList = array_values($validation);
 
+        $promotionGateEvidence = $this->promotionGateEvidence($data);
+
         return match ($action) {
-            Action::ADD => new AddResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList),
-            Action::DELETE => new DeleteResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList),
-            Action::REPLACE => new ReplaceResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList),
-            Action::REJECT => new RejectResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList),
+            Action::ADD => new AddResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList, $constraint, $promotionGateEvidence),
+            Action::DELETE => new DeleteResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList, $constraint, $promotionGateEvidence),
+            Action::REPLACE => new ReplaceResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList, $constraint, $promotionGateEvidence),
+            Action::REJECT => new RejectResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList, $constraint, $promotionGateEvidence),
         };
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     *
+     * @return array<string, bool|string>
+     */
+    private function promotionGateEvidence(array $data): array
+    {
+        $evidence = [];
+        foreach (['critical_incident', 'critical_incident_justification', 'false_positive_risk_justification'] as $field) {
+            if (!array_key_exists($field, $data)) {
+                continue;
+            }
+            $value = $data[$field];
+            if (is_bool($value) || is_string($value)) {
+                $evidence[$field] = $value;
+                continue;
+            }
+
+            throw new ValidationException('', null, null, $field . ' must be a boolean or string');
+        }
+
+        return $evidence;
     }
 
     /**

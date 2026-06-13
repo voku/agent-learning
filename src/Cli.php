@@ -31,6 +31,7 @@ final class Cli
                 'prepare' => $this->prepareCommand($tokens),
                 'proposal-validate' => $this->proposalValidateCommand($tokens),
                 'proposal-import' => $this->proposalImportCommand($tokens),
+                'constraint-export' => $this->constraintExportCommand($tokens),
                 'finding-transition' => $this->findingTransitionCommand($tokens),
                 'proposal-approve' => $this->proposalApproveCommand($tokens),
                 'proposal-reject' => $this->proposalRejectCommand($tokens),
@@ -176,6 +177,30 @@ final class Cli
     /**
      * @param list<string> $tokens
      */
+    private function constraintExportCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $proposalPath = $this->stringOption($parsed['options'], 'proposal') ?? $parsed['arguments'][0] ?? null;
+        $outputDir = $this->stringOption($parsed['options'], 'output-dir') ?? $this->stringOption($parsed['options'], 'output');
+        if ($proposalPath === null || trim($proposalPath) === '') {
+            throw new ValidationException($root, null, null, 'constraint-export requires --proposal or a proposal path argument');
+        }
+        if ($outputDir === null || trim($outputDir) === '') {
+            throw new ValidationException($root, null, null, 'constraint-export requires --output-dir option');
+        }
+
+        $proposalPath = $this->resolveProposalPath($proposalPath, $root);
+        $findingsById = $this->validateFindings($root, $this->stringOption($parsed['options'], 'task-id-pattern'));
+        (new ConstraintGenerationPackageExporter())->export($root, $proposalPath, $outputDir, $findingsById);
+        $this->write('Exported constraint generation package: ' . $outputDir . "\n");
+
+        return 0;
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
     private function findingTransitionCommand(array $tokens): int
     {
         $parsed = $this->parseOptions($tokens);
@@ -295,6 +320,7 @@ final class Cli
             . "  prepare              Build consolidation input for selected validated findings.\n"
             . "  proposal-validate    Validate one proposal against known findings.\n"
             . "  proposal-import      Import a consolidation result file as a candidate proposal.\n"
+            . "  constraint-export    Export generation package files for a constraint proposal.\n"
             . "  finding-transition   Transition a finding to a new state.\n"
             . "  proposal-approve     Approve a candidate proposal.\n"
             . "  proposal-reject      Reject a candidate proposal.\n"
@@ -313,6 +339,7 @@ final class Cli
             . "  --proposal PATH          Proposal path for proposal-validate.\n"
             . "  --input PATH             Input file for proposal-import.\n"
             . "  --output PATH            Output file for prepare.\n"
+            . "  --output-dir PATH        Output directory for constraint-export.\n"
             . "  --by ACTOR               Actor performing the operation.\n"
             . "  --reason REASON          Reason for proposal rejection.\n"
             . "  --commit COMMIT          Commit hash or pull request reference.\n"

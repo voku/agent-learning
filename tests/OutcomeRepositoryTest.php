@@ -58,6 +58,25 @@ final class OutcomeRepositoryTest extends TestCase
         self::assertSame('outcome.2026-06-20.001', $outcomes[0]['id']);
     }
 
+    public function testRecordsConstraintOutcomeSuccessfully(): void
+    {
+        $repo = new OutcomeRepository();
+        $record = [
+            'id' => 'outcome.2026-06-20.002',
+            'task_id' => 'PROJECT-205',
+            'applied_proposals' => ['proposal.2026-06-08.001'],
+            'guidance_used' => ['constraint.project.inline-template.render-data'],
+            'result' => 'violation_detected',
+            'recorded_by' => 'lars',
+            'recorded_at' => '2026-06-20T12:00:00+00:00',
+        ];
+
+        $repo->record($this->root, $record);
+
+        $outcomes = $repo->loadAll($this->root);
+        self::assertSame('violation_detected', $outcomes[0]['result']);
+    }
+
     public function testThrowsOnUnknownProposalReference(): void
     {
         $repo = new OutcomeRepository();

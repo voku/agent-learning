@@ -21,6 +21,9 @@ A **Proposal** defines a potential durable mutation to the repository's guidelin
 * References one or more validated source findings that back it up.
 * Contains metadata about target type, scope, proposed boundary, validation checklist, status, and approval.
 
+### Constraint Specifications
+A **ConstraintSpecification** is a typed, reviewable bridge from confirmed learning to executable validation. Constraint proposals describe the engine, rule identifier, scope, objective violation, allowed boundaries, false-positive risk, validation commands, local example rules, target rule path, and registration files. The package validates whether the learning is stable and precise enough for a later PHPStan, PHP-CS-Fixer, test, or CI generation step.
+
 ### Evidence
 Findings must be backed by concrete, verifiable evidence. Supported types include:
 * `file_reference`: References to specific files and line numbers.
@@ -47,6 +50,10 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 * [Proposal](src/Proposal.php): Read-only entity representing a proposed modification to guidelines.
 * [ProposalStatus](src/ProposalStatus.php): Enum defining proposal states (`candidate`, `approved`, `rejected`, `applied`).
 * [Action](src/Action.php): Enum representing actions (`NO_DURABLE_LEARNING`, `ADD`, `DELETE`, `REPLACE`, `REJECT`).
+* [ConstraintSpecification](src/ConstraintSpecification.php): Read-only model for hard-constraint promotion candidates.
+* [ConstraintEngine](src/ConstraintEngine.php): Enum defining supported hard-constraint engines (`phpstan`, `php_cs_fixer`, `test`, `ci`).
+* [Detectability](src/Detectability.php): Enum describing whether the violation is statically, syntax-locally, runtime, or cross-file detectable.
+* [FalsePositiveRisk](src/FalsePositiveRisk.php): Enum declaring expected false-positive risk (`low`, `medium`, `high`, `unknown`).
 
 ### Parsers & Repositories
 * [FindingParser](src/FindingParser.php): Parses a finding JSON record or file.
@@ -61,9 +68,11 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 * [JsonlValidator](src/JsonlValidator.php): Parses and validates JSON Lines log formats.
 * [RedactionGuard](src/RedactionGuard.php): Scans all content for credentials, secrets, or sensitive configuration keys to prevent accidental leaks.
 * [DecisionHistoryValidator](src/DecisionHistoryValidator.php): Validates log consistency of the decision history.
+* [ConstraintPromotionValidator](src/ConstraintPromotionValidator.php): Validates that constraint proposals come from confirmed findings and contain explicit promotion-gate evidence.
 
 ### Utilities & Infrastructure
 * [ConsolidationPromptBuilder](src/ConsolidationPromptBuilder.php): Assembles validated findings and rejected proposals history into a structured LLM consolidation prompt.
+* [ConstraintGenerationPackageExporter](src/ConstraintGenerationPackageExporter.php): Exports `specification.json`, source findings/proposals, examples, validation plan, and generation prompt for coding-agent rule generation.
 * [RecordAccess](src/RecordAccess.php): Utility helper to extract strongly typed fields from raw array data.
 * [Json](src/Json.php): Helper for decoding files safely.
 * [ValidationException](src/ValidationException.php): Custom runtime exception with file name, line numbers, and record IDs context.
@@ -107,6 +116,10 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
    - `REJECTED` proposal or a `REJECT` action requires a non-empty `reason`.
 7. **Lifecycle Directory Check**: Proposal files under `proposals/<status>/` must embed the same `status` value.
 8. **Scope Broader Check**: If proposal `scope` includes entries not present in the referenced findings, a `scope_justification` must be provided.
+9. **Constraint Promotion Gates**: Constraint proposals require confirmed source findings, several independent findings or a critical-incident justification, explicit scope, explicit allowed boundaries, objective detectability, validation commands, declared false-positive risk, local example rule references where available, and engine-compatible target paths/commands.
+
+### Applied Constraint Metadata
+When a constraint proposal is marked `applied`, its validation JSON must include `generated_files`, `registration_file`, `commit`, `tests`, `validation_result`, and `content_hashes`. This preserves lineage from finding to proposal, generated rule, registration, commit, validation, and later outcome.
 
 ### Redaction Constraints
 All keys and values are checked using [RedactionGuard](src/RedactionGuard.php) against secret assignment patterns. Any matches of standard credential assignments (e.g. `password`, `token`, `api_key`, `ms-Mcs-AdmPwd` patterns) throw a validation exception.
