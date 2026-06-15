@@ -4,6 +4,18 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.3.0] - 2026-06-15
+
+### Added
+- 
+- Add `constraint-activate` to write active constraint manifests from approved or applied constraint proposals.
+- Add `constraint-loop` to export, apply, and activate generated constraints with one explicit tooling command.
+- Add learning-root `config.json` path settings for `project_root`, `constraint_generation_dir`, and `active_constraints_dir`.
+
+### Changed
+
+- Resolve constraint example, generation-package, and active-manifest paths from CLI options, learning-root configuration, or legacy project-root inference.
+
 ## [0.2.0] - 2026-06-14
 
 ### Added

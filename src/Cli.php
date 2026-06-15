@@ -32,6 +32,8 @@ final class Cli
                 'proposal-validate' => $this->proposalValidateCommand($tokens),
                 'proposal-import' => $this->proposalImportCommand($tokens),
                 'constraint-export' => $this->constraintExportCommand($tokens),
+                'constraint-activate' => $this->constraintActivateCommand($tokens),
+                'constraint-loop' => $this->constraintLoopCommand($tokens),
                 'finding-transition' => $this->findingTransitionCommand($tokens),
                 'proposal-approve' => $this->proposalApproveCommand($tokens),
                 'proposal-reject' => $this->proposalRejectCommand($tokens),
@@ -67,6 +69,63 @@ final class Cli
             . 'Findings: ' . count($findingsById) . "\n"
             . 'Proposals: ' . count($proposalsById) . "\n"
         );
+
+        return 0;
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function constraintLoopCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $proposal = $this->stringOption($parsed['options'], 'proposal') ?? $parsed['arguments'][0] ?? null;
+        if ($proposal === null || trim($proposal) === '') {
+            throw new ValidationException($root, null, null, 'constraint-loop requires --proposal or a proposal ID/path argument');
+        }
+
+        $actor = $this->stringOption($parsed['options'], 'by');
+        if ($actor === null || trim($actor) === '') {
+            throw new ValidationException($root, null, null, 'constraint-loop requires --by actor option');
+        }
+
+        $commit = $this->stringOption($parsed['options'], 'commit');
+        if ($commit === null || trim($commit) === '') {
+            throw new ValidationException($root, null, null, 'constraint-loop requires --commit option');
+        }
+
+        $validation = $this->stringOption($parsed['options'], 'validation');
+        if ($validation === null || trim($validation) === '') {
+            throw new ValidationException($root, null, null, 'constraint-loop requires --validation file option');
+        }
+
+        $proposalPath = $this->resolveProposalPathOrId($proposal, $root);
+        $findingsById = $this->validateFindings($root, $this->stringOption($parsed['options'], 'task-id-pattern'));
+        $result = (new ConstraintLoopRunner())->run(
+            $root,
+            $proposalPath,
+            $actor,
+            $commit,
+            $validation,
+            $this->stringOption($parsed['options'], 'output-dir') ?? $this->stringOption($parsed['options'], 'output'),
+            $this->stringOption($parsed['options'], 'manifest') ?? $this->stringOption($parsed['options'], 'manifest-path'),
+            $findingsById,
+            $this->boolOption($parsed['options'], 'approve-candidate'),
+            $this->boolOption($parsed['options'], 'overwrite'),
+            $this->stringOption($parsed['options'], 'project-root'),
+            $this->stringOption($parsed['options'], 'constraint-generation-dir'),
+            $this->stringOption($parsed['options'], 'active-constraints-dir'),
+        );
+
+        if ($result->approvedCandidate) {
+            $this->write('Approved proposal: ' . $result->proposalId . "\n");
+        }
+        $this->write('Exported constraint generation package: ' . $result->generationPackageDir . "\n");
+        if ($result->markedApplied) {
+            $this->write('Marked proposal applied: ' . $result->proposalId . "\n");
+        }
+        $this->write('Activated constraint manifest: ' . $result->manifestPath . "\n");
 
         return 0;
     }
@@ -186,14 +245,53 @@ final class Cli
         if ($proposalPath === null || trim($proposalPath) === '') {
             throw new ValidationException($root, null, null, 'constraint-export requires --proposal or a proposal path argument');
         }
+
+        $proposalPath = $this->resolveProposalPath($proposalPath, $root);
+        $findingsById = $this->validateFindings($root, $this->stringOption($parsed['options'], 'task-id-pattern'));
         if ($outputDir === null || trim($outputDir) === '') {
-            throw new ValidationException($root, null, null, 'constraint-export requires --output-dir option');
+            $proposal = (new ProposalValidator())->validateFile($proposalPath, $findingsById);
+            $outputDir = (new LearningProjectPaths())->constraintGenerationDirectory(
+                $root,
+                $this->stringOption($parsed['options'], 'constraint-generation-dir'),
+            ) . '/' . $proposal->id;
+        }
+        (new ConstraintGenerationPackageExporter())->export(
+            $root,
+            $proposalPath,
+            $outputDir,
+            $findingsById,
+            $this->stringOption($parsed['options'], 'project-root'),
+        );
+        $this->write('Exported constraint generation package: ' . $outputDir . "\n");
+
+        return 0;
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function constraintActivateCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $proposalPath = $this->stringOption($parsed['options'], 'proposal') ?? $parsed['arguments'][0] ?? null;
+        $outputPath = $this->stringOption($parsed['options'], 'output') ?? $this->stringOption($parsed['options'], 'output-file');
+        if ($proposalPath === null || trim($proposalPath) === '') {
+            throw new ValidationException($root, null, null, 'constraint-activate requires --proposal or a proposal path argument');
         }
 
         $proposalPath = $this->resolveProposalPath($proposalPath, $root);
         $findingsById = $this->validateFindings($root, $this->stringOption($parsed['options'], 'task-id-pattern'));
-        (new ConstraintGenerationPackageExporter())->export($root, $proposalPath, $outputDir, $findingsById);
-        $this->write('Exported constraint generation package: ' . $outputDir . "\n");
+        $manifestPath = (new ConstraintManifestActivator())->activate(
+            $root,
+            $proposalPath,
+            $outputPath,
+            $findingsById,
+            $this->boolOption($parsed['options'], 'overwrite'),
+            $this->stringOption($parsed['options'], 'project-root'),
+            $this->stringOption($parsed['options'], 'active-constraints-dir'),
+        );
+        $this->write('Activated constraint manifest: ' . $manifestPath . "\n");
 
         return 0;
     }
@@ -321,6 +419,8 @@ final class Cli
             . "  proposal-validate    Validate one proposal against known findings.\n"
             . "  proposal-import      Import a consolidation result file as a candidate proposal.\n"
             . "  constraint-export    Export generation package files for a constraint proposal.\n"
+            . "  constraint-activate  Write an active constraint manifest from an approved/applied proposal.\n"
+            . "  constraint-loop      Export, apply, and activate a generated constraint proposal.\n"
             . "  finding-transition   Transition a finding to a new state.\n"
             . "  proposal-approve     Approve a candidate proposal.\n"
             . "  proposal-reject      Reject a candidate proposal.\n"
@@ -339,7 +439,13 @@ final class Cli
             . "  --proposal PATH          Proposal path for proposal-validate.\n"
             . "  --input PATH             Input file for proposal-import.\n"
             . "  --output PATH            Output file for prepare.\n"
-            . "  --output-dir PATH        Output directory for constraint-export.\n"
+            . "  --output-dir PATH        Output directory for constraint-export or constraint-loop.\n"
+            . "  --project-root PATH      Project root used for constraint file checks and examples.\n"
+            . "  --constraint-generation-dir PATH Base directory for generated constraint packages.\n"
+            . "  --active-constraints-dir PATH Directory for active constraint manifests.\n"
+            . "  --overwrite              Allow constraint-activate to replace an existing manifest.\n"
+            . "  --approve-candidate      Allow constraint-loop to approve a candidate proposal before applying.\n"
+            . "  --manifest PATH          Manifest output path for constraint-loop or constraint-activate.\n"
             . "  --by ACTOR               Actor performing the operation.\n"
             . "  --reason REASON          Reason for proposal rejection.\n"
             . "  --commit COMMIT          Commit hash or pull request reference.\n"
@@ -392,6 +498,15 @@ final class Cli
         throw new ValidationException($proposalPath, null, null, 'proposal file does not exist');
     }
 
+    private function resolveProposalPathOrId(string $proposal, string $root): string
+    {
+        if (is_file($proposal) || str_ends_with($proposal, '.json')) {
+            return $this->resolveProposalPath($proposal, $root);
+        }
+
+        return (new ProposalTransitionManager())->resolveProposalPath($proposal, $root);
+    }
+
     /**
      * @param list<string> $tokens
      *
@@ -401,8 +516,7 @@ final class Cli
     {
         $options = [];
         $arguments = [];
-        for ($index = 0; $index < count($tokens); $index++) {
-            $token = $tokens[$index];
+        foreach ($tokens as $index => $token) {
             if (!str_starts_with($token, '--')) {
                 $arguments[] = $token;
                 continue;

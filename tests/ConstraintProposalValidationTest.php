@@ -7,6 +7,8 @@ namespace voku\AgentLearning\Tests;
 use PHPUnit\Framework\TestCase;
 use voku\AgentLearning\ConstraintGenerationPackageExporter;
 use voku\AgentLearning\ConstraintEngine;
+use voku\AgentLearning\ConstraintLoopRunner;
+use voku\AgentLearning\ConstraintManifestActivator;
 use voku\AgentLearning\Detectability;
 use voku\AgentLearning\FalsePositiveRisk;
 use voku\AgentLearning\Finding;
@@ -143,6 +145,11 @@ final class ConstraintProposalValidationTest extends TestCase
         $output = $root . '/constraint-generation/proposal.2026-06-13.001';
         mkdir($root . '/findings/validated', 0777, true);
         mkdir($root . '/proposals/candidate', 0777, true);
+        mkdir($root . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
+        file_put_contents(
+            $root . '/infra/githooks/StandardITPortal/PHPStan/ItPortalTranslationParametersRule.php',
+            "<?php\nfinal class ItPortalTranslationParametersRule {}\n",
+        );
 
         $findings = [
             'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
@@ -163,8 +170,182 @@ final class ConstraintProposalValidationTest extends TestCase
 
             $spec = json_decode((string)file_get_contents($output . '/specification.json'), true);
             self::assertSame('project.translation.parameters', $spec['constraint']['rule_id']);
+            $examples = json_decode((string)file_get_contents($output . '/examples.json'), true);
+            self::assertStringContainsString('ItPortalTranslationParametersRule', $examples['examples'][0]['content']);
         } finally {
             $this->removeDirectory($root);
+        }
+    }
+
+    public function testActivatesConstraintManifestFromApprovedProposal(): void
+    {
+        $project = sys_get_temp_dir() . '/constraint_manifest_activate_' . bin2hex(random_bytes(8));
+        $root = $project . '/infra/doc/agent-learning';
+        mkdir($root . '/proposals/approved', 0777, true);
+        mkdir($project . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
+        file_put_contents($project . '/infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
+        file_put_contents($project . '/infra/githooks/phpstan_bootstrap.php', "<?php\n");
+
+        $findings = [
+            'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
+            'finding.2026-06-13.002' => $this->finding('finding.2026-06-13.002'),
+        ];
+        $proposalPath = $root . '/proposals/approved/proposal.2026-06-13.001.json';
+        file_put_contents($proposalPath, json_encode($this->approvedProposalRecord(), JSON_THROW_ON_ERROR));
+
+        try {
+            $manifestPath = (new ConstraintManifestActivator())->activate($root, $proposalPath, null, $findings);
+
+            self::assertSame($root . '/constraints/active/constraint.project.translation.parameters.json', $manifestPath);
+            self::assertFileExists($manifestPath);
+            $manifest = json_decode((string)file_get_contents($manifestPath), true);
+            self::assertSame('constraint.project.translation.parameters', $manifest['id']);
+            self::assertSame('phpstan', $manifest['engine']);
+            self::assertSame('project.translation.parameters', $manifest['rule_identifier']);
+            self::assertSame(['src/'], $manifest['scope']);
+            self::assertSame(['vendor/bin/phpstan analyse'], $manifest['validation_commands']);
+            self::assertSame('proposal.2026-06-13.001', $manifest['source_proposal']);
+            self::assertSame('active', $manifest['status']);
+        } finally {
+            $this->removeDirectory($project);
+        }
+    }
+
+    public function testRejectsConstraintManifestActivationBeforeApproval(): void
+    {
+        $project = sys_get_temp_dir() . '/constraint_manifest_candidate_' . bin2hex(random_bytes(8));
+        $root = $project . '/infra/doc/agent-learning';
+        mkdir($root . '/proposals/candidate', 0777, true);
+        mkdir($project . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
+        file_put_contents($project . '/infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
+        file_put_contents($project . '/infra/githooks/phpstan_bootstrap.php', "<?php\n");
+
+        $proposalPath = $root . '/proposals/candidate/proposal.2026-06-13.001.json';
+        file_put_contents($proposalPath, json_encode($this->proposalRecord(), JSON_THROW_ON_ERROR));
+
+        try {
+            $this->expectException(ValidationException::class);
+            $this->expectExceptionMessage('constraint activation requires an approved or applied proposal');
+
+            (new ConstraintManifestActivator())->activate($root, $proposalPath, null, [
+                'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
+                'finding.2026-06-13.002' => $this->finding('finding.2026-06-13.002'),
+            ]);
+        } finally {
+            $this->removeDirectory($project);
+        }
+    }
+
+    public function testConstraintLoopApprovesAppliesAndActivatesCandidate(): void
+    {
+        $project = sys_get_temp_dir() . '/constraint_loop_' . bin2hex(random_bytes(8));
+        $root = $project . '/infra/doc/agent-learning';
+        mkdir($root . '/findings/validated', 0777, true);
+        mkdir($root . '/proposals/candidate', 0777, true);
+        mkdir($root . '/history', 0777, true);
+        mkdir($project . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
+        file_put_contents($project . '/infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
+        file_put_contents($project . '/infra/githooks/phpstan_bootstrap.php', "<?php\n");
+        file_put_contents(
+            $root . '/findings/validated/finding.2026-06-13.001.json',
+            json_encode($this->findingRecord('finding.2026-06-13.001'), JSON_THROW_ON_ERROR),
+        );
+        file_put_contents(
+            $root . '/findings/validated/finding.2026-06-13.002.json',
+            json_encode($this->findingRecord('finding.2026-06-13.002'), JSON_THROW_ON_ERROR),
+        );
+        $proposalPath = $root . '/proposals/candidate/proposal.2026-06-13.001.json';
+        file_put_contents($proposalPath, json_encode($this->proposalRecord(), JSON_THROW_ON_ERROR));
+        $validationPath = $root . '/validation-result.json';
+        file_put_contents($validationPath, json_encode($this->constraintValidationRecord(), JSON_THROW_ON_ERROR));
+
+        try {
+            $findings = [
+                'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
+                'finding.2026-06-13.002' => $this->finding('finding.2026-06-13.002'),
+            ];
+            $result = (new ConstraintLoopRunner())->run(
+                $root,
+                $proposalPath,
+                'codex',
+                'working-tree',
+                $validationPath,
+                null,
+                null,
+                $findings,
+                true,
+            );
+
+            self::assertTrue($result->approvedCandidate);
+            self::assertTrue($result->markedApplied);
+            self::assertFileDoesNotExist($proposalPath);
+            self::assertFileExists($root . '/proposals/applied/proposal.2026-06-13.001.json');
+            self::assertFileExists($root . '/constraint-generation/proposal.2026-06-13.001/specification.json');
+            self::assertFileExists($root . '/constraints/active/constraint.project.translation.parameters.json');
+        } finally {
+            $this->removeDirectory($project);
+        }
+    }
+
+    public function testConstraintLoopUsesConfiguredPathsForNonStandardProjectLayout(): void
+    {
+        $workspace = sys_get_temp_dir() . '/constraint_loop_configured_' . bin2hex(random_bytes(8));
+        $project = $workspace . '/application';
+        $root = $workspace . '/learning-state';
+        mkdir($root . '/findings/validated', 0777, true);
+        mkdir($root . '/proposals/candidate', 0777, true);
+        mkdir($root . '/history', 0777, true);
+        mkdir($project . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
+        file_put_contents($project . '/infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
+        file_put_contents(
+            $project . '/infra/githooks/StandardITPortal/PHPStan/ItPortalTranslationParametersRule.php',
+            "<?php\nfinal class ItPortalTranslationParametersRule {}\n",
+        );
+        file_put_contents($project . '/infra/githooks/phpstan_bootstrap.php', "<?php\n");
+        file_put_contents($root . '/config.json', json_encode([
+            'schema_version' => '1.0',
+            'project_root' => '../application',
+            'constraint_generation_dir' => 'generated-packages',
+            'active_constraints_dir' => 'active-manifests',
+        ], JSON_THROW_ON_ERROR));
+        file_put_contents(
+            $root . '/findings/validated/finding.2026-06-13.001.json',
+            json_encode($this->findingRecord('finding.2026-06-13.001'), JSON_THROW_ON_ERROR),
+        );
+        file_put_contents(
+            $root . '/findings/validated/finding.2026-06-13.002.json',
+            json_encode($this->findingRecord('finding.2026-06-13.002'), JSON_THROW_ON_ERROR),
+        );
+        $proposalPath = $root . '/proposals/candidate/proposal.2026-06-13.001.json';
+        file_put_contents($proposalPath, json_encode($this->proposalRecord(), JSON_THROW_ON_ERROR));
+        $validationPath = $root . '/validation-result.json';
+        file_put_contents($validationPath, json_encode($this->constraintValidationRecord(), JSON_THROW_ON_ERROR));
+
+        try {
+            $findings = [
+                'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
+                'finding.2026-06-13.002' => $this->finding('finding.2026-06-13.002'),
+            ];
+            $result = (new ConstraintLoopRunner())->run(
+                $root,
+                $proposalPath,
+                'codex',
+                'working-tree',
+                $validationPath,
+                null,
+                null,
+                $findings,
+                true,
+            );
+
+            self::assertSame($root . '/generated-packages/proposal.2026-06-13.001', $result->generationPackageDir);
+            self::assertSame($root . '/active-manifests/constraint.project.translation.parameters.json', $result->manifestPath);
+            self::assertFileExists($result->generationPackageDir . '/examples.json');
+            self::assertFileExists($result->manifestPath);
+            $examples = json_decode((string)file_get_contents($result->generationPackageDir . '/examples.json'), true);
+            self::assertStringContainsString('ItPortalTranslationParametersRule', $examples['examples'][0]['content']);
+        } finally {
+            $this->removeDirectory($workspace);
         }
     }
 
@@ -200,6 +381,18 @@ final class ConstraintProposalValidationTest extends TestCase
         }
 
         return array_replace($record, $overrides);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function approvedProposalRecord(): array
+    {
+        return $this->proposalRecord([
+            'status' => 'approved',
+            'approved_by' => 'lars',
+            'approved_at' => '2026-06-13T11:00:00+00:00',
+        ]);
     }
 
     /**
@@ -245,6 +438,51 @@ final class ConstraintProposalValidationTest extends TestCase
             'public',
             ['id' => $id],
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function findingRecord(string $id): array
+    {
+        return [
+            'id' => $id,
+            'task_id' => 'PROJECT-1234',
+            'session' => 'session_abc123',
+            'created_at' => '2026-06-13T09:00:00+00:00',
+            'created_by' => 'agent',
+            'scope' => ['src/'],
+            'observation' => 'Translation parameter mismatch was found in review.',
+            'evidence' => [
+                [
+                    'type' => 'manual_verification',
+                    'summary' => 'Validated that the static rule can detect the recurring mismatch.',
+                ],
+            ],
+            'hypothesis' => 'A static PHPStan rule can detect the recurring mismatch.',
+            'validated_conclusion' => 'Translation parameters can be checked statically.',
+            'confidence' => 'high',
+            'validation_status' => 'validated',
+            'status' => 'validated',
+            'sensitivity' => 'public',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function constraintValidationRecord(): array
+    {
+        return [
+            'generated_files' => ['infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php'],
+            'registration_file' => 'infra/githooks/phpstan_bootstrap.php',
+            'commit' => 'working-tree',
+            'tests' => ['vendor/bin/phpstan analyse'],
+            'validation_result' => ['phpstan' => 'passed'],
+            'content_hashes' => [
+                'infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php' => 'hash',
+            ],
+        ];
     }
 
     /**

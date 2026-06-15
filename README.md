@@ -69,10 +69,12 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 * [RedactionGuard](src/RedactionGuard.php): Scans all content for credentials, secrets, or sensitive configuration keys to prevent accidental leaks.
 * [DecisionHistoryValidator](src/DecisionHistoryValidator.php): Validates log consistency of the decision history.
 * [ConstraintPromotionValidator](src/ConstraintPromotionValidator.php): Validates that constraint proposals come from confirmed findings and contain explicit promotion-gate evidence.
+* [ConstraintManifestActivator](src/ConstraintManifestActivator.php): Writes the active manifest consumed by recall tooling after an approved or applied constraint rule exists in the project.
 
 ### Utilities & Infrastructure
 * [ConsolidationPromptBuilder](src/ConsolidationPromptBuilder.php): Assembles validated findings and rejected proposals history into a structured LLM consolidation prompt.
 * [ConstraintGenerationPackageExporter](src/ConstraintGenerationPackageExporter.php): Exports `specification.json`, source findings/proposals, examples, validation plan, and generation prompt for coding-agent rule generation.
+* [ConstraintLoopRunner](src/ConstraintLoopRunner.php): Drives the approved generated-rule close-out path by exporting, applying, and activating a hard constraint with one explicit command.
 * [RecordAccess](src/RecordAccess.php): Utility helper to extract strongly typed fields from raw array data.
 * [Json](src/Json.php): Helper for decoding files safely.
 * [ValidationException](src/ValidationException.php): Custom runtime exception with file name, line numbers, and record IDs context.
@@ -120,6 +122,22 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 
 ### Applied Constraint Metadata
 When a constraint proposal is marked `applied`, its validation JSON must include `generated_files`, `registration_file`, `commit`, `tests`, `validation_result`, and `content_hashes`. This preserves lineage from finding to proposal, generated rule, registration, commit, validation, and later outcome.
+
+### Active Constraint Manifests
+After a generated constraint is approved and implemented, run `constraint-activate` to create `constraints/active/constraint.<rule_id>.json`. The command validates the proposal, checks the target rule file and registration files exist relative to the project root, and writes the exact engine, rule identifier, scope, validation commands, and source proposal that `voku/agent-recall-compiler` selects later.
+
+Learning roots may define `config.json` to avoid hard-coding one repository layout:
+
+```json
+{
+  "schema_version": "1.0",
+  "project_root": "../../..",
+  "constraint_generation_dir": "constraint-generation",
+  "active_constraints_dir": "constraints/active"
+}
+```
+
+Relative paths are resolved from the learning root. CLI options `--project-root`, `--constraint-generation-dir`, and `--active-constraints-dir` override `config.json` for one run. Without configuration, the package keeps the legacy project-root inference for `infra/doc/agent-learning`, `.agent-learning`, `docs/agent-learning`, and `agent-learning`.
 
 ### Redaction Constraints
 All keys and values are checked using [RedactionGuard](src/RedactionGuard.php) against secret assignment patterns. Any matches of standard credential assignments (e.g. `password`, `token`, `api_key`, `ms-Mcs-AdmPwd` patterns) throw a validation exception.
@@ -193,6 +211,14 @@ All keys and values are checked using [RedactionGuard](src/RedactionGuard.php) a
 
 ## Development & Testing
 
+### Bundled Agent Skills
+
+This package ships package-specific skills under `skills/`:
+
+- [`agent-learning-consumer`](skills/agent-learning-consumer/SKILL.md): for end users setting up a learning root, capturing findings, validating proposals, and preparing consolidation input.
+- [`agent-hard-constraint-author`](skills/agent-hard-constraint-author/SKILL.md): for end users promoting validated findings into executable PHPStan, PHP-CS-Fixer, test, or CI constraints.
+- [`agent-learning-maintainer`](skills/agent-learning-maintainer/SKILL.md): for maintainers changing `voku/agent-learning` source, tests, docs, or local vendor syncs.
+
 ### Running Tests
 To run unit and integration tests for this package:
 ```bash
@@ -222,6 +248,9 @@ vendor/bin/agent-learning validate --root infra/doc/agent-learning
 vendor/bin/agent-learning prepare --root infra/doc/agent-learning --task PROJECT-1234 --task GH-158
 vendor/bin/agent-learning prepare --root infra/doc/agent-learning --finding finding.2026-06-08.001 --scope src/Auth --since 2026-06-01
 vendor/bin/agent-learning proposal-validate --root infra/doc/agent-learning --proposal proposal.2026-06-08.001.json
+vendor/bin/agent-learning constraint-export --root infra/doc/agent-learning --proposal proposal.2026-06-08.001.json
+vendor/bin/agent-learning constraint-activate --root infra/doc/agent-learning --proposal proposal.2026-06-08.001.json
+vendor/bin/agent-learning constraint-loop --root infra/doc/agent-learning proposal.2026-06-08.001 --by lars --commit working-tree --validation infra/doc/agent-learning/validation-results/proposal.2026-06-08.001.json --approve-candidate
 ```
 
 `prepare` prints the selected finding IDs before writing the prompt. Empty selections fail unless `--allow-empty` is passed. If `templates/consolidation-prompt.md` exists under the learning root, its content is appended to the generated consolidation input as a project-specific prompt addendum.

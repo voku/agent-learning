@@ -9,7 +9,7 @@ final class ConstraintGenerationPackageExporter
     /**
      * @param array<string, Finding> $findingsById
      */
-    public function export(string $root, string $proposalPath, string $outputDir, array $findingsById): void
+    public function export(string $root, string $proposalPath, string $outputDir, array $findingsById, ?string $projectRoot = null): void
     {
         $proposal = (new ProposalValidator())->validateFile($proposalPath, $findingsById);
         if ($proposal->targetType !== GuidanceType::CONSTRAINT->value || $proposal->constraint === null) {
@@ -46,7 +46,7 @@ final class ConstraintGenerationPackageExporter
         ]);
         $this->writeJson($outputDir . '/examples.json', [
             'schema_version' => '1.0',
-            'examples' => $this->loadExamples($root, $proposal->constraint->exampleRulePaths),
+            'examples' => $this->loadExamples($root, $proposal->constraint->exampleRulePaths, $projectRoot),
         ]);
         $this->writeJson($outputDir . '/validation-plan.json', [
             'schema_version' => '1.0',
@@ -60,11 +60,12 @@ final class ConstraintGenerationPackageExporter
      * @param list<string> $examplePaths
      * @return list<array{path: string, content: string}>
      */
-    private function loadExamples(string $root, array $examplePaths): array
+    private function loadExamples(string $root, array $examplePaths, ?string $configuredProjectRoot): array
     {
         $examples = [];
+        $projectRoot = (new LearningProjectPaths())->projectRootForLearningRoot($root, $configuredProjectRoot);
         foreach ($examplePaths as $path) {
-            $absolute = is_file($path) ? $path : dirname($root, 2) . '/' . ltrim($path, '/');
+            $absolute = is_file($path) ? $path : $projectRoot . '/' . ltrim($path, '/');
             if (!is_file($absolute)) {
                 $examples[] = ['path' => $path, 'content' => ''];
                 continue;
