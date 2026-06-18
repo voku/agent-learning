@@ -119,17 +119,12 @@ final class Cli
         $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
         $taskIdPattern = $this->stringOption($parsed['options'], 'task-id-pattern');
 
-        $findingsById = $this->validateFindings($root, $taskIdPattern);
-        $proposalsById = (new ProposalRepository())->loadAll($root, $findingsById);
-        (new DecisionHistoryValidator())->validateHistory($root, $proposalsById);
-
-        // Also validate outcomes
-        (new OutcomeRepository())->loadAll($root, $proposalsById);
+        $result = (new LearningRepositoryValidator($this->findingLifecycle))->validate($root, $taskIdPattern);
 
         $this->write(
-            'Validated agent learning root: ' . $root . "\n"
-            . 'Findings: ' . count($findingsById) . "\n"
-            . 'Proposals: ' . count($proposalsById) . "\n"
+            'Validated agent learning root: ' . $result->root . "\n"
+            . 'Findings: ' . count($result->findingsById) . "\n"
+            . 'Proposals: ' . count($result->proposalsById) . "\n"
         );
 
         return 0;
@@ -534,18 +529,7 @@ final class Cli
      */
     private function validateFindings(string $root, ?string $taskIdPattern): array
     {
-        $validator = $taskIdPattern === null ? new FindingValidator() : new FindingValidator(taskIdPattern: $taskIdPattern);
-        $findingsById = [];
-        foreach ($this->findingLifecycle->findingFiles($root) as $file) {
-            $finding = $validator->validateFile($file);
-            $this->findingLifecycle->assertPathMatchesStatus($finding, $file, $root);
-            if (isset($findingsById[$finding->id])) {
-                throw new ValidationException($file, null, $finding->id, 'duplicate finding ID');
-            }
-            $findingsById[$finding->id] = $finding;
-        }
-
-        return $findingsById;
+        return (new LearningRepositoryValidator($this->findingLifecycle))->validateFindings($root, $taskIdPattern);
     }
 
     private function resolveProposalPath(string $proposalPath, string $root): string
