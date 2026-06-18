@@ -14,12 +14,19 @@ A **Finding** represents a single raw experience or observation captured from a 
 * A confidence level.
 * Explicit validation metadata (`unverified`, `validated`, `invalidated`).
 * A validated conclusion detailing why the pattern was verified or rejected.
+* Optional learning triage metadata:
+  * `classification`: `CREATE_SKILL`, `UPDATE_SKILL`, `ADD_LEARNING_NOTE`, or `IGNORE`.
+  * `pattern_key`: stable dot-separated clustering key such as `tests.add_before_change`.
+  * `validation_case`: concrete `given` / `when` / `then` behavior check.
+
+`ADD_LEARNING_NOTE` is the default durable capture. `CREATE_SKILL` should be rare; prefer `UPDATE_SKILL` when an existing skill already owns the behavior. `IGNORE` is valid for praise, vague reflection, one-off details, and already-covered guidance.
 
 ### Proposals
 A **Proposal** defines a potential durable mutation to the repository's guidelines or instructions (e.g., in `MEMORY.md` or dedicated agent skills). 
 * Can represent actions like `ADD`, `DELETE`, `REPLACE`, `REJECT`, or `NO_DURABLE_LEARNING`.
 * References one or more validated source findings that back it up.
 * Contains metadata about target type, scope, proposed boundary, validation checklist, status, and approval.
+* May carry the same `learning_decision`, `pattern_key`, and `validation_case` fields used by consolidation. `CREATE_SKILL` proposals additionally require an `overlap_check` proving existing skills were inspected and no overlapping skill owns more than 50% of the behavior.
 
 ### Constraint Specifications
 A **ConstraintSpecification** is a typed, reviewable bridge from confirmed learning to executable validation. Constraint proposals describe the engine, rule identifier, scope, objective violation, allowed boundaries, false-positive risk, validation commands, local example rules, target rule path, and registration files. The package validates whether the learning is stable and precise enough for a later PHPStan, PHP-CS-Fixer, test, or CI generation step.
@@ -119,6 +126,11 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 7. **Lifecycle Directory Check**: Proposal files under `proposals/<status>/` must embed the same `status` value.
 8. **Scope Broader Check**: If proposal `scope` includes entries not present in the referenced findings, a `scope_justification` must be provided.
 9. **Constraint Promotion Gates**: Constraint proposals require confirmed source findings, several independent findings or a critical-incident justification, explicit scope, explicit allowed boundaries, objective detectability, validation commands, declared false-positive risk, local example rule references where available, and engine-compatible target paths/commands.
+10. **Learning Triage Gates**: When present, `learning_decision` must align with the proposal:
+   - `IGNORE` requires `NO_DURABLE_LEARNING`.
+   - `ADD_LEARNING_NOTE` preserves the raw learning without pretending it is ready for skill promotion.
+   - `UPDATE_SKILL` requires `target_type=skill`.
+   - `CREATE_SKILL` requires `ADD`, `target_type=skill`, `pattern_key`, `validation_case`, and an `overlap_check` with inspected skills and `max_overlap_percent <= 50`.
 
 ### Applied Constraint Metadata
 When a constraint proposal is marked `applied`, its validation JSON must include `generated_files`, `registration_file`, `commit`, `tests`, `validation_result`, and `content_hashes`. This preserves lineage from finding to proposal, generated rule, registration, commit, validation, and later outcome.
@@ -176,6 +188,20 @@ All keys and values are checked using [RedactionGuard](src/RedactionGuard.php) a
   "validation_status": "validated",
   "status": "validated",
   "sensitivity": "public"
+}
+```
+
+With learning triage:
+
+```json
+{
+  "classification": "ADD_LEARNING_NOTE",
+  "pattern_key": "tests.add_before_change",
+  "validation_case": {
+    "given": "a task modifies behavior covered by existing tests",
+    "when": "the agent prepares the implementation plan",
+    "then": "it identifies relevant tests before editing production code"
+  }
 }
 ```
 

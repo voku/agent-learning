@@ -14,7 +14,7 @@ final readonly class ReplaceResult implements ConsolidationResult
      * @param list<string> $scope
      * @param list<string> $validation
      * @param list<string> $remainingUncertainty
-     * @param array<string, bool|string> $promotionGateEvidence
+     * @param array<string, bool|float|int|string|list<string>> $promotionGateEvidence
      */
     public function __construct(
         public array $sourceFindings,
@@ -29,6 +29,9 @@ final readonly class ReplaceResult implements ConsolidationResult
         public array $remainingUncertainty = [],
         public ?ConstraintSpecification $constraint = null,
         public array $promotionGateEvidence = [],
+        public ?LearningClassification $learningDecision = null,
+        public ?string $patternKey = null,
+        public ?ValidationCase $validationCase = null,
     ) {
     }
 

@@ -6,10 +6,12 @@ namespace voku\AgentLearning\Tests;
 
 use PHPUnit\Framework\TestCase;
 use voku\AgentLearning\Action;
+use voku\AgentLearning\LearningClassification;
 use voku\AgentLearning\Proposal;
 use voku\AgentLearning\ProposalStatus;
 use voku\AgentLearning\ProposalValidator;
 use voku\AgentLearning\ValidationException;
+use voku\AgentLearning\ValidationCase;
 
 final class ProposalValidatorTest extends TestCase
 {
@@ -194,6 +196,53 @@ final class ProposalValidatorTest extends TestCase
         (new ProposalValidator())->validate($proposal, 'proposal.json');
     }
 
+    public function testCreateSkillRequiresOverlapCheck(): void
+    {
+        $proposal = $this->createProposal(
+            Action::ADD,
+            ProposalStatus::CANDIDATE,
+            extraRaw: [
+                'learning_decision' => 'CREATE_SKILL',
+                'pattern_key' => 'skills.distill_learning',
+                'validation_case' => [
+                    'given' => 'a repeated workflow correction has no owning skill',
+                    'when' => 'the consolidation result proposes CREATE_SKILL',
+                    'then' => 'the proposal records the inspected skill overlap',
+                ],
+            ]
+        );
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('CREATE_SKILL requires overlap_check');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
+    public function testCreateSkillRejectsHighOverlap(): void
+    {
+        $proposal = $this->createProposal(
+            Action::ADD,
+            ProposalStatus::CANDIDATE,
+            extraRaw: [
+                'learning_decision' => 'CREATE_SKILL',
+                'pattern_key' => 'skills.distill_learning',
+                'validation_case' => [
+                    'given' => 'a repeated workflow correction has an owning skill',
+                    'when' => 'the consolidation result proposes CREATE_SKILL',
+                    'then' => 'the proposal is rejected because UPDATE_SKILL is the correct path',
+                ],
+                'overlap_check' => [
+                    'inspected' => ['agent-learning-consumer'],
+                    'max_overlap_percent' => 75,
+                    'decision' => 'Existing skill owns this behavior.',
+                ],
+            ]
+        );
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('CREATE_SKILL overlap exceeds update threshold');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
     /**
      * @param list<string> $scope
      * @param list<string> $sourceFindings
@@ -249,6 +298,16 @@ final class ProposalValidatorTest extends TestCase
         ];
         
         $raw = array_merge($raw, $extraRaw);
+        $learningDecision = null;
+        if (is_string($raw['learning_decision'] ?? null)) {
+            $learningDecision = LearningClassification::from($raw['learning_decision']);
+        }
+        $validationCase = null;
+        if (is_array($raw['validation_case'] ?? null)) {
+            /** @var array<string, mixed> $validationCaseRecord */
+            $validationCaseRecord = $raw['validation_case'];
+            $validationCase = ValidationCase::fromArray($validationCaseRecord, 'validation_case', 'proposal.json', null, $id);
+        }
 
         return new Proposal(
             id: $id,
@@ -268,6 +327,9 @@ final class ProposalValidatorTest extends TestCase
             approvedBy: $raw['approved_by'],
             approvedAt: $raw['approved_at'],
             raw: $raw,
+            learningDecision: $learningDecision,
+            patternKey: is_string($raw['pattern_key'] ?? null) ? $raw['pattern_key'] : null,
+            validationCase: $validationCase,
         );
     }
 }

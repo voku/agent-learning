@@ -8,7 +8,9 @@ use PHPUnit\Framework\TestCase;
 use voku\AgentLearning\Finding;
 use voku\AgentLearning\FindingStatus;
 use voku\AgentLearning\FindingValidator;
+use voku\AgentLearning\LearningClassification;
 use voku\AgentLearning\ValidationException;
+use voku\AgentLearning\ValidationCase;
 
 final class FindingValidatorTest extends TestCase
 {
@@ -223,6 +225,38 @@ final class FindingValidatorTest extends TestCase
         $validator->validate($finding, 'finding.json');
     }
 
+    public function testClassifiedLearningRequiresPatternKey(): void
+    {
+        $validator = new FindingValidator();
+        $finding = $this->createFinding(
+            taskId: 'PROJECT-123',
+            classification: LearningClassification::ADD_LEARNING_NOTE,
+            validationCase: new ValidationCase(
+                'a task has a durable review correction',
+                'the agent records a finding',
+                'the finding includes a stable pattern key and future behavior check'
+            )
+        );
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('classified learning requires pattern_key');
+        $validator->validate($finding, 'finding.json');
+    }
+
+    public function testClassifiedLearningRequiresValidationCase(): void
+    {
+        $validator = new FindingValidator();
+        $finding = $this->createFinding(
+            taskId: 'PROJECT-123',
+            classification: LearningClassification::ADD_LEARNING_NOTE,
+            patternKey: 'learning.validation_case'
+        );
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('classified learning requires validation_case');
+        $validator->validate($finding, 'finding.json');
+    }
+
     private function createFinding(
         string $taskId,
         FindingStatus $status = FindingStatus::VALIDATED,
@@ -232,7 +266,10 @@ final class FindingValidatorTest extends TestCase
         string $observation = 'An observation description.',
         string $hypothesis = 'A hypothetical explanation.',
         string $confidence = 'medium',
-        ?string $validatedConclusion = 'The validated conclusion.'
+        ?string $validatedConclusion = 'The validated conclusion.',
+        ?LearningClassification $classification = null,
+        ?string $patternKey = null,
+        ?ValidationCase $validationCase = null,
     ): Finding {
         $conclusion = $validationStatus === 'validated' ? ($validatedConclusion ?? 'The validated conclusion.') : null;
 
@@ -270,8 +307,10 @@ final class FindingValidatorTest extends TestCase
                 'validation_status' => $validationStatus,
                 'status' => $status->value,
                 'sensitivity' => 'public',
-            ]
+            ],
+            classification: $classification,
+            patternKey: $patternKey,
+            validationCase: $validationCase,
         );
     }
 }
-

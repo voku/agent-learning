@@ -48,7 +48,7 @@ final class ConsolidationResultValidator
         }
 
         // 4. Validate fields matching the action type
-        $allowedCommon = ['action', 'source_findings', 'reason', 'remaining_uncertainty'];
+        $allowedCommon = ['action', 'source_findings', 'reason', 'remaining_uncertainty', 'learning_decision', 'pattern_key', 'validation_case'];
         $allowedNoDurable = [...$allowedCommon, 'existing_guidance_id'];
         $allowedDurable = [
             ...$allowedCommon,
@@ -63,6 +63,7 @@ final class ConsolidationResultValidator
             'critical_incident',
             'critical_incident_justification',
             'false_positive_risk_justification',
+            'overlap_check',
         ];
 
         $allowedKeys = ($action === Action::NO_DURABLE_LEARNING) ? $allowedNoDurable : $allowedDurable;
@@ -112,8 +113,22 @@ final class ConsolidationResultValidator
         /** @var list<string> $remainingUncertaintyList */
         $remainingUncertaintyList = array_values($remainingUncertainty);
 
+        $learningDecision = $this->optionalLearningDecision($data);
+        $patternKey = $this->optionalPatternKey($data, $learningDecision);
+        $validationCase = $this->optionalValidationCase($data, $learningDecision);
+
         // Handle NO_DURABLE_LEARNING
         if ($action === Action::NO_DURABLE_LEARNING) {
+            if (
+                $learningDecision !== null
+                &&
+                $learningDecision !== LearningClassification::IGNORE
+                &&
+                $learningDecision !== LearningClassification::ADD_LEARNING_NOTE
+            ) {
+                throw new ValidationException('', null, null, 'NO_DURABLE_LEARNING allows only IGNORE or ADD_LEARNING_NOTE learning_decision');
+            }
+
             $existingGuidanceId = $data['existing_guidance_id'] ?? null;
             if ($existingGuidanceId !== null && (!is_string($existingGuidanceId) || trim($existingGuidanceId) === '')) {
                 throw new ValidationException('', null, null, 'existing_guidance_id must be a non-empty string');
@@ -123,7 +138,10 @@ final class ConsolidationResultValidator
                 $sourceFindingsList,
                 $reason,
                 $remainingUncertaintyList,
-                $existingGuidanceId
+                $existingGuidanceId,
+                $learningDecision,
+                $patternKey,
+                $validationCase,
             );
         }
 
@@ -134,6 +152,8 @@ final class ConsolidationResultValidator
             throw new ValidationException('', null, null, 'missing or unsupported target_type: ' . var_export($targetType, true));
         }
         $targetType = $guidanceType->value;
+
+        $this->assertLearningDecisionMatchesDurableAction($learningDecision, $action, $targetType, $data);
 
         $constraint = null;
         if ($targetType === GuidanceType::CONSTRAINT->value) {
@@ -216,17 +236,17 @@ final class ConsolidationResultValidator
         $promotionGateEvidence = $this->promotionGateEvidence($data);
 
         return match ($action) {
-            Action::ADD => new AddResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList, $constraint, $promotionGateEvidence),
-            Action::DELETE => new DeleteResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList, $constraint, $promotionGateEvidence),
-            Action::REPLACE => new ReplaceResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList, $constraint, $promotionGateEvidence),
-            Action::REJECT => new RejectResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList, $constraint, $promotionGateEvidence),
+            Action::ADD => new AddResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList, $constraint, $promotionGateEvidence, $learningDecision, $patternKey, $validationCase),
+            Action::DELETE => new DeleteResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList, $constraint, $promotionGateEvidence, $learningDecision, $patternKey, $validationCase),
+            Action::REPLACE => new ReplaceResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList, $constraint, $promotionGateEvidence, $learningDecision, $patternKey, $validationCase),
+            Action::REJECT => new RejectResult($sourceFindingsList, $reason, $targetType, $target, $scopeList, $old, $new, $boundary, $validationList, $remainingUncertaintyList, $constraint, $promotionGateEvidence, $learningDecision, $patternKey, $validationCase),
         };
     }
 
     /**
      * @param array<string, mixed> $data
      *
-     * @return array<string, bool|string>
+     * @return array<string, bool|float|int|string|list<string>>
      */
     private function promotionGateEvidence(array $data): array
     {
@@ -243,8 +263,116 @@ final class ConsolidationResultValidator
 
             throw new ValidationException('', null, null, $field . ' must be a boolean or string');
         }
+        $overlap = $data['overlap_check'] ?? null;
+        if (is_array($overlap)) {
+            $inspected = $overlap['inspected'] ?? null;
+            $maxOverlapPercent = $overlap['max_overlap_percent'] ?? null;
+            $decision = $overlap['decision'] ?? null;
+            if (!is_array($inspected) || $inspected === []) {
+                throw new ValidationException('', null, null, 'overlap_check.inspected must be a non-empty string list');
+            }
+            foreach ($inspected as $item) {
+                if (!is_string($item) || trim($item) === '') {
+                    throw new ValidationException('', null, null, 'overlap_check.inspected must be a non-empty string list');
+                }
+            }
+            if (!is_int($maxOverlapPercent) && !is_float($maxOverlapPercent)) {
+                throw new ValidationException('', null, null, 'overlap_check.max_overlap_percent must be numeric');
+            }
+            if (!is_string($decision) || trim($decision) === '') {
+                throw new ValidationException('', null, null, 'overlap_check.decision must be a non-empty string');
+            }
+
+            /** @var list<string> $inspectedList */
+            $inspectedList = array_values($inspected);
+            $evidence['overlap_check.inspected'] = $inspectedList;
+            $evidence['overlap_check.max_overlap_percent'] = $maxOverlapPercent;
+            $evidence['overlap_check.decision'] = trim($decision);
+        }
 
         return $evidence;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function optionalLearningDecision(array $data): ?LearningClassification
+    {
+        $value = $data['learning_decision'] ?? null;
+        if ($value === null) {
+            return null;
+        }
+        if (!is_string($value)) {
+            throw new ValidationException('', null, null, 'learning_decision must be a string');
+        }
+        $decision = LearningClassification::tryFrom($value);
+        if (!$decision instanceof LearningClassification) {
+            throw new ValidationException('', null, null, 'unsupported learning_decision: ' . $value);
+        }
+
+        return $decision;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function optionalPatternKey(array $data, ?LearningClassification $learningDecision): ?string
+    {
+        $value = $data['pattern_key'] ?? null;
+        if ($value === null) {
+            if ($learningDecision !== null && $learningDecision !== LearningClassification::IGNORE) {
+                throw new ValidationException('', null, null, 'learning_decision requires pattern_key');
+            }
+
+            return null;
+        }
+        if (!is_string($value) || preg_match('/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)+$/', $value) !== 1) {
+            throw new ValidationException('', null, null, 'pattern_key must use stable dot-separated lowercase segments');
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function optionalValidationCase(array $data, ?LearningClassification $learningDecision): ?ValidationCase
+    {
+        $validationCase = ValidationCase::fromOptionalRecord($data, 'validation_case', 'consolidation-result', null, null);
+        if ($learningDecision !== null && $learningDecision !== LearningClassification::IGNORE && !$validationCase instanceof ValidationCase) {
+            throw new ValidationException('', null, null, 'learning_decision requires validation_case');
+        }
+
+        return $validationCase;
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function assertLearningDecisionMatchesDurableAction(?LearningClassification $learningDecision, Action $action, string $targetType, array $data): void
+    {
+        if ($learningDecision === null) {
+            return;
+        }
+        if ($learningDecision === LearningClassification::IGNORE) {
+            throw new ValidationException('', null, null, 'IGNORE learning_decision requires NO_DURABLE_LEARNING action');
+        }
+        if ($learningDecision === LearningClassification::CREATE_SKILL) {
+            if ($action !== Action::ADD || $targetType !== GuidanceType::SKILL->value) {
+                throw new ValidationException('', null, null, 'CREATE_SKILL requires ADD action with target_type=skill');
+            }
+            $overlap = $data['overlap_check'] ?? null;
+            if (!is_array($overlap)) {
+                throw new ValidationException('', null, null, 'CREATE_SKILL requires overlap_check');
+            }
+            $maxOverlapPercent = $overlap['max_overlap_percent'] ?? null;
+            if ((!is_int($maxOverlapPercent) && !is_float($maxOverlapPercent)) || $maxOverlapPercent > 50) {
+                throw new ValidationException('', null, null, 'CREATE_SKILL requires overlap_check.max_overlap_percent <= 50');
+            }
+        }
+        if ($learningDecision === LearningClassification::UPDATE_SKILL && $targetType !== GuidanceType::SKILL->value) {
+            throw new ValidationException('', null, null, 'UPDATE_SKILL requires target_type=skill');
+        }
     }
 
     /**

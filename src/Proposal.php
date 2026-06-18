@@ -31,6 +31,9 @@ final readonly class Proposal
         public ?string $approvedAt,
         public array $raw,
         public ?ConstraintSpecification $constraint = null,
+        public ?LearningClassification $learningDecision = null,
+        public ?string $patternKey = null,
+        public ?ValidationCase $validationCase = null,
     ) {
     }
 }

@@ -170,6 +170,8 @@ final class ProposalValidator
             throw new ValidationException($file, $line, $proposal->id, 'rejected proposal requires a reason');
         }
 
+        $this->assertLearningDecision($proposal, $file, $line);
+
         $evidenceScope = [];
         foreach ($proposal->sourceFindings as $findingId) {
             $finding = $findingsById[$findingId] ?? null;
@@ -210,6 +212,55 @@ final class ProposalValidator
             ) {
                 throw new ValidationException($file, $line, $proposal->id, 'proposal scope is broader than source finding evidence without justification: ' . $scope);
             }
+        }
+    }
+
+    private function assertLearningDecision(Proposal $proposal, string $file, ?int $line): void
+    {
+        if ($proposal->patternKey !== null && preg_match('/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)+$/', $proposal->patternKey) !== 1) {
+            throw new ValidationException($file, $line, $proposal->id, 'pattern_key must use stable dot-separated lowercase segments');
+        }
+
+        if ($proposal->learningDecision === null) {
+            return;
+        }
+
+        if ($proposal->learningDecision !== LearningClassification::IGNORE) {
+            if ($proposal->patternKey === null || trim($proposal->patternKey) === '') {
+                throw new ValidationException($file, $line, $proposal->id, 'learning_decision requires pattern_key');
+            }
+            if (!$proposal->validationCase instanceof ValidationCase) {
+                throw new ValidationException($file, $line, $proposal->id, 'learning_decision requires validation_case');
+            }
+        }
+
+        if ($proposal->learningDecision === LearningClassification::IGNORE && $proposal->action !== Action::NO_DURABLE_LEARNING) {
+            throw new ValidationException($file, $line, $proposal->id, 'IGNORE learning_decision requires NO_DURABLE_LEARNING action');
+        }
+
+        if ($proposal->learningDecision === LearningClassification::CREATE_SKILL) {
+            if ($proposal->action !== Action::ADD || $proposal->targetType !== GuidanceType::SKILL->value) {
+                throw new ValidationException($file, $line, $proposal->id, 'CREATE_SKILL requires ADD action with target_type=skill');
+            }
+            $overlap = $proposal->raw['overlap_check'] ?? null;
+            if (!is_array($overlap)) {
+                throw new ValidationException($file, $line, $proposal->id, 'CREATE_SKILL requires overlap_check');
+            }
+            $inspected = $overlap['inspected'] ?? null;
+            if (!is_array($inspected) || $inspected === []) {
+                throw new ValidationException($file, $line, $proposal->id, 'CREATE_SKILL overlap_check requires inspected skills');
+            }
+            $maxOverlap = $overlap['max_overlap_percent'] ?? null;
+            if (!is_int($maxOverlap) && !is_float($maxOverlap)) {
+                throw new ValidationException($file, $line, $proposal->id, 'CREATE_SKILL overlap_check requires max_overlap_percent');
+            }
+            if ($maxOverlap > 50) {
+                throw new ValidationException($file, $line, $proposal->id, 'CREATE_SKILL overlap exceeds update threshold');
+            }
+        }
+
+        if ($proposal->learningDecision === LearningClassification::UPDATE_SKILL && $proposal->targetType !== GuidanceType::SKILL->value) {
+            throw new ValidationException($file, $line, $proposal->id, 'UPDATE_SKILL requires target_type=skill');
         }
     }
 

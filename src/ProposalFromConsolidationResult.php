@@ -45,9 +45,24 @@ final class ProposalFromConsolidationResult
         $boundary = null;
         $validation = [];
         $constraint = null;
+        $learningDecision = null;
+        $patternKey = null;
+        $validationCase = null;
 
         if ($result instanceof NoDurableLearningResult) {
+            $learningDecision = $result->learningDecision;
+            $patternKey = $result->patternKey;
+            $validationCase = $result->validationCase;
             $raw['existing_guidance_id'] = $result->existingGuidanceId;
+            if ($result->learningDecision instanceof LearningClassification) {
+                $raw['learning_decision'] = $result->learningDecision->value;
+            }
+            if ($result->patternKey !== null) {
+                $raw['pattern_key'] = $result->patternKey;
+            }
+            if ($result->validationCase instanceof ValidationCase) {
+                $raw['validation_case'] = $result->validationCase->toArray();
+            }
             $raw['target_type'] = null;
             $raw['target'] = null;
             $raw['scope'] = [];
@@ -66,6 +81,9 @@ final class ProposalFromConsolidationResult
             $boundary = $result->boundary;
             $validation = $result->validation;
             $constraint = $result->constraint;
+            $learningDecision = $result->learningDecision;
+            $patternKey = $result->patternKey;
+            $validationCase = $result->validationCase;
 
             $raw['target_type'] = $result->targetType;
             $raw['target'] = $result->target;
@@ -79,7 +97,24 @@ final class ProposalFromConsolidationResult
                 $raw['constraint'] = $result->constraint->toArray();
             }
             foreach ($result->promotionGateEvidence as $field => $value) {
+                if (str_starts_with($field, 'overlap_check.')) {
+                    $overlapField = substr($field, strlen('overlap_check.'));
+                    if (!isset($raw['overlap_check']) || !is_array($raw['overlap_check'])) {
+                        $raw['overlap_check'] = [];
+                    }
+                    $raw['overlap_check'][$overlapField] = $value;
+                    continue;
+                }
                 $raw[$field] = $value;
+            }
+            if ($result->learningDecision instanceof LearningClassification) {
+                $raw['learning_decision'] = $result->learningDecision->value;
+            }
+            if ($result->patternKey !== null) {
+                $raw['pattern_key'] = $result->patternKey;
+            }
+            if ($result->validationCase instanceof ValidationCase) {
+                $raw['validation_case'] = $result->validationCase->toArray();
             }
         }
 
@@ -101,7 +136,10 @@ final class ProposalFromConsolidationResult
             null,
             null,
             $raw,
-            $constraint
+            $constraint,
+            $learningDecision,
+            $patternKey,
+            $validationCase,
         );
     }
 }

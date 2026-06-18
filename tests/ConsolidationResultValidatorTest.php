@@ -214,6 +214,63 @@ final class ConsolidationResultValidatorTest extends TestCase
         self::assertInstanceOf(NoDurableLearningResult::class, $res);
     }
 
+    public function testValidatesAddLearningNoteWithoutDurableMutation(): void
+    {
+        $validator = new ConsolidationResultValidator();
+        $data = [
+            'action' => 'NO_DURABLE_LEARNING',
+            'source_findings' => ['f-1'],
+            'reason' => 'Keep this as a raw learning note until the pattern recurs.',
+            'learning_decision' => 'ADD_LEARNING_NOTE',
+            'pattern_key' => 'skills.distill_learning',
+            'validation_case' => [
+                'given' => 'a session produces a useful but unpromoted learning',
+                'when' => 'the consolidation step runs',
+                'then' => 'it records the pattern key and validation case without creating a skill',
+            ],
+        ];
+
+        $res = $validator->validate($data, $this->findings);
+
+        self::assertInstanceOf(NoDurableLearningResult::class, $res);
+        self::assertSame('ADD_LEARNING_NOTE', $res->learningDecision?->value);
+        self::assertSame('skills.distill_learning', $res->patternKey);
+    }
+
+    public function testValidatesCreateSkillWithOverlapGate(): void
+    {
+        $validator = new ConsolidationResultValidator();
+        $data = [
+            'action' => 'ADD',
+            'source_findings' => ['f-1'],
+            'reason' => 'The behavior is repeated and no inspected existing skill owns it.',
+            'target_type' => 'skill',
+            'target' => 'skill.review-distillation',
+            'scope' => ['src/Auth'],
+            'new' => 'Distill repeated review findings into bounded guidance with validation cases.',
+            'boundary' => 'Only applies to durable review findings, not one-off task notes.',
+            'validation' => ['Run the skill validation command.'],
+            'learning_decision' => 'CREATE_SKILL',
+            'pattern_key' => 'skills.review_distillation',
+            'validation_case' => [
+                'given' => 'a review finding repeats across sessions',
+                'when' => 'the agent proposes a new skill',
+                'then' => 'it records inspected overlap and a concrete behavior check',
+            ],
+            'overlap_check' => [
+                'inspected' => ['agent-learning-consumer', 'agent-learning-maintainer'],
+                'max_overlap_percent' => 35,
+                'decision' => 'No existing skill owns review distillation.',
+            ],
+        ];
+
+        $res = $validator->validate($data, $this->findings);
+
+        self::assertInstanceOf(AddResult::class, $res);
+        self::assertSame('CREATE_SKILL', $res->learningDecision?->value);
+        self::assertSame('skills.review_distillation', $res->patternKey);
+    }
+
     public function testThrowsOnInvalidExistingGuidanceIdInNoDurable(): void
     {
         $validator = new ConsolidationResultValidator();

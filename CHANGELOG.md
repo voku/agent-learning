@@ -4,10 +4,26 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.4.0] - 2026-06-18
+
+### Added
+
+- Add typed learning triage with `LearningClassification` values for `CREATE_SKILL`, `UPDATE_SKILL`, `ADD_LEARNING_NOTE`, and `IGNORE`.
+- Add `ValidationCase` support so findings, consolidation results, and proposals can carry concrete `given` / `when` / `then` behavior checks.
+- Add optional `classification`, `pattern_key`, and `validation_case` fields to findings.
+- Add optional `learning_decision`, `pattern_key`, `validation_case`, and `overlap_check` fields to consolidation results and proposals.
+- Add validation coverage for learning-note defaults, CREATE_SKILL overlap gates, pattern-key format, and validation-case requirements.
+
+### Changed
+
+- Update consolidation prompts to default useful raw lessons to `ADD_LEARNING_NOTE`, prefer `UPDATE_SKILL` over duplicate skill creation, and reject praise, self-justification, or generic advice.
+- Require `CREATE_SKILL` proposals to prove existing skill overlap was inspected and that maximum overlap is not above 50%.
+- Preserve learning triage metadata when importing consolidation results into candidate proposals.
+
 ## [0.3.0] - 2026-06-15
 
 ### Added
-- 
+
 - Add `constraint-activate` to write active constraint manifests from approved or applied constraint proposals.
 - Add `constraint-loop` to export, apply, and activate generated constraints with one explicit tooling command.
 - Add learning-root `config.json` path settings for `project_root`, `constraint_generation_dir`, and `active_constraints_dir`.

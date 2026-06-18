@@ -27,6 +27,9 @@ final readonly class Finding
         public FindingStatus $status,
         public string $sensitivity,
         public array $raw,
+        public ?LearningClassification $classification = null,
+        public ?string $patternKey = null,
+        public ?ValidationCase $validationCase = null,
     ) {
     }
 }

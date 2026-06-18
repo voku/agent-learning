@@ -70,7 +70,31 @@ final class FindingValidator
             throw new ValidationException($file, $line, $finding->id, 'hypothesis presented as validated fact');
         }
 
+        $this->assertLearningTriage($finding, $file, $line);
         $this->evidenceValidator->validate($finding->evidence, $file, $line, $finding->id);
+    }
+
+    private function assertLearningTriage(Finding $finding, string $file, ?int $line): void
+    {
+        if ($finding->patternKey !== null && preg_match('/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)+$/', $finding->patternKey) !== 1) {
+            throw new ValidationException($file, $line, $finding->id, 'pattern_key must use stable dot-separated lowercase segments');
+        }
+
+        if ($finding->classification === null) {
+            return;
+        }
+
+        if ($finding->classification === LearningClassification::IGNORE) {
+            return;
+        }
+
+        if ($finding->patternKey === null || trim($finding->patternKey) === '') {
+            throw new ValidationException($file, $line, $finding->id, 'classified learning requires pattern_key');
+        }
+
+        if (!$finding->validationCase instanceof ValidationCase) {
+            throw new ValidationException($file, $line, $finding->id, 'classified learning requires validation_case');
+        }
     }
 
     private function assertLifecycleCombination(Finding $finding, string $file, ?int $line): void

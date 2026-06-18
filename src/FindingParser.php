@@ -29,6 +29,15 @@ final class FindingParser
             throw new ValidationException($file, $line, $recordId, 'unsupported finding status: ' . $statusValue);
         }
 
+        $classificationValue = $this->recordAccess->optionalString($record, 'classification', $file, $line, $recordId);
+        $classification = null;
+        if ($classificationValue !== null) {
+            $classification = LearningClassification::tryFrom($classificationValue);
+            if ($classification === null) {
+                throw new ValidationException($file, $line, $recordId, 'unsupported learning classification: ' . $classificationValue);
+            }
+        }
+
         return new Finding(
             $this->recordAccess->string($record, 'id', $file, $line, $recordId),
             $this->recordAccess->string($record, 'task_id', $file, $line, $recordId),
@@ -45,6 +54,9 @@ final class FindingParser
             $status,
             $this->recordAccess->string($record, 'sensitivity', $file, $line, $recordId),
             $record,
+            $classification,
+            $this->recordAccess->optionalString($record, 'pattern_key', $file, $line, $recordId),
+            ValidationCase::fromOptionalRecord($record, 'validation_case', $file, $line, $recordId),
         );
     }
 }

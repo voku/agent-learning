@@ -58,6 +58,15 @@ final class ProposalParser
             ? $this->recordAccess->stringList($record, 'validation', $file, $line, $recordId)
             : ($constraint instanceof ConstraintSpecification ? $constraint->validationCommands : []);
 
+        $learningDecisionValue = $this->recordAccess->optionalString($record, 'learning_decision', $file, $line, $recordId);
+        $learningDecision = null;
+        if ($learningDecisionValue !== null) {
+            $learningDecision = LearningClassification::tryFrom($learningDecisionValue);
+            if ($learningDecision === null) {
+                throw new ValidationException($file, $line, $recordId, 'unsupported learning_decision: ' . $learningDecisionValue);
+            }
+        }
+
         return new Proposal(
             $this->recordAccess->string($record, 'id', $file, $line, $recordId),
             $this->recordAccess->string($record, 'created_at', $file, $line, $recordId),
@@ -77,6 +86,9 @@ final class ProposalParser
             $this->recordAccess->optionalString($record, 'approved_at', $file, $line, $recordId),
             $record,
             $constraint,
+            $learningDecision,
+            $this->recordAccess->optionalString($record, 'pattern_key', $file, $line, $recordId),
+            ValidationCase::fromOptionalRecord($record, 'validation_case', $file, $line, $recordId),
         );
     }
 }

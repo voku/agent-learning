@@ -18,6 +18,9 @@ final readonly class NoDurableLearningResult implements ConsolidationResult
         public string $reason,
         public array $remainingUncertainty = [],
         public ?string $existingGuidanceId = null,
+        public ?LearningClassification $learningDecision = null,
+        public ?string $patternKey = null,
+        public ?ValidationCase $validationCase = null,
     ) {
     }
 
