@@ -15,6 +15,7 @@ final class OutcomeRepository
     public function __construct(
         private readonly JsonlValidator $jsonlValidator = new JsonlValidator(),
         private readonly RedactionGuard $redactionGuard = new RedactionGuard(),
+        private readonly GuidanceOutcomeEventParser $guidanceOutcomeEventParser = new GuidanceOutcomeEventParser(),
     ) {
     }
 
@@ -39,6 +40,11 @@ final class OutcomeRepository
             $id = $record['id'] ?? null;
             if (!is_string($id) || trim($id) === '') {
                 throw new ValidationException($path, $lineNumber, null, 'missing or empty outcome id');
+            }
+
+            if (str_starts_with($id, 'guidance-outcome.')) {
+                $this->guidanceOutcomeEventParser->parse($record, $path, $lineNumber);
+                continue;
             }
 
             $this->validateOutcomeRecord($record, $path, $lineNumber, $id, $proposalsById);
@@ -129,6 +135,11 @@ final class OutcomeRepository
     private function validateOutcomeRecord(array $record, string $file, ?int $line, ?string $recordId, array $proposalsById = []): void
     {
         $id = $record['id'] ?? null;
+        if (is_string($id) && str_starts_with($id, 'guidance-outcome.')) {
+            $this->guidanceOutcomeEventParser->parse($record, $file, $line);
+
+            return;
+        }
         if (!is_string($id) || preg_match('/^outcome\.\d{4}-\d{2}-\d{2}\.\d{3}$/', $id) !== 1) {
             throw new ValidationException($file, $line, $recordId, 'outcome id must match outcome.YYYY-MM-DD.NNN');
         }

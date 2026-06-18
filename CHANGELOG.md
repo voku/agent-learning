@@ -4,6 +4,24 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.5.0] - 2026-06-18
+
+### Added
+
+- Add strict recall-selection and per-guidance outcome event models, parsers, and JSONL repositories.
+- Add deterministic `GuidanceUsageProjector` summaries for eligibility, selection, application, explicit outcomes, distinct tasks, timestamps, and evidence event IDs.
+- Add typed evolution decisions for promotion, staleness, replacement, conflict, and no-action review results.
+- Add separate conservative policies for finding-to-memory, memory-to-skill, skill-to-constraint, memory staleness, skill staleness, and constraint review.
+- Add `guidance-evaluate` CLI to validate event histories, print deterministic usage summaries and decisions, and optionally write reviewable candidate proposals.
+- Add idempotent candidate proposal writing with preserved event provenance under `evolution_decision`.
+- Add guidance-evaluation schema documentation and a complete fixture showing findings to memory to recalled outcomes to skill-promotion candidate.
+- Add regression coverage for deterministic projection, malformed and duplicate events, selected/applied/helpful separation, promotion gates, harmful blockers, stale review behavior, constraint inactivity, candidate provenance, and idempotent writes.
+
+### Changed
+
+- Allow `OutcomeRepository` validation to read new `guidance-outcome.*` event rows alongside legacy aggregate outcome records.
+- Update README and bundled skills to document immutable event projection, candidate-only writes, and the human approval gate.
+
 ## [0.4.0] - 2026-06-18
 
 ### Added

@@ -1,0 +1,17 @@
+{
+  "id": "finding.2026-06-18.002",
+  "task_id": "PROJECT-2",
+  "session": "session_PROJECT-2",
+  "created_at": "2026-06-18T08:15:00+00:00",
+  "created_by": "agent",
+  "scope": ["src/Auth"],
+  "observation": "A later auth task repeated the same boundary check.",
+  "evidence": [{"type": "file_reference", "path": "src/Auth/LoginService.php", "line": 1}],
+  "hypothesis": "The boundary check is reusable beyond one task.",
+  "validated_conclusion": "The auth context-boundary check is a recurring procedure.",
+  "confidence": "high",
+  "validation_status": "validated",
+  "status": "validated",
+  "sensitivity": "public",
+  "pattern_key": "auth.context_boundary"
+}

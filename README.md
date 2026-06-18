@@ -58,6 +58,7 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 * [ProposalStatus](src/ProposalStatus.php): Enum defining proposal states (`candidate`, `approved`, `rejected`, `applied`).
 * [Action](src/Action.php): Enum representing actions (`NO_DURABLE_LEARNING`, `ADD`, `DELETE`, `REPLACE`, `REJECT`).
 * [ConstraintSpecification](src/ConstraintSpecification.php): Read-only model for hard-constraint promotion candidates.
+* [GuidanceUsageSummary](src/GuidanceUsageSummary.php): Read-only projection of recall eligibility, selection, application, explicit outcomes, task spread, timestamps, and evidence event IDs.
 * [ConstraintEngine](src/ConstraintEngine.php): Enum defining supported hard-constraint engines (`phpstan`, `php_cs_fixer`, `test`, `ci`).
 * [Detectability](src/Detectability.php): Enum describing whether the violation is statically, syntax-locally, runtime, or cross-file detectable.
 * [FalsePositiveRisk](src/FalsePositiveRisk.php): Enum declaring expected false-positive risk (`low`, `medium`, `high`, `unknown`).
@@ -67,6 +68,8 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 * [ProposalParser](src/ProposalParser.php): Parses a proposal JSON record or file.
 * [FindingRepository](src/FindingRepository.php): Loads validated findings from root directories.
 * [ProposalRepository](src/ProposalRepository.php): Loads proposals under different lifecycle folders.
+* [RecallSelectionEventRepository](src/RecallSelectionEventRepository.php): Loads immutable recall-selection JSONL events produced by `voku/agent-recall-compiler`.
+* [GuidanceOutcomeEventRepository](src/GuidanceOutcomeEventRepository.php): Loads immutable per-guidance outcome JSONL events.
 
 ### Validators
 * [FindingValidator](src/FindingValidator.php): Enforces structure, format, and lifecycle consistency for findings.
@@ -82,6 +85,8 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 * [ConsolidationPromptBuilder](src/ConsolidationPromptBuilder.php): Assembles validated findings and rejected proposals history into a structured LLM consolidation prompt.
 * [ConstraintGenerationPackageExporter](src/ConstraintGenerationPackageExporter.php): Exports `specification.json`, source findings/proposals, examples, validation plan, and generation prompt for coding-agent rule generation.
 * [ConstraintLoopRunner](src/ConstraintLoopRunner.php): Drives the approved generated-rule close-out path by exporting, applying, and activating a hard constraint with one explicit command.
+* [GuidanceUsageProjector](src/GuidanceUsageProjector.php): Rebuilds deterministic usage summaries from immutable event histories without mutable counters.
+* [GuidanceEvolutionEvaluator](src/GuidanceEvolutionEvaluator.php): Applies conservative tier-specific promotion and review policies.
 * [RecordAccess](src/RecordAccess.php): Utility helper to extract strongly typed fields from raw array data.
 * [Json](src/Json.php): Helper for decoding files safely.
 * [ValidationException](src/ValidationException.php): Custom runtime exception with file name, line numbers, and record IDs context.
@@ -277,6 +282,7 @@ vendor/bin/agent-learning proposal-validate --root infra/doc/agent-learning --pr
 vendor/bin/agent-learning constraint-export --root infra/doc/agent-learning --proposal proposal.2026-06-08.001.json
 vendor/bin/agent-learning constraint-activate --root infra/doc/agent-learning --proposal proposal.2026-06-08.001.json
 vendor/bin/agent-learning constraint-loop --root infra/doc/agent-learning proposal.2026-06-08.001 --by lars --commit working-tree --validation infra/doc/agent-learning/validation-results/proposal.2026-06-08.001.json --approve-candidate
+vendor/bin/agent-learning guidance-evaluate --root infra/doc/agent-learning --selection-history history/recall-selections.jsonl --outcome-history history/outcomes.jsonl
 ```
 
 `prepare` prints the selected finding IDs before writing the prompt. Empty selections fail unless `--allow-empty` is passed. If `templates/consolidation-prompt.md` exists under the learning root, its content is appended to the generated consolidation input as a project-specific prompt addendum.
@@ -289,3 +295,11 @@ vendor/bin/agent-learning constraint-loop --root infra/doc/agent-learning propos
 * `agent-learning`
 
 Zero-byte `.json` files are treated as extraction placeholders and skipped. Non-empty finding, proposal, and history records are validated strictly.
+
+### Guidance Usage Evaluation
+
+`guidance-evaluate` consumes immutable event histories produced by `voku/agent-recall-compiler`, rebuilds deterministic usage summaries, and prints conservative decisions for finding-to-memory, memory-to-skill, skill-to-constraint, and stale/replacement review paths.
+
+It does not edit `MEMORY.md`, skills, active constraints, PHPStan configuration, or CI. With `--write-candidates`, it may write only reviewable proposal files under `proposals/candidate/`; no proposal is approved, applied, or activated automatically.
+
+Schema details, policy gates, and duplicate behavior are documented in [`docs/guidance-evaluation.md`](docs/guidance-evaluation.md). A complete findings-to-memory-to-skill-promotion fixture is available under [`examples/guidance-evaluation`](examples/guidance-evaluation).

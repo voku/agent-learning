@@ -13,8 +13,9 @@ Use this skill when changing the `voku/agent-learning` package itself. Keep pack
 2. Preserve source-package authority: package repo first, consuming-project `vendor/voku/agent-learning` only for local integration testing.
 3. Convert project-specific assumptions into `config.json`, CLI options, docs, examples, or tests.
 4. Keep activation human-gated. Package code may generate candidates and manifests, but should not silently approve durable guidance.
-5. Add focused regression tests for lifecycle state, path resolution, manifest activation, generation-package export, or CLI behavior when those change.
-6. Validate from the package repo.
+5. For guidance event work, keep projection deterministic from JSONL, keep policies tier-specific, and write only candidate proposals under `proposals/candidate`.
+6. Add focused regression tests for lifecycle state, path resolution, manifest activation, generation-package export, event projection, policy gates, or CLI behavior when those change.
+7. Validate from the package repo.
 
 ## Validation
 

@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "id": "proposal.2026-06-18.100",
+  "created_at": "2026-06-18T09:00:00+00:00",
+  "action": "ADD",
+  "target_type": "memory",
+  "target": "memory.auth",
+  "scope": ["src/Auth"],
+  "source_findings": ["finding.2026-06-18.001", "finding.2026-06-18.002"],
+  "new": "Procedure: before changing auth services, check the auth context boundary and run the auth validation command.",
+  "reason": "Recurring auth work needs the same memory.",
+  "boundary": "Auth service work only.",
+  "validation": ["vendor/bin/phpunit"],
+  "status": "approved",
+  "proposed_by": "maintainer",
+  "approved_by": "maintainer",
+  "approved_at": "2026-06-18T09:10:00+00:00",
+  "recurring_procedure": true
+}

@@ -34,6 +34,7 @@ final class Cli
                 'constraint-export' => $this->constraintExportCommand($tokens),
                 'constraint-activate' => $this->constraintActivateCommand($tokens),
                 'constraint-loop' => $this->constraintLoopCommand($tokens),
+                'guidance-evaluate' => $this->guidanceEvaluateCommand($tokens),
                 'finding-transition' => $this->findingTransitionCommand($tokens),
                 'proposal-approve' => $this->proposalApproveCommand($tokens),
                 'proposal-reject' => $this->proposalRejectCommand($tokens),
@@ -46,6 +47,67 @@ final class Cli
 
             return 1;
         }
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function guidanceEvaluateCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $selectionHistory = $this->resolveHistoryPath($root, $this->stringOption($parsed['options'], 'selection-history') ?? 'history/recall-selections.jsonl');
+        $outcomeHistory = $this->resolveHistoryPath($root, $this->stringOption($parsed['options'], 'outcome-history') ?? 'history/outcomes.jsonl');
+
+        $findingsById = $this->validateFindings($root, $this->stringOption($parsed['options'], 'task-id-pattern'));
+        $proposalsById = (new ProposalRepository())->loadAll($root, $findingsById);
+        (new DecisionHistoryValidator())->validateHistory($root, $proposalsById);
+        (new OutcomeRepository())->loadAll($root, $proposalsById);
+
+        $selectionEvents = (new RecallSelectionEventRepository())->load($root, $selectionHistory);
+        $outcomeEvents = (new GuidanceOutcomeEventRepository())->load($root, $outcomeHistory);
+        $result = (new GuidanceEvolutionEvaluator())->evaluate($findingsById, $proposalsById, $selectionEvents, $outcomeEvents);
+
+        $this->write("Guidance usage summaries:\n");
+        foreach ($result->summaries as $summary) {
+            $this->write(sprintf(
+                "- %s (%s): eligible=%d selected=%d applied=%d helpful=%d irrelevant=%d harmful=%d not_used=%d unknown=%d tasks=%d\n",
+                $summary->guidanceId,
+                $summary->guidanceType->value,
+                $summary->eligibleCount,
+                $summary->selectedCount,
+                $summary->appliedCount,
+                $summary->helpfulCount,
+                $summary->irrelevantCount,
+                $summary->harmfulCount,
+                $summary->notUsedCount,
+                $summary->unknownCount,
+                $summary->distinctTaskCount,
+            ));
+        }
+
+        $this->write("Candidate decisions:\n");
+        foreach ($result->decisions as $decision) {
+            $this->write(sprintf(
+                "- %s %s: %s -> %s; reason=%s; uncertainty=%s\n",
+                $decision->type->value,
+                $decision->guidanceId,
+                $decision->sourceTier->value,
+                $decision->targetTier instanceof GuidanceType ? $decision->targetTier->value : 'review',
+                $decision->reason,
+                $decision->remainingUncertainty,
+            ));
+        }
+
+        if ($this->boolOption($parsed['options'], 'write-candidates')) {
+            $proposalIds = (new GuidanceCandidateProposalWriter())->write($root, $result->decisions, $findingsById);
+            $this->write('Candidate proposals written: ' . count($proposalIds) . "\n");
+            foreach ($proposalIds as $proposalId) {
+                $this->write('- ' . $proposalId . "\n");
+            }
+        }
+
+        return 0;
     }
 
     /**
@@ -421,6 +483,7 @@ final class Cli
             . "  constraint-export    Export generation package files for a constraint proposal.\n"
             . "  constraint-activate  Write an active constraint manifest from an approved/applied proposal.\n"
             . "  constraint-loop      Export, apply, and activate a generated constraint proposal.\n"
+            . "  guidance-evaluate    Project recall usage events and create reviewable candidate proposals.\n"
             . "  finding-transition   Transition a finding to a new state.\n"
             . "  proposal-approve     Approve a candidate proposal.\n"
             . "  proposal-reject      Reject a candidate proposal.\n"
@@ -443,6 +506,9 @@ final class Cli
             . "  --project-root PATH      Project root used for constraint file checks and examples.\n"
             . "  --constraint-generation-dir PATH Base directory for generated constraint packages.\n"
             . "  --active-constraints-dir PATH Directory for active constraint manifests.\n"
+            . "  --selection-history PATH Recall selection JSONL path for guidance-evaluate.\n"
+            . "  --outcome-history PATH Guidance outcome JSONL path for guidance-evaluate.\n"
+            . "  --write-candidates       Write only candidate proposal files from eligible decisions.\n"
             . "  --overwrite              Allow constraint-activate to replace an existing manifest.\n"
             . "  --approve-candidate      Allow constraint-loop to approve a candidate proposal before applying.\n"
             . "  --manifest PATH          Manifest output path for constraint-loop or constraint-activate.\n"
@@ -505,6 +571,15 @@ final class Cli
         }
 
         return (new ProposalTransitionManager())->resolveProposalPath($proposal, $root);
+    }
+
+    private function resolveHistoryPath(string $root, string $path): string
+    {
+        if (str_starts_with($path, '/') || preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1) {
+            return $path;
+        }
+
+        return $root . '/' . ltrim($path, '/');
     }
 
     /**
