@@ -77,6 +77,7 @@ final class LearningRootResolver
         throw new ValidationException($root, null, null, 'directory is not an agent-learning root');
     }
 
+    /** @param array<string, mixed> $config */
     private function projectRoot(string $root, ?string $override, array $config): string
     {
         $configured = $override ?? $this->configuredString($root, $config, 'project_root');
@@ -96,11 +97,13 @@ final class LearningRootResolver
         return $root;
     }
 
+    /** @param array<string, mixed> $config */
     private function configuredPath(string $root, ?string $override, array $config, string $key, string $default): string
     {
         return $this->resolvePath($root, $override ?? $this->configuredString($root, $config, $key) ?? $default);
     }
 
+    /** @param array<string, mixed> $config */
     private function configuredString(string $root, array $config, string $key): ?string
     {
         $value = $config[$key] ?? null;
@@ -111,6 +114,7 @@ final class LearningRootResolver
         return $value;
     }
 
+    /** @return array<string, mixed> */
     private function loadConfig(string $root): array
     {
         $path = $root . '/config.json';
