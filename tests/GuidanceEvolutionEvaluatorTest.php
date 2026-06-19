@@ -148,24 +148,25 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
     {
         $fixtureRoot = __DIR__ . '/fixtures/dogfood-learning-loop/learning-root';
         $root = sys_get_temp_dir() . '/dogfood-learning-loop-fixture-' . bin2hex(random_bytes(8));
-        $this->copyDirectory($fixtureRoot, $root);
-
-        $argv = [
-            'agent-learning',
-            'guidance-evaluate',
-            '--root',
-            $root,
-            '--write-candidates',
-        ];
-
-        ob_start();
-        try {
-            self::assertSame(0, (new Cli())->run($argv));
-        } finally {
-            ob_end_clean();
-        }
 
         try {
+            $this->copyDirectory($fixtureRoot, $root);
+
+            $argv = [
+                'agent-learning',
+                'guidance-evaluate',
+                '--root',
+                $root,
+                '--write-candidates',
+            ];
+
+            ob_start();
+            try {
+                self::assertSame(0, (new Cli())->run($argv));
+            } finally {
+                ob_end_clean();
+            }
+
             self::assertSame([], glob($root . '/proposals/candidate/*.json') ?: []);
             self::assertDirectoryDoesNotExist($root . '/proposals/candidate');
         } finally {
@@ -188,10 +189,11 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
     {
         $fixtureRoot = __DIR__ . '/fixtures/dogfood-learning-loop/learning-root';
         $root = sys_get_temp_dir() . '/dogfood-learning-loop-invalid-history-' . bin2hex(random_bytes(8));
-        $this->copyDirectory($fixtureRoot, $root);
-        file_put_contents($root . '/history/recall-selections.jsonl', '');
 
         try {
+            $this->copyDirectory($fixtureRoot, $root);
+            file_put_contents($root . '/history/recall-selections.jsonl', '');
+
             $this->expectException(ValidationException::class);
             $this->expectExceptionMessage('guidance outcome has no corresponding recall selection');
             (new \voku\AgentLearning\LearningRepositoryValidator())->validate($root);
@@ -445,8 +447,26 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
         if (!is_dir($source)) {
             self::fail('Fixture directory does not exist: ' . $source);
         }
-        if (!is_dir($destination) && !mkdir($destination, 0777, true) && !is_dir($destination)) {
-            self::fail('Could not create fixture copy directory: ' . $destination);
+
+        if (!is_dir($destination)) {
+            $mkdirError = null;
+            set_error_handler(
+                static function (int $severity, string $message) use (&$mkdirError): bool {
+                    $mkdirError = $message;
+
+                    return true;
+                }
+            );
+            try {
+                $created = mkdir($destination, 0777, true);
+            } finally {
+                restore_error_handler();
+            }
+
+            if (!$created && !is_dir($destination)) {
+                $details = $mkdirError !== null ? ' (' . $mkdirError . ')' : '';
+                self::fail('Could not create fixture copy directory: ' . $destination . $details);
+            }
         }
 
         foreach (array_diff(scandir($source) ?: [], ['.', '..']) as $file) {
