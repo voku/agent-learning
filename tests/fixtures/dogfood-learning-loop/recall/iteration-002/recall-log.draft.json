@@ -1,0 +1,56 @@
+{
+    "schema_version": "1.0",
+    "id": "outcome.2026-06-19.000",
+    "compilation_id": "compilation.DOGFOOD-2.2026-06-19-000331.08eaa388",
+    "task_id": "DOGFOOD-2",
+    "task_files": [
+        "dogfood/task-agent-learning-loop.md",
+        "dogfood/recall/iteration-002"
+    ],
+    "session": "dogfood-session-002",
+    "created_at": "2026-06-19T00:03:31+00:00",
+    "guidance_used": [
+        "proposal.2026-06-19.001"
+    ],
+    "constraints_used": [],
+    "applied_proposals": [
+        "proposal.2026-06-19.001"
+    ],
+    "selected": [
+        "proposal.2026-06-19.001"
+    ],
+    "evaluated_guidance": [
+        {
+            "guidance_id": "proposal.2026-06-19.001",
+            "guidance_type": "memory",
+            "eligible": true,
+            "selected": true,
+            "selection_reason": "scope_overlap",
+            "exclusion_reason": null,
+            "task_files": [
+                "dogfood/task-agent-learning-loop.md",
+                "dogfood/recall/iteration-002"
+            ]
+        }
+    ],
+    "guidance_outcomes": [
+        {
+            "guidance_id": "proposal.2026-06-19.001",
+            "guidance_type": "memory",
+            "selected": true,
+            "applied": true,
+            "outcome": "helpful",
+            "comment": "Helpful: it changed close-out behavior by requiring an explicit outcome judgment and a check for no premature promotion instead of treating selection as proof of usefulness."
+        }
+    ],
+    "applied": [
+        "proposal.2026-06-19.001"
+    ],
+    "helpful": [
+        "proposal.2026-06-19.001"
+    ],
+    "irrelevant": [],
+    "harmful": [],
+    "result": "successful",
+    "comment": "Selected guidance was judged helpful based on concrete close-out behavior; one event is not enough for promotion."
+}

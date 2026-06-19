@@ -1,0 +1,26 @@
+{
+  "id": "finding.2026-06-19.001",
+  "task_id": "DOGFOOD-2",
+  "session": "dogfood-selected-guidance-setup",
+  "created_at": "2026-06-19T00:00:00+00:00",
+  "created_by": "dogfood-agent",
+  "scope": ["dogfood"],
+  "observation": "The first dogfood loop selected no active guidance, so the next loop needs a scoped guidance item to test whether selection becomes usable outcome evidence without being treated as automatic usefulness.",
+  "evidence": [
+    {"type": "file_reference", "path": "dogfood/task-agent-learning-loop.md", "line": 73},
+    {"type": "file_reference", "path": "dogfood/recall/iteration-001/meta.json", "line": 12}
+  ],
+  "hypothesis": "A scoped dogfood guidance item can force one selected-guidance session while preserving explicit outcome judgment and avoiding premature promotion.",
+  "validated_conclusion": "The second dogfood loop should use a scoped guidance item and then log whether it was helpful, irrelevant, harmful, or not used based on actual task impact.",
+  "confidence": "medium",
+  "validation_status": "validated",
+  "status": "validated",
+  "sensitivity": "public",
+  "classification": "ADD_LEARNING_NOTE",
+  "pattern_key": "dogfood.selected_guidance_outcome",
+  "validation_case": {
+    "given": "a dogfood task intentionally selects scoped guidance",
+    "when": "the task closes out",
+    "then": "the outcome is logged explicitly and no promotion is created from a single selection"
+  }
+}

@@ -36,7 +36,7 @@
   ],
   "scripts": {
     "test": "phpunit",
-    "phpstan": "phpstan analyse --configuration=phpstan.neon.dist",
+    "phpstan": "phpstan analyse --configuration=phpstan.neon.dist --memory-limit=512M",
     "ci": [
       "@composer validate --strict",
       "@test",

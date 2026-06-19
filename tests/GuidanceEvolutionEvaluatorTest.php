@@ -98,6 +98,110 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
         self::assertSame(1, $summary->unknownCount);
     }
 
+    public function testDogfoodEmptyGuidanceFixtureDoesNotInventTelemetry(): void
+    {
+        $fixtureRoot = __DIR__ . '/fixtures/dogfood-learning-loop/recall/iteration-001';
+        $meta = json_decode((string)file_get_contents($fixtureRoot . '/meta.json'), true, 512, JSON_THROW_ON_ERROR);
+        $draft = json_decode((string)file_get_contents($fixtureRoot . '/recall-log.draft.json'), true, 512, JSON_THROW_ON_ERROR);
+
+        self::assertSame([], $meta['selected_guidance']);
+        self::assertSame([], $meta['selected_constraints']);
+        self::assertSame([], $draft['selected']);
+        self::assertSame([], $draft['guidance_outcomes']);
+        self::assertSame([], $draft['applied']);
+        self::assertSame([], $draft['helpful']);
+        self::assertSame([], $draft['irrelevant']);
+        self::assertSame([], $draft['harmful']);
+        self::assertNotContains('none', $draft['selected']);
+        self::assertStringNotContainsString('"guidance_id":"none"', json_encode($draft, JSON_THROW_ON_ERROR));
+        self::assertStringNotContainsString('"outcome":"not_used"', json_encode($draft, JSON_THROW_ON_ERROR));
+    }
+
+    public function testDogfoodSelectedGuidanceFixtureProjectsOneSignalWithoutPromotion(): void
+    {
+        $fixtureRoot = __DIR__ . '/fixtures/dogfood-learning-loop/learning-root';
+        $findings = (new FindingRepository())->loadValidated($fixtureRoot);
+        $proposals = (new ProposalRepository())->loadAll($fixtureRoot, $findings);
+        $selectionEvents = (new RecallSelectionEventRepository())->load($fixtureRoot);
+        $outcomeEvents = (new GuidanceOutcomeEventRepository())->load($fixtureRoot);
+
+        $summaries = (new GuidanceUsageProjector())->project($selectionEvents, $outcomeEvents);
+        $summary = $summaries['proposal.2026-06-19.001'];
+
+        self::assertSame(1, $summary->eligibleCount);
+        self::assertSame(1, $summary->selectedCount);
+        self::assertSame(1, $summary->appliedCount);
+        self::assertSame(1, $summary->helpfulCount);
+        self::assertSame(0, $summary->irrelevantCount);
+        self::assertSame(0, $summary->harmfulCount);
+        self::assertSame(0, $summary->notUsedCount);
+        self::assertSame(0, $summary->unknownCount);
+        self::assertSame(['DOGFOOD-2'], $summary->distinctTaskIds);
+
+        $result = (new GuidanceEvolutionEvaluator())->evaluate($findings, $proposals, $selectionEvents, $outcomeEvents);
+        self::assertCount(1, $result->decisions);
+        self::assertSame(EvolutionDecisionType::NO_ACTION, $result->decisions[0]->type);
+        self::assertSame('proposal.2026-06-19.001', $result->decisions[0]->guidanceId);
+    }
+
+    public function testDogfoodSelectedGuidanceFixtureWritesNoCandidateProposal(): void
+    {
+        $fixtureRoot = __DIR__ . '/fixtures/dogfood-learning-loop/learning-root';
+        $root = sys_get_temp_dir() . '/dogfood-learning-loop-fixture-' . bin2hex(random_bytes(8));
+
+        try {
+            $this->copyDirectory($fixtureRoot, $root);
+
+            $argv = [
+                'agent-learning',
+                'guidance-evaluate',
+                '--root',
+                $root,
+                '--write-candidates',
+            ];
+
+            ob_start();
+            try {
+                self::assertSame(0, (new Cli())->run($argv));
+            } finally {
+                ob_end_clean();
+            }
+
+            self::assertSame([], glob($root . '/proposals/candidate/*.json') ?: []);
+            self::assertDirectoryDoesNotExist($root . '/proposals/candidate');
+        } finally {
+            $this->removeDirectory($root);
+        }
+    }
+
+    public function testValidateIncludesDogfoodRecallHistoryEvents(): void
+    {
+        $fixtureRoot = __DIR__ . '/fixtures/dogfood-learning-loop/learning-root';
+        $result = (new \voku\AgentLearning\LearningRepositoryValidator())->validate($fixtureRoot);
+
+        self::assertCount(1, $result->findingsById);
+        self::assertCount(1, $result->proposalsById);
+        self::assertCount(1, $result->recallSelectionEvents);
+        self::assertCount(1, $result->guidanceOutcomeEvents);
+    }
+
+    public function testValidateRejectsDogfoodGuidanceOutcomeWithoutSelection(): void
+    {
+        $fixtureRoot = __DIR__ . '/fixtures/dogfood-learning-loop/learning-root';
+        $root = sys_get_temp_dir() . '/dogfood-learning-loop-invalid-history-' . bin2hex(random_bytes(8));
+
+        try {
+            $this->copyDirectory($fixtureRoot, $root);
+            file_put_contents($root . '/history/recall-selections.jsonl', '');
+
+            $this->expectException(ValidationException::class);
+            $this->expectExceptionMessage('guidance outcome has no corresponding recall selection');
+            (new \voku\AgentLearning\LearningRepositoryValidator())->validate($root);
+        } finally {
+            $this->removeDirectory($root);
+        }
+    }
+
     public function testRepeatedSelectionWithoutHelpfulOutcomesDoesNotPromote(): void
     {
         $this->writeFinding('finding.2026-06-18.001', 'PROJECT-1');
@@ -336,5 +440,44 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
             is_dir($path) ? $this->removeDirectory($path) : unlink($path);
         }
         rmdir($dir);
+    }
+
+    private function copyDirectory(string $source, string $destination): void
+    {
+        if (!is_dir($source)) {
+            self::fail('Fixture directory does not exist: ' . $source);
+        }
+
+        if (!is_dir($destination)) {
+            $mkdirError = null;
+            set_error_handler(
+                static function (int $severity, string $message) use (&$mkdirError): bool {
+                    $mkdirError = $message;
+
+                    return true;
+                }
+            );
+            try {
+                $created = mkdir($destination, 0777, true);
+            } finally {
+                restore_error_handler();
+            }
+
+            if (!$created && !is_dir($destination)) {
+                $details = $mkdirError !== null ? ' (' . $mkdirError . ')' : '';
+                self::fail('Could not create fixture copy directory: ' . $destination . $details);
+            }
+        }
+
+        foreach (array_diff(scandir($source) ?: [], ['.', '..']) as $file) {
+            $sourcePath = $source . '/' . $file;
+            $destinationPath = $destination . '/' . $file;
+            if (is_dir($sourcePath)) {
+                $this->copyDirectory($sourcePath, $destinationPath);
+                continue;
+            }
+
+            copy($sourcePath, $destinationPath);
+        }
     }
 }

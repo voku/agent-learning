@@ -1,0 +1,23 @@
+{
+    "schema_version": "1.0",
+    "compilation_id": "compilation.dogfood-agent-learning-loop.2026-06-18-223259.7c417fe8",
+    "task_id": "dogfood-agent-learning-loop",
+    "task_files": [
+        "README.md",
+        "bin/agent-learning",
+        "src",
+        "tests"
+    ],
+    "compiled_at": "2026-06-18T22:32:59+00:00",
+    "selected_guidance": [],
+    "evaluated_guidance": [],
+    "selected_constraints": [],
+    "selected_rejections": [],
+    "outcome_stats": [],
+    "warnings": [],
+    "output_hashes": {
+        "system.md": "988177d81ea008b6c2f38c51037d620cc456e538522e47e8067779619bfbd32c",
+        "validation-plan.md": "7cef09b98ac86f46520c8b45d33c0eb3405727adbd2d4e3232aa8f78373d5876",
+        "recall-log.draft.json": "eea79fbd3bd0817b6b93eb9e936ff05dc8c1caed639329a3916784695734fb85"
+    }
+}

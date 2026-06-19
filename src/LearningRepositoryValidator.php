@@ -17,8 +17,18 @@ final class LearningRepositoryValidator
         $proposalsById = (new ProposalRepository())->loadAll($root, $findingsById);
         (new DecisionHistoryValidator())->validateHistory($root, $proposalsById);
         $outcomes = (new OutcomeRepository())->loadAll($root, $proposalsById);
+        $recallSelectionEvents = (new RecallSelectionEventRepository())->load($root);
+        $guidanceOutcomeEvents = (new GuidanceOutcomeEventRepository())->load($root);
+        (new GuidanceUsageProjector())->project($recallSelectionEvents, $guidanceOutcomeEvents);
 
-        return new LearningRepositoryValidationResult($root, $findingsById, $proposalsById, $outcomes);
+        return new LearningRepositoryValidationResult(
+            $root,
+            $findingsById,
+            $proposalsById,
+            $outcomes,
+            $recallSelectionEvents,
+            $guidanceOutcomeEvents,
+        );
     }
 
     /** @return array<string, Finding> */

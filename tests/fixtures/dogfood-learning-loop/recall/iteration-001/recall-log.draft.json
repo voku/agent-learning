@@ -1,0 +1,26 @@
+{
+    "schema_version": "1.0",
+    "id": "outcome.2026-06-18.000",
+    "compilation_id": "compilation.dogfood-agent-learning-loop.2026-06-18-223259.7c417fe8",
+    "task_id": "dogfood-agent-learning-loop",
+    "task_files": [
+        "README.md",
+        "bin/agent-learning",
+        "src",
+        "tests"
+    ],
+    "session": "dogfood-session-001",
+    "created_at": "2026-06-18T22:32:59+00:00",
+    "guidance_used": [],
+    "constraints_used": [],
+    "applied_proposals": [],
+    "selected": [],
+    "evaluated_guidance": [],
+    "guidance_outcomes": [],
+    "applied": [],
+    "helpful": [],
+    "irrelevant": [],
+    "harmful": [],
+    "result": "successful",
+    "comment": "No active guidance or constraints were selected; composer phpstan memory limit maintenance was validated. Selection absence was preserved rather than treated as usage."
+}

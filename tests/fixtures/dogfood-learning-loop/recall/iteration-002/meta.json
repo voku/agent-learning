@@ -1,0 +1,44 @@
+{
+    "schema_version": "1.0",
+    "compilation_id": "compilation.DOGFOOD-2.2026-06-19-000331.08eaa388",
+    "task_id": "DOGFOOD-2",
+    "task_files": [
+        "dogfood/task-agent-learning-loop.md",
+        "dogfood/recall/iteration-002"
+    ],
+    "compiled_at": "2026-06-19T00:03:31+00:00",
+    "selected_guidance": [
+        "proposal.2026-06-19.001"
+    ],
+    "evaluated_guidance": [
+        {
+            "guidance_id": "proposal.2026-06-19.001",
+            "guidance_type": "memory",
+            "eligible": true,
+            "selected": true,
+            "selection_reason": "scope_overlap",
+            "exclusion_reason": null,
+            "task_files": [
+                "dogfood/task-agent-learning-loop.md",
+                "dogfood/recall/iteration-002"
+            ]
+        }
+    ],
+    "selected_constraints": [],
+    "selected_rejections": [],
+    "outcome_stats": {
+        "proposal.2026-06-19.001": {
+            "selected_count": 0,
+            "helpful_count": 0,
+            "irrelevant_count": 0,
+            "harmful_count": 0,
+            "violation_detected_count": 0
+        }
+    },
+    "warnings": [],
+    "output_hashes": {
+        "system.md": "b1876e0f59bd63aabf77dc4e96a5d301825a1d30c3c10f38eb18eb9c94c3f149",
+        "validation-plan.md": "26c63a377f80ada75aa7ec6f352b4f1b196212c7b653999804bc91174bff1100",
+        "recall-log.draft.json": "50c3cd46575a0c93866e809c05db6fc272bd302387d3f65cb01d81232e9af1b4"
+    }
+}
