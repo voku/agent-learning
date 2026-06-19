@@ -4,6 +4,16 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.6.0] - 2026-06-19
+
+### Added
+
+- Add validating recall history in learning root checks
+
+### Refactored
+
+- Consolidate learning root resolution
+
 ## [0.5.0] - 2026-06-18
 
 ### Added
