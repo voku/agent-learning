@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "id": "proposal.2026-06-19.001",
+  "created_at": "2026-06-19T00:05:00+00:00",
+  "action": "ADD",
+  "target_type": "memory",
+  "target": "memory.dogfood.selected_guidance_outcome",
+  "scope": ["dogfood"],
+  "source_findings": ["finding.2026-06-19.001"],
+  "new": "For dogfood tasks under `dogfood/`, treat selected guidance as a prompt to make an explicit outcome judgment, not as proof that the guidance was useful. Mark the selected item helpful, irrelevant, harmful, or not used based on concrete task impact, then verify `guidance-evaluate` does not create a promotion from insufficient evidence.",
+  "reason": "The next dogfood loop needs one scoped guidance item to test selected-guidance outcome projection without worshipping selection as usefulness.",
+  "boundary": "Dogfood evidence-capture tasks under the `dogfood/` directory only.",
+  "validation": ["composer validate --strict", "composer test", "composer phpstan", "php bin/agent-learning guidance-evaluate --root dogfood/learning-root --selection-history history/recall-selections.jsonl --outcome-history history/outcomes.jsonl --write-candidates"],
+  "status": "approved",
+  "proposed_by": "dogfood-agent",
+  "approved_by": "dogfood-agent",
+  "approved_at": "2026-06-19T00:06:00+00:00",
+  "learning_decision": "ADD_LEARNING_NOTE",
+  "pattern_key": "dogfood.selected_guidance_outcome",
+  "validation_case": {
+    "given": "a dogfood task intentionally selects scoped guidance",
+    "when": "the task closes out",
+    "then": "the outcome is logged explicitly and no promotion is created from a single selection"
+  }
+}

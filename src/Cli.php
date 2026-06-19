@@ -125,6 +125,8 @@ final class Cli
             'Validated agent learning root: ' . $result->root . "\n"
             . 'Findings: ' . count($result->findingsById) . "\n"
             . 'Proposals: ' . count($result->proposalsById) . "\n"
+            . 'Recall selections: ' . count($result->recallSelectionEvents) . "\n"
+            . 'Guidance outcomes: ' . count($result->guidanceOutcomeEvents) . "\n"
         );
 
         return 0;
