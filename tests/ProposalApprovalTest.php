@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace voku\AgentLearning\Tests;
 
 use PHPUnit\Framework\TestCase;
+use voku\AgentLearning\Cli;
 use voku\AgentLearning\ProposalTransitionManager;
 use voku\AgentLearning\ValidationException;
 
@@ -50,6 +51,35 @@ final class ProposalApprovalTest extends TestCase
         self::assertIsString($decisions);
         self::assertStringContainsString('approved', $decisions);
         self::assertStringContainsString('proposal.2026-06-08.001', $decisions);
+    }
+
+    public function testApprovesProposalSuccessfullyThroughCliWithSpaceSeparatedOptions(): void
+    {
+        // Reproduces a real bug: parseOptions() used `foreach ($tokens as $index => $token)` with a
+        // manual `$index++` to skip a consumed option value. foreach ignores manual index mutation, so
+        // the consumed value re-appeared as a bogus leading positional argument, and proposal-approve
+        // (which reads the proposal ID from $arguments[0]) approved the wrong "proposal" (the --root
+        // value) instead of the one actually requested.
+        $argv = [
+            'agent-learning',
+            'proposal-approve',
+            '--root',
+            $this->root,
+            '--by',
+            'lars',
+            'proposal.2026-06-08.001',
+        ];
+
+        ob_start();
+        try {
+            $exitCode = (new Cli())->run($argv);
+        } finally {
+            ob_end_clean();
+        }
+
+        self::assertSame(0, $exitCode);
+        self::assertFileDoesNotExist($this->root . '/proposals/candidate/proposal.2026-06-08.001.json');
+        self::assertFileExists($this->root . '/proposals/approved/proposal.2026-06-08.001.json');
     }
 
     public function testApproveNoDurableLearningProposalThrows(): void

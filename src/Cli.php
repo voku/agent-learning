@@ -577,7 +577,9 @@ final class Cli
     {
         $options = [];
         $arguments = [];
-        foreach ($tokens as $index => $token) {
+        $count = count($tokens);
+        for ($index = 0; $index < $count; $index++) {
+            $token = $tokens[$index];
             if (!str_starts_with($token, '--')) {
                 $arguments[] = $token;
                 continue;

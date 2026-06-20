@@ -4,6 +4,20 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.6.1] - 2026-06-20
+
+### Fixed
+
+- `Cli::parseOptions()` used `foreach ($tokens as $index => $token)` with a manual `$index++` to skip
+  a consumed option value. `foreach` ignores manual mutation of the loop variable, so the consumed
+  value was re-read on the next iteration and pushed onto `$arguments` as a bogus leading positional
+  argument. Any command that reads its primary ID from `$arguments[0]` (`proposal-approve`,
+  `proposal-reject`, `proposal-mark-applied`, `finding-transition`, and `constraint-export`/
+  `constraint-activate`/`constraint-loop` when given a bare ID) silently operated on the wrong record
+  whenever at least one `--option value` pair preceded it. Switched to an explicit indexed `for` loop
+  (matching the already-correct pattern in the sibling `voku/agent-recall-compiler` package) and added
+  a regression test that exercises `proposal-approve` through `Cli::run()` with space-separated options.
+
 ## [0.6.0] - 2026-06-19
 
 ### Added
