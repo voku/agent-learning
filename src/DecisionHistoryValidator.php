@@ -19,6 +19,7 @@ final class DecisionHistoryValidator
     {
         $approvedPath = $root . '/history/decisions.jsonl';
         $rejectedPath = $root . '/history/rejected-proposals.jsonl';
+        $retiredPath = $root . '/history/retired-proposals.jsonl';
         $approvedProposals = [];
         foreach ($this->jsonRecords($approvedPath) as $record) {
             $proposalId = $this->requireString($record, 'proposal_id', $approvedPath, null);
@@ -44,6 +45,16 @@ final class DecisionHistoryValidator
             }
             if (trim((string)($record['reason'] ?? '')) === '') {
                 throw new ValidationException($rejectedPath, null, $proposalId, 'rejected proposal requires a reason');
+            }
+        }
+
+        foreach ($this->jsonRecords($retiredPath) as $record) {
+            $proposalId = $this->requireString($record, 'proposal_id', $retiredPath, null);
+            if (!isset($proposalsById[$proposalId])) {
+                throw new ValidationException($retiredPath, null, $proposalId, 'history references unknown proposal');
+            }
+            if (trim((string)($record['reason'] ?? '')) === '') {
+                throw new ValidationException($retiredPath, null, $proposalId, 'retired proposal requires a reason');
             }
         }
     }

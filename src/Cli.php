@@ -39,6 +39,7 @@ final class Cli
                 'proposal-approve' => $this->proposalApproveCommand($tokens),
                 'proposal-reject' => $this->proposalRejectCommand($tokens),
                 'proposal-mark-applied' => $this->proposalMarkAppliedCommand($tokens),
+                'proposal-retire' => $this->proposalRetireCommand($tokens),
                 'help', '--help', '-h' => $this->helpCommand(),
                 default => $this->unknownCommand($command),
             };
@@ -468,6 +469,33 @@ final class Cli
         return 0;
     }
 
+    /**
+     * @param list<string> $tokens
+     */
+    private function proposalRetireCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $proposalId = $parsed['arguments'][0] ?? null;
+        $actor = $this->stringOption($parsed['options'], 'by');
+        $reason = $this->stringOption($parsed['options'], 'reason');
+
+        if ($proposalId === null || trim($proposalId) === '') {
+            throw new ValidationException($root, null, null, 'proposal-retire requires proposal ID argument');
+        }
+        if ($actor === null || trim($actor) === '') {
+            throw new ValidationException($root, null, null, 'proposal-retire requires --by actor option');
+        }
+        if ($reason === null || trim($reason) === '') {
+            throw new ValidationException($root, null, null, 'proposal-retire requires --reason option');
+        }
+
+        (new ProposalTransitionManager())->retire($root, $proposalId, $actor, $reason);
+        $this->write(sprintf("Retired proposal: %s\n", $proposalId));
+
+        return 0;
+    }
+
     private function helpCommand(): int
     {
         $this->write(
@@ -484,7 +512,8 @@ final class Cli
             . "  finding-transition   Transition a finding to a new state.\n"
             . "  proposal-approve     Approve a candidate proposal.\n"
             . "  proposal-reject      Reject a candidate proposal.\n"
-            . "  proposal-mark-applied Mark an approved proposal as applied externally.\n\n"
+            . "  proposal-mark-applied Mark an approved proposal as applied externally.\n"
+            . "  proposal-retire      Retire an applied proposal once its target fully captures the change.\n\n"
             . "Options:\n"
             . "  --root PATH              Learning root or project root. Defaults to auto-discovery.\n"
             . "  --task-id-pattern REGEX  Override finding task id validation.\n"
@@ -510,7 +539,7 @@ final class Cli
             . "  --approve-candidate      Allow constraint-loop to approve a candidate proposal before applying.\n"
             . "  --manifest PATH          Manifest output path for constraint-loop or constraint-activate.\n"
             . "  --by ACTOR               Actor performing the operation.\n"
-            . "  --reason REASON          Reason for proposal rejection.\n"
+            . "  --reason REASON          Reason for proposal rejection or retirement.\n"
             . "  --commit COMMIT          Commit hash or pull request reference.\n"
             . "  --validation PATH        Path to validation evidence JSON file.\n"
         );

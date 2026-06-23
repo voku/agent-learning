@@ -4,6 +4,24 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.7.0] - 2026-06-23
+
+### Added
+
+- Added a `retired` `ProposalStatus`, reachable only from `applied` via the new
+  `ProposalTransitionManager::retire()` / `proposal-retire` CLI command. Once a proposal's durable
+  change is fully captured in its target skill/doc/memory home, retiring it moves the file to
+  `proposals/retired/` and appends an immutable record to the new `history/retired-proposals.jsonl`
+  (validated by `DecisionHistoryValidator`). Consuming projects do not need any change in
+  `voku/agent-recall-compiler`: its `RecallRepository::loadActiveGuidance()` already only scans
+  `proposals/approved/` and `proposals/applied/`, so a retired proposal is simply never read into the
+  active recall guidance pool again, instead of accumulating there forever.
+- `ProposalValidator`'s source-finding check now also accepts findings with
+  `FindingStatus::ARCHIVED` (previously only `VALIDATED`/`CONSOLIDATED`), and
+  `ProposalTransitionManager::approve()`'s inline check was widened to match, so a finding can be
+  archived after its proposal already cited it as evidence without breaking that proposal's
+  validation on a later `validate`/`approve`/`retire` run.
+
 ## [0.6.1] - 2026-06-20
 
 ### Fixed

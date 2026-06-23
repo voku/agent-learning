@@ -25,6 +25,7 @@ final class ProposalValidatorTest extends TestCase
             yield $action->value . ' approved' => [$action, ProposalStatus::APPROVED];
             yield $action->value . ' rejected' => [$action, ProposalStatus::REJECTED];
             yield $action->value . ' applied' => [$action, ProposalStatus::APPLIED];
+            yield $action->value . ' retired' => [$action, ProposalStatus::RETIRED];
         }
 
         yield 'NO_DURABLE_LEARNING candidate' => [Action::NO_DURABLE_LEARNING, ProposalStatus::CANDIDATE];
@@ -51,8 +52,10 @@ final class ProposalValidatorTest extends TestCase
     {
         yield 'NO_DURABLE_LEARNING approved' => [Action::NO_DURABLE_LEARNING, ProposalStatus::APPROVED];
         yield 'NO_DURABLE_LEARNING applied' => [Action::NO_DURABLE_LEARNING, ProposalStatus::APPLIED];
+        yield 'NO_DURABLE_LEARNING retired' => [Action::NO_DURABLE_LEARNING, ProposalStatus::RETIRED];
         yield 'REJECT approved' => [Action::REJECT, ProposalStatus::APPROVED];
         yield 'REJECT applied' => [Action::REJECT, ProposalStatus::APPLIED];
+        yield 'REJECT retired' => [Action::REJECT, ProposalStatus::RETIRED];
     }
 
     /**
@@ -268,7 +271,7 @@ final class ProposalValidatorTest extends TestCase
         array $extraRaw = [],
     ): Proposal {
         $isDurable = $action !== Action::NO_DURABLE_LEARNING;
-        $isApprovedLifecycle = $status === ProposalStatus::APPROVED || $status === ProposalStatus::APPLIED;
+        $isApprovedLifecycle = $status === ProposalStatus::APPROVED || $status === ProposalStatus::APPLIED || $status === ProposalStatus::RETIRED;
         $isRejectedLifecycle = $status === ProposalStatus::REJECTED || $action === Action::REJECT;
         
         $oldWording = $old ?? ($action === Action::ADD ? null : 'Old guidance.');

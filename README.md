@@ -55,7 +55,7 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 * [Finding](src/Finding.php): Read-only entity representing a captured session finding.
 * [FindingStatus](src/FindingStatus.php): Enum defining finding lifecycles (`candidate`, `validated`, `invalidated`, `rejected`, `superseded`, `consolidated`, `archived`).
 * [Proposal](src/Proposal.php): Read-only entity representing a proposed modification to guidelines.
-* [ProposalStatus](src/ProposalStatus.php): Enum defining proposal states (`candidate`, `approved`, `rejected`, `applied`).
+* [ProposalStatus](src/ProposalStatus.php): Enum defining proposal states (`candidate`, `approved`, `rejected`, `applied`, `retired`).
 * [Action](src/Action.php): Enum representing actions (`NO_DURABLE_LEARNING`, `ADD`, `DELETE`, `REPLACE`, `REJECT`).
 * [ConstraintSpecification](src/ConstraintSpecification.php): Read-only model for hard-constraint promotion candidates.
 * [GuidanceUsageSummary](src/GuidanceUsageSummary.php): Read-only projection of recall eligibility, selection, application, explicit outcomes, task spread, timestamps, and evidence event IDs.
@@ -123,11 +123,12 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
    - `REPLACE` action requires both `old` and `new` wording.
 6. **Status Constraints**:
    - Proposal `action` describes the requested durable change (`ADD`, `DELETE`, `REPLACE`, `REJECT`, `NO_DURABLE_LEARNING`).
-   - Proposal `status` describes the human lifecycle decision (`candidate`, `approved`, `rejected`, `applied`).
-   - Durable actions (`ADD`, `DELETE`, `REPLACE`) may be `candidate`, `approved`, `rejected`, or `applied`.
+   - Proposal `status` describes the human lifecycle decision (`candidate`, `approved`, `rejected`, `applied`, `retired`).
+   - Durable actions (`ADD`, `DELETE`, `REPLACE`) may be `candidate`, `approved`, `rejected`, `applied`, or `retired`.
    - `REJECT` and `NO_DURABLE_LEARNING` may only be `candidate` or `rejected`.
-   - `APPROVED` or `APPLIED` proposal requires `approved_by` and `approved_at` timestamp.
+   - `APPROVED`, `APPLIED`, or `RETIRED` proposal requires `approved_by` and `approved_at` timestamp.
    - `REJECTED` proposal or a `REJECT` action requires a non-empty `reason`.
+   - `RETIRED` proposal requires a non-empty `reason`. Retirement only applies to a previously `APPLIED` proposal whose durable change is now fully captured in its target skill/doc/memory home; `voku/agent-recall-compiler`'s `loadActiveGuidance()` only scans `proposals/approved/` and `proposals/applied/`, so a retired proposal stops being read into every future active recall guidance pool without needing any change in that package.
 7. **Lifecycle Directory Check**: Proposal files under `proposals/<status>/` must embed the same `status` value.
 8. **Scope Broader Check**: If proposal `scope` includes entries not present in the referenced findings, a `scope_justification` must be provided.
 9. **Constraint Promotion Gates**: Constraint proposals require confirmed source findings, several independent findings or a critical-incident justification, explicit scope, explicit allowed boundaries, objective detectability, validation commands, declared false-positive risk, local example rule references where available, and engine-compatible target paths/commands.

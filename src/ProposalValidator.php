@@ -140,6 +140,8 @@ final class ProposalValidator
                 $proposal->status === ProposalStatus::APPROVED
                 ||
                 $proposal->status === ProposalStatus::APPLIED
+                ||
+                $proposal->status === ProposalStatus::RETIRED
             )
             &&
             (
@@ -170,6 +172,14 @@ final class ProposalValidator
             throw new ValidationException($file, $line, $proposal->id, 'rejected proposal requires a reason');
         }
 
+        if (
+            $proposal->status === ProposalStatus::RETIRED
+            &&
+            trim($proposal->reason) === ''
+        ) {
+            throw new ValidationException($file, $line, $proposal->id, 'retired proposal requires a reason');
+        }
+
         $this->assertLearningDecision($proposal, $file, $line);
 
         $evidenceScope = [];
@@ -185,9 +195,14 @@ final class ProposalValidator
 
             if ($finding instanceof Finding) {
                 // Provenance: finding.2026-06-13.005 (consolidated source findings support)
+                // A finding archived after its proposal already cited it as evidence stays
+                // a valid reference: archiving only means the lesson is now fully captured
+                // in its canonical home, not that the original evidence was wrong.
                 $isValidatedStatus = $finding->status === FindingStatus::VALIDATED
                                      ||
-                                     $finding->status === FindingStatus::CONSOLIDATED;
+                                     $finding->status === FindingStatus::CONSOLIDATED
+                                     ||
+                                     $finding->status === FindingStatus::ARCHIVED;
                 if (
                     !$isValidatedStatus
                     ||
@@ -279,6 +294,7 @@ final class ProposalValidator
                 ProposalStatus::APPROVED,
                 ProposalStatus::REJECTED,
                 ProposalStatus::APPLIED,
+                ProposalStatus::RETIRED,
             ],
             Action::NO_DURABLE_LEARNING, Action::REJECT => [
                 ProposalStatus::CANDIDATE,

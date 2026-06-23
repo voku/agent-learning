@@ -70,8 +70,8 @@ final class ProposalTransitionManager
             if ($finding === null) {
                 throw new ValidationException($proposalPath, null, $proposalId, 'source finding does not exist: ' . $findingId);
             }
-            if ($finding->status !== FindingStatus::VALIDATED && $finding->status !== FindingStatus::CONSOLIDATED) {
-                throw new ValidationException($proposalPath, null, $proposalId, 'source finding is not validated or consolidated: ' . $findingId);
+            if ($finding->status !== FindingStatus::VALIDATED && $finding->status !== FindingStatus::CONSOLIDATED && $finding->status !== FindingStatus::ARCHIVED) {
+                throw new ValidationException($proposalPath, null, $proposalId, 'source finding is not validated, consolidated, or archived: ' . $findingId);
             }
         }
 
@@ -236,6 +236,129 @@ final class ProposalTransitionManager
             }
             throw new ValidationException($proposalPath, null, $proposalId, 'proposal rejection failed and was rolled back: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Retire an applied proposal once its durable change is fully captured in its
+     * target skill/doc/memory home, so it stops being read into every future active
+     * recall guidance pool. Distinct from `reject()` (which discards a candidate that
+     * never took effect) and from `FindingStatus::ARCHIVED`/`CONSOLIDATED` (which only
+     * cover findings, not proposals).
+     *
+     * @param string $root
+     * @param string $proposalId
+     * @param string $actor
+     * @param string $reason
+     * @throws ValidationException
+     */
+    public function retire(string $root, string $proposalId, string $actor, string $reason): void
+    {
+        if (trim($actor) === '') {
+            throw new ValidationException('', null, $proposalId, 'actor name must be explicit');
+        }
+        if (trim($reason) === '') {
+            throw new ValidationException('', null, $proposalId, 'retirement reason must be explicit');
+        }
+
+        $proposalPath = $this->resolveProposalPath($proposalId, $root);
+        $proposal = (new ProposalParser())->parseFile($proposalPath);
+
+        if ($proposal->status !== ProposalStatus::APPLIED) {
+            throw new ValidationException($proposalPath, null, $proposalId, 'proposal is not applied');
+        }
+
+        $now = new DateTimeImmutable('now');
+        $nowStr = $now->format(DateTimeInterface::ATOM);
+
+        // Backup current state
+        $originalProposalContent = file_get_contents($proposalPath);
+        $retiredPath = $root . '/history/retired-proposals.jsonl';
+        $originalRetiredContent = is_file($retiredPath) ? file_get_contents($retiredPath) : null;
+
+        // Prepare updated proposal JSON
+        $data = $proposal->raw;
+        $data['status'] = ProposalStatus::RETIRED->value;
+        $data['reason'] = $reason;
+        $data['retired_by'] = $actor;
+        $data['retired_at'] = $nowStr;
+
+        $updatedContent = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+        $targetDir = $root . '/proposals/retired';
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0777, true);
+        }
+        $targetPath = $targetDir . '/' . $proposalId . '.json';
+
+        $retirementId = $this->generateRetirementId($root, $now);
+        $retirementRecord = [
+            'id' => $retirementId,
+            'proposal_id' => $proposalId,
+            'retired_by' => $actor,
+            'retired_at' => $nowStr,
+            'reason' => $reason,
+        ];
+        $retirementLine = json_encode($retirementRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+
+        try {
+            file_put_contents($proposalPath, $updatedContent);
+            if ($proposalPath !== $targetPath) {
+                if (is_file($targetPath)) {
+                    throw new ValidationException($targetPath, null, $proposalId, 'target file already exists');
+                }
+                if (!rename($proposalPath, $targetPath)) {
+                    throw new ValidationException($proposalPath, null, $proposalId, 'failed to move proposal file');
+                }
+            }
+            if (!is_dir(dirname($retiredPath))) {
+                mkdir(dirname($retiredPath), 0777, true);
+            }
+            file_put_contents($retiredPath, $retirementLine, FILE_APPEND);
+
+            // Re-validate entire repo
+            $this->validateRepository($root);
+        } catch (\Throwable $e) {
+            // Rollback
+            if (is_file($targetPath) && $targetPath !== $proposalPath) {
+                rename($targetPath, $proposalPath);
+            }
+            file_put_contents($proposalPath, $originalProposalContent);
+            if ($originalRetiredContent === null) {
+                if (is_file($retiredPath)) {
+                    unlink($retiredPath);
+                }
+            } else {
+                file_put_contents($retiredPath, $originalRetiredContent);
+            }
+            throw new ValidationException($proposalPath, null, $proposalId, 'proposal retirement failed and was rolled back: ' . $e->getMessage());
+        }
+    }
+
+    public function generateRetirementId(string $root, ?DateTimeImmutable $date = null): string
+    {
+        $dateObj = $date ?? new DateTimeImmutable('now');
+        $dateStr = $dateObj->format('Y-m-d');
+        $prefix = 'retirement.' . $dateStr . '.';
+
+        $path = $root . '/history/retired-proposals.jsonl';
+        $maxNum = 0;
+        if (is_file($path)) {
+            $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            if ($lines !== false) {
+                foreach ($lines as $line) {
+                    $decoded = json_decode($line, true);
+                    $id = $decoded['id'] ?? '';
+                    if (str_starts_with($id, $prefix)) {
+                        $suffix = substr($id, strlen($prefix));
+                        if (is_numeric($suffix)) {
+                            $maxNum = max($maxNum, (int)$suffix);
+                        }
+                    }
+                }
+            }
+        }
+
+        return $prefix . sprintf('%03d', $maxNum + 1);
     }
 
     public function generateDecisionId(string $root, ?DateTimeImmutable $date = null): string

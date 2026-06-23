@@ -10,4 +10,5 @@ enum ProposalStatus: string
     case APPROVED = 'approved';
     case REJECTED = 'rejected';
     case APPLIED = 'applied';
+    case RETIRED = 'retired';
 }
