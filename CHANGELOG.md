@@ -4,6 +4,17 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.8.0] - 2026-07-06
+
+### Added
+
+- add docs about https://github.com/ctxrs/ctx and how to use it for findings existing learnings from your coding agents
+- New `backlog` CLI command that lists validated findings not yet consolidated into a proposal and
+  exits non-zero while any remain. This is a deterministic gate for the recurring "only the recent
+  findings were processed" failure: a learning-loop pass can no longer be reported as done while a
+  backlog of unconsolidated findings exists. `--allow-nonempty` makes the listing informational
+  (exit 0) for reporting without gating. Backed by `BacklogCommandTest`.
+
 ## [0.7.0] - 2026-06-23
 
 ### Added
