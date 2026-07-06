@@ -35,6 +35,7 @@ final class Cli
                 'constraint-activate' => $this->constraintActivateCommand($tokens),
                 'constraint-loop' => $this->constraintLoopCommand($tokens),
                 'guidance-evaluate' => $this->guidanceEvaluateCommand($tokens),
+                'backlog' => $this->backlogCommand($tokens),
                 'finding-transition' => $this->findingTransitionCommand($tokens),
                 'proposal-approve' => $this->proposalApproveCommand($tokens),
                 'proposal-reject' => $this->proposalRejectCommand($tokens),
@@ -109,6 +110,47 @@ final class Cli
         }
 
         return 0;
+    }
+
+    /**
+     * Report validated findings that have not yet been consolidated into a proposal.
+     *
+     * This is the deterministic guard for the recurring "I only processed the
+     * recent findings" failure: it exits non-zero while any validated finding is
+     * still unconsolidated, so the learning loop cannot be declared done while a
+     * backlog remains. Pass --allow-nonempty for a non-gating, informational listing.
+     *
+     * @param list<string> $tokens
+     */
+    private function backlogCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+
+        $validated = (new FindingRepository())->loadValidated($root);
+        ksort($validated);
+
+        $this->write('Unconsolidated validated findings: ' . count($validated) . "\n");
+        foreach ($validated as $finding) {
+            $this->write(sprintf("- %s (task %s): %s\n", $finding->id, $finding->taskId, $finding->observation));
+        }
+
+        if ($validated === []) {
+            $this->write("Backlog is clear.\n");
+
+            return 0;
+        }
+
+        if ($this->boolOption($parsed['options'], 'allow-nonempty')) {
+            return 0;
+        }
+
+        $this->writeError(
+            'Learning backlog is not empty: ' . count($validated)
+            . " validated finding(s) still need consolidation. Consolidate them, or pass --allow-nonempty for an informational listing.\n"
+        );
+
+        return 1;
     }
 
     /**
@@ -509,6 +551,7 @@ final class Cli
             . "  constraint-activate  Write an active constraint manifest from an approved/applied proposal.\n"
             . "  constraint-loop      Export, apply, and activate a generated constraint proposal.\n"
             . "  guidance-evaluate    Project recall usage events and create reviewable candidate proposals.\n"
+            . "  backlog              List validated findings not yet consolidated; exits non-zero while any remain.\n"
             . "  finding-transition   Transition a finding to a new state.\n"
             . "  proposal-approve     Approve a candidate proposal.\n"
             . "  proposal-reject      Reject a candidate proposal.\n"
@@ -525,6 +568,7 @@ final class Cli
             . "  --since YYYY-MM-DD       Include findings created on or after this date.\n"
             . "  --until YYYY-MM-DD       Include findings created on or before this date.\n"
             . "  --allow-empty            Allow prepare to write a prompt with no selected findings.\n"
+            . "  --allow-nonempty         Make backlog informational (exit 0) instead of gating on a non-empty backlog.\n"
             . "  --proposal PATH          Proposal path for proposal-validate.\n"
             . "  --input PATH             Input file for proposal-import.\n"
             . "  --output PATH            Output file for prepare.\n"

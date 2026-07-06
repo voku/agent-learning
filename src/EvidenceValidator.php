@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning;
 
+use DateTimeImmutable;
+use DateTimeInterface;
+
 final class EvidenceValidator
 {
     /**
@@ -19,6 +22,17 @@ final class EvidenceValidator
         'schema_reference',
         'runtime_observation',
         'manual_verification',
+        'agent_history_reference',
+    ];
+
+    /**
+     * @var list<string>
+     */
+    private const array AGENT_HISTORY_REFERENCE_STATUSES = [
+        'found',
+        'inspected',
+        'rejected',
+        'stale',
     ];
 
     /**
@@ -53,6 +67,12 @@ final class EvidenceValidator
                 continue;
             }
 
+            if ($type === 'agent_history_reference') {
+                $this->validateAgentHistoryReference($item, $file, $line, $recordId, $index);
+
+                continue;
+            }
+
             $field = match ($type) {
                 'commit' => 'commit',
                 'review_comment' => 'reference',
@@ -72,5 +92,55 @@ final class EvidenceValidator
         if (!is_string($value) || trim($value) === '') {
             throw new ValidationException($file, $line, $recordId, 'evidence index ' . $index . ' requires non-empty string field: ' . $field);
         }
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function validateAgentHistoryReference(array $item, string $file, ?int $line, string $recordId, int $index): void
+    {
+        $this->requireString($item, 'source', $file, $line, $recordId, $index);
+        if ($item['source'] !== 'ctx') {
+            throw new ValidationException($file, $line, $recordId, 'agent_history_reference evidence requires source=ctx at index ' . $index);
+        }
+
+        $this->requireString($item, 'query', $file, $line, $recordId, $index);
+        $this->requireString($item, 'retrieved_at', $file, $line, $recordId, $index);
+        $this->requireString($item, 'summary', $file, $line, $recordId, $index);
+        $this->requireString($item, 'verification_status', $file, $line, $recordId, $index);
+
+        $sessionId = $item['ctx_session_id'] ?? null;
+        $eventId = $item['ctx_event_id'] ?? null;
+        if ((!is_string($sessionId) || trim($sessionId) === '') && (!is_string($eventId) || trim($eventId) === '')) {
+            throw new ValidationException($file, $line, $recordId, 'agent_history_reference evidence requires ctx_session_id or ctx_event_id at index ' . $index);
+        }
+
+        $retrievedAt = $item['retrieved_at'];
+        $parsedRetrievedAt = is_string($retrievedAt)
+            ? DateTimeImmutable::createFromFormat(DateTimeInterface::ATOM, $retrievedAt)
+            : false;
+        if ($parsedRetrievedAt === false || $this->hasTimestampParseErrors()) {
+            throw new ValidationException($file, $line, $recordId, 'agent_history_reference evidence requires valid ISO timestamp retrieved_at at index ' . $index);
+        }
+
+        $verificationStatus = $item['verification_status'];
+        if (!is_string($verificationStatus) || !in_array($verificationStatus, self::AGENT_HISTORY_REFERENCE_STATUSES, true)) {
+            throw new ValidationException($file, $line, $recordId, 'agent_history_reference evidence has unsupported verification_status at index ' . $index);
+        }
+
+        $provider = $item['provider'] ?? null;
+        if ($provider !== null && (!is_string($provider) || trim($provider) === '')) {
+            throw new ValidationException($file, $line, $recordId, 'agent_history_reference evidence provider must be a non-empty string when present at index ' . $index);
+        }
+    }
+
+    private function hasTimestampParseErrors(): bool
+    {
+        $errors = DateTimeImmutable::getLastErrors();
+        if ($errors === false) {
+            return false;
+        }
+
+        return $errors['warning_count'] > 0 || $errors['error_count'] > 0;
     }
 }

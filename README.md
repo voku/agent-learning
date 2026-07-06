@@ -38,7 +38,17 @@ Findings must be backed by concrete, verifiable evidence. Supported types includ
 * `test_result` / `phpstan_result`: Command execution command and summary.
 * `review_comment`: Pull/merge request comments or reviews.
 * `issue_reference`: Bounded issue or ticket tracker reference.
+* `agent_history_reference`: Bounded reference to inspected local agent-history evidence discovered with ctx.
 * Others (e.g., `schema_reference`, `runtime_observation`, `manual_verification`).
+
+### Using ctx as historical evidence
+`agent-learning` does not index agent history itself. If [ctx](https://github.com/ctxrs/ctx) is installed, use it before writing findings to discover relevant prior sessions, failed attempts, rejected approaches, and validation history.
+
+ctx hits are evidence references, not durable memory. Record only bounded summaries and ctx IDs in findings. Durable learning still flows through validated findings, proposals, and reviewed decisions.
+
+ctx helps find what happened before; agent-learning decides what deserves to survive.
+
+See [docs/ctx-integration.md](docs/ctx-integration.md) for the evidence schema and the local-history boundary. The related package skill is `agent-learning-ctx-evidence`; the ctx-side search skill is `ctx-agent-history-search`.
 
 ### Decision History
 A persistent record of approved or rejected proposals stored in JSON Lines (`.jsonl`) format. 
@@ -248,6 +258,7 @@ With learning triage:
 This package ships package-specific skills under `skills/`:
 
 - [`agent-learning-consumer`](skills/agent-learning-consumer/SKILL.md): for end users setting up a learning root, capturing findings, validating proposals, and preparing consolidation input.
+- [`agent-learning-ctx-evidence`](skills/agent-learning-ctx-evidence/SKILL.md): for using ctx-backed local agent-history search as bounded evidence references without importing raw transcripts.
 - [`agent-hard-constraint-author`](skills/agent-hard-constraint-author/SKILL.md): for end users promoting validated findings into executable PHPStan, PHP-CS-Fixer, test, or CI constraints.
 - [`agent-learning-maintainer`](skills/agent-learning-maintainer/SKILL.md): for maintainers changing `voku/agent-learning` source, tests, docs, or local vendor syncs.
 
