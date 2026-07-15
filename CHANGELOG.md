@@ -4,6 +4,26 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.8.4] - 2026-07-15
+
+### Added
+
+- `guidance-evaluate` now warns when `history/outcomes.jsonl` contains records
+  in the older "outcome.*" session-summary shape (helpful/irrelevant/harmful
+  as proposal-ID arrays, predating the per-guidance-item "guidance-outcome.*"
+  shape). `OutcomeRepository::loadAll()` already validated both shapes without
+  error, but `GuidanceOutcomeEventRepository::load()` -- and therefore every
+  `GuidanceUsageProjector` statistic and promotion/staleness decision -- has
+  always silently skipped anything that is not `guidance-outcome.*`. A
+  guidance item whose only recorded usage was in the older shape was
+  indistinguishable from one that was never used at all, with no signal that
+  older data was excluded. New `GuidanceOutcomeEventRepository::countLegacyRecords()`
+  makes that count explicit; `guidance-evaluate` now prints it before its
+  usual summary/decision output when the count is non-zero. This does not
+  migrate old records into the new shape (that would require fabricating
+  matching recall-selection linkage that never existed for them) -- it only
+  makes the existing exclusion visible instead of silent.
+
 ## [0.8.3] - 2026-07-15
 
 ### Fixed

@@ -43,4 +43,34 @@ final class GuidanceOutcomeEventRepository
 
         return $events;
     }
+
+    /**
+     * Count records in the outcome history that are NOT the current
+     * "guidance-outcome.*" per-guidance-item shape (e.g. the older
+     * "outcome.*" session-summary shape with helpful/irrelevant/harmful as
+     * proposal-ID arrays). OutcomeRepository::loadAll() validates both
+     * shapes without error, but load() above -- and therefore every
+     * GuidanceUsageProjector-based statistic and promotion/staleness
+     * decision -- silently excludes anything that is not "guidance-outcome.*".
+     * Callers should surface this count instead of letting older recorded
+     * usage signal disappear invisibly from guidance-evaluate output.
+     */
+    public function countLegacyRecords(string $root, ?string $path = null): int
+    {
+        $path = $path ?? $root . '/history/outcomes.jsonl';
+        if (!is_file($path)) {
+            return 0;
+        }
+
+        $records = $this->jsonlValidator->parseFile($path);
+        $legacyCount = 0;
+        foreach ($records as $record) {
+            $id = $record['id'] ?? null;
+            if (is_string($id) && !str_starts_with($id, 'guidance-outcome.')) {
+                ++$legacyCount;
+            }
+        }
+
+        return $legacyCount;
+    }
 }

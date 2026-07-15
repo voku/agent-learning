@@ -68,7 +68,16 @@ final class Cli
         (new OutcomeRepository())->loadAll($root, $proposalsById);
 
         $selectionEvents = (new RecallSelectionEventRepository())->load($root, $selectionHistory);
-        $outcomeEvents = (new GuidanceOutcomeEventRepository())->load($root, $outcomeHistory);
+        $guidanceOutcomeEventRepository = new GuidanceOutcomeEventRepository();
+        $outcomeEvents = $guidanceOutcomeEventRepository->load($root, $outcomeHistory);
+        $legacyOutcomeCount = $guidanceOutcomeEventRepository->countLegacyRecords($root, $outcomeHistory);
+        if ($legacyOutcomeCount > 0) {
+            $this->write(sprintf(
+                "⚠️  %d record(s) in %s use an older outcome shape (not \"guidance-outcome.*\") and are excluded from every statistic and decision below. Their recorded usage signal is not lost -- it is still stored -- but it currently cannot inform promotion/staleness decisions.\n",
+                $legacyOutcomeCount,
+                $outcomeHistory,
+            ));
+        }
         $result = (new GuidanceEvolutionEvaluator())->evaluate($findingsById, $proposalsById, $selectionEvents, $outcomeEvents);
 
         $this->write("Guidance usage summaries:\n");
