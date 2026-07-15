@@ -309,7 +309,7 @@ final class Cli
             throw new ValidationException($root, null, null, 'proposal-validate requires --proposal or a proposal path argument');
         }
 
-        $proposalPath = $this->resolveProposalPath($proposalPath, $root);
+        $proposalPath = $this->resolveProposalPathOrId($proposalPath, $root);
         $findingsById = $this->validateFindings($root, $this->stringOption($parsed['options'], 'task-id-pattern'));
         $proposal = (new ProposalValidator())->validateFile($proposalPath, $findingsById);
         (new ProposalLifecycle())->assertPathMatchesStatus($proposal, $proposalPath, $root);
@@ -349,7 +349,7 @@ final class Cli
             throw new ValidationException($root, null, null, 'constraint-export requires --proposal or a proposal path argument');
         }
 
-        $proposalPath = $this->resolveProposalPath($proposalPath, $root);
+        $proposalPath = $this->resolveProposalPathOrId($proposalPath, $root);
         $findingsById = $this->validateFindings($root, $this->stringOption($parsed['options'], 'task-id-pattern'));
         if ($outputDir === null || trim($outputDir) === '') {
             $proposal = (new ProposalValidator())->validateFile($proposalPath, $findingsById);
@@ -383,7 +383,7 @@ final class Cli
             throw new ValidationException($root, null, null, 'constraint-activate requires --proposal or a proposal path argument');
         }
 
-        $proposalPath = $this->resolveProposalPath($proposalPath, $root);
+        $proposalPath = $this->resolveProposalPathOrId($proposalPath, $root);
         $findingsById = $this->validateFindings($root, $this->stringOption($parsed['options'], 'task-id-pattern'));
         $manifestPath = (new ConstraintManifestActivator())->activate(
             $root,

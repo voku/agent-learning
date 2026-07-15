@@ -4,6 +4,21 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.8.3] - 2026-07-15
+
+### Fixed
+
+- `constraint-export`, `constraint-activate`, and `proposal-validate` failed with
+  "proposal file does not exist" when given a bare proposal ID (e.g.
+  `proposal.2026-06-14.001`) instead of a full file path, because they resolved
+  `--proposal` via `Cli::resolveProposalPath()`, which concatenates the raw
+  argument onto each status directory without appending `.json` and without
+  falling back to `ProposalTransitionManager::resolveProposalPath()`.
+  `constraint-loop` and `proposal-approve`/`proposal-reject` already handled bare
+  IDs correctly via `resolveProposalPathOrId()` -- the three affected commands now
+  use the same resolver, so all proposal-referencing commands accept either a
+  bare ID or a full path consistently.
+
 ## [0.8.2] - 2026-07-15
 
 ### Added

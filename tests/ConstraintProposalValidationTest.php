@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace voku\AgentLearning\Tests;
 
 use PHPUnit\Framework\TestCase;
+use voku\AgentLearning\Cli;
 use voku\AgentLearning\ConstraintGenerationPackageExporter;
 use voku\AgentLearning\ConstraintEngine;
 use voku\AgentLearning\ConstraintLoopRunner;
@@ -206,6 +207,60 @@ final class ConstraintProposalValidationTest extends TestCase
             self::assertSame(['vendor/bin/phpstan analyse'], $manifest['validation_commands']);
             self::assertSame('proposal.2026-06-13.001', $manifest['source_proposal']);
             self::assertSame('active', $manifest['status']);
+        } finally {
+            $this->removeDirectory($project);
+        }
+    }
+
+    public function testActivatesConstraintManifestFromApprovedProposalUsingBareIdThroughCli(): void
+    {
+        // Reproduces a real bug: constraint-export/constraint-activate/proposal-validate all
+        // resolved the --proposal argument via Cli::resolveProposalPath() directly, which
+        // concatenates the raw argument onto each status directory without appending ".json"
+        // and without falling back to ProposalTransitionManager::resolveProposalPath() the way
+        // resolveProposalPathOrId() (used by constraint-loop and proposal-approve/reject) does.
+        // A bare proposal ID -- the natural, documented CLI input shape -- failed with
+        // "proposal file does not exist" unless the caller passed the full file path instead.
+        $project = sys_get_temp_dir() . '/constraint_manifest_activate_bare_id_' . bin2hex(random_bytes(8));
+        $root = $project . '/infra/doc/agent-learning';
+        mkdir($root . '/proposals/approved', 0777, true);
+        mkdir($root . '/findings/validated', 0777, true);
+        mkdir($project . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
+        file_put_contents($project . '/infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
+        file_put_contents($project . '/infra/githooks/phpstan_bootstrap.php', "<?php\n");
+
+        foreach (['finding.2026-06-13.001', 'finding.2026-06-13.002'] as $findingId) {
+            file_put_contents(
+                $root . '/findings/validated/' . $findingId . '.json',
+                json_encode($this->findingRecord($findingId), JSON_THROW_ON_ERROR)
+            );
+        }
+
+        file_put_contents(
+            $root . '/proposals/approved/proposal.2026-06-13.001.json',
+            json_encode($this->approvedProposalRecord(), JSON_THROW_ON_ERROR)
+        );
+
+        $argv = [
+            'agent-learning',
+            'constraint-activate',
+            '--root',
+            $root,
+            '--proposal',
+            'proposal.2026-06-13.001',
+        ];
+
+        try {
+            ob_start();
+            try {
+                $exitCode = (new Cli())->run($argv);
+            } finally {
+                ob_end_clean();
+            }
+
+            self::assertSame(0, $exitCode);
+            $manifestPath = $root . '/constraints/active/constraint.project.translation.parameters.json';
+            self::assertFileExists($manifestPath);
         } finally {
             $this->removeDirectory($project);
         }
