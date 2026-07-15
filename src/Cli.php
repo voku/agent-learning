@@ -39,6 +39,7 @@ final class Cli
                 'finding-transition' => $this->findingTransitionCommand($tokens),
                 'proposal-approve' => $this->proposalApproveCommand($tokens),
                 'proposal-reject' => $this->proposalRejectCommand($tokens),
+                'proposal-acknowledge' => $this->proposalAcknowledgeCommand($tokens),
                 'proposal-mark-applied' => $this->proposalMarkAppliedCommand($tokens),
                 'proposal-retire' => $this->proposalRetireCommand($tokens),
                 'help', '--help', '-h' => $this->helpCommand(),
@@ -483,6 +484,33 @@ final class Cli
     /**
      * @param list<string> $tokens
      */
+    private function proposalAcknowledgeCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $proposalId = $parsed['arguments'][0] ?? null;
+        $actor = $this->stringOption($parsed['options'], 'by');
+        $reason = $this->stringOption($parsed['options'], 'reason');
+
+        if ($proposalId === null || trim($proposalId) === '') {
+            throw new ValidationException($root, null, null, 'proposal-acknowledge requires proposal ID argument');
+        }
+        if ($actor === null || trim($actor) === '') {
+            throw new ValidationException($root, null, null, 'proposal-acknowledge requires --by actor option');
+        }
+        if ($reason === null || trim($reason) === '') {
+            throw new ValidationException($root, null, null, 'proposal-acknowledge requires --reason option');
+        }
+
+        (new ProposalTransitionManager())->acknowledge($root, $proposalId, $actor, $reason);
+        $this->write(sprintf("Acknowledged proposal: %s\n", $proposalId));
+
+        return 0;
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
     private function proposalMarkAppliedCommand(array $tokens): int
     {
         $parsed = $this->parseOptions($tokens);
@@ -555,6 +583,7 @@ final class Cli
             . "  finding-transition   Transition a finding to a new state.\n"
             . "  proposal-approve     Approve a candidate proposal.\n"
             . "  proposal-reject      Reject a candidate proposal.\n"
+            . "  proposal-acknowledge Formally close a candidate NO_DURABLE_LEARNING proposal without approving or rejecting it.\n"
             . "  proposal-mark-applied Mark an approved proposal as applied externally.\n"
             . "  proposal-retire      Retire an applied proposal once its target fully captures the change.\n\n"
             . "Options:\n"
@@ -583,7 +612,7 @@ final class Cli
             . "  --approve-candidate      Allow constraint-loop to approve a candidate proposal before applying.\n"
             . "  --manifest PATH          Manifest output path for constraint-loop or constraint-activate.\n"
             . "  --by ACTOR               Actor performing the operation.\n"
-            . "  --reason REASON          Reason for proposal rejection or retirement.\n"
+            . "  --reason REASON          Reason for proposal rejection, retirement, or acknowledgement.\n"
             . "  --commit COMMIT          Commit hash or pull request reference.\n"
             . "  --validation PATH        Path to validation evidence JSON file.\n"
         );

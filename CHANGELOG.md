@@ -4,6 +4,22 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.8.2] - 2026-07-15
+
+### Added
+
+- New `proposal-acknowledge` command and `ProposalTransitionManager::acknowledge()`,
+  plus a new `ProposalStatus::ACKNOWLEDGED` status and `proposals/acknowledged/`
+  directory. Closing a candidate `NO_DURABLE_LEARNING` proposal previously required
+  `proposal-reject`, which is semantically wrong: `NO_DURABLE_LEARNING` already
+  represents a correct, considered conclusion ("nothing durable to change here"),
+  not a decision a maintainer disagreed with. `approve()` was already (correctly)
+  refusing `NO_DURABLE_LEARNING`, leaving `reject()` as the only available terminal
+  transition and producing an audit trail that reads as disapproval for what is
+  actually acceptance. `acknowledge()` only accepts proposals whose `action` is
+  `NO_DURABLE_LEARNING`; every other action must still go through `approve()` or
+  `reject()`.
+
 ## [0.8.1] - 2026-07-15
 
 ### Fixed

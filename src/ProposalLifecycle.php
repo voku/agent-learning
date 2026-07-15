@@ -15,6 +15,7 @@ final class ProposalLifecycle
         'rejected' => ProposalStatus::REJECTED,
         'applied' => ProposalStatus::APPLIED,
         'retired' => ProposalStatus::RETIRED,
+        'acknowledged' => ProposalStatus::ACKNOWLEDGED,
     ];
 
     /**

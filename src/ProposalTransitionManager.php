@@ -239,6 +239,134 @@ final class ProposalTransitionManager
     }
 
     /**
+     * Formally close a candidate NO_DURABLE_LEARNING proposal without approving or
+     * rejecting it. Distinct from `reject()`: NO_DURABLE_LEARNING already represents a
+     * correct, considered conclusion ("nothing durable to change here"), not a decision
+     * the maintainer disagreed with. Before this transition existed, closing such a
+     * proposal required misusing `reject()`, producing an audit trail that reads as
+     * disapproval for what is actually acceptance of the analysis.
+     *
+     * @param string $root
+     * @param string $proposalId
+     * @param string $actor
+     * @param string $reason
+     * @throws ValidationException
+     */
+    public function acknowledge(string $root, string $proposalId, string $actor, string $reason): void
+    {
+        if (trim($actor) === '') {
+            throw new ValidationException('', null, $proposalId, 'actor name must be explicit');
+        }
+        if (trim($reason) === '') {
+            throw new ValidationException('', null, $proposalId, 'acknowledgement reason must be explicit');
+        }
+
+        $proposalPath = $this->resolveProposalPath($proposalId, $root);
+        $proposal = (new ProposalParser())->parseFile($proposalPath);
+
+        if ($proposal->status !== ProposalStatus::CANDIDATE) {
+            throw new ValidationException($proposalPath, null, $proposalId, 'proposal is not a candidate');
+        }
+
+        if ($proposal->action !== Action::NO_DURABLE_LEARNING) {
+            throw new ValidationException($proposalPath, null, $proposalId, 'only a NO_DURABLE_LEARNING proposal can be acknowledged; use approve() or reject() instead');
+        }
+
+        $now = new DateTimeImmutable('now');
+        $nowStr = $now->format(DateTimeInterface::ATOM);
+
+        // Backup current state
+        $originalProposalContent = file_get_contents($proposalPath);
+        $acknowledgedPath = $root . '/history/acknowledged-proposals.jsonl';
+        $originalAcknowledgedContent = is_file($acknowledgedPath) ? file_get_contents($acknowledgedPath) : null;
+
+        // Prepare updated proposal JSON
+        $data = $proposal->raw;
+        $data['status'] = ProposalStatus::ACKNOWLEDGED->value;
+        $data['acknowledged_by'] = $actor;
+        $data['acknowledged_at'] = $nowStr;
+        $data['reason'] = $reason;
+
+        $updatedContent = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+        $targetDir = $root . '/proposals/acknowledged';
+        if (!is_dir($targetDir)) {
+            mkdir($targetDir, 0777, true);
+        }
+        $targetPath = $targetDir . '/' . $proposalId . '.json';
+
+        $acknowledgementId = $this->generateAcknowledgementId($root, $now);
+        $acknowledgementRecord = [
+            'id' => $acknowledgementId,
+            'proposal_id' => $proposalId,
+            'acknowledged_by' => $actor,
+            'acknowledged_at' => $nowStr,
+            'reason' => $reason,
+        ];
+        $acknowledgementLine = json_encode($acknowledgementRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+
+        try {
+            file_put_contents($proposalPath, $updatedContent);
+            if ($proposalPath !== $targetPath) {
+                if (is_file($targetPath)) {
+                    throw new ValidationException($targetPath, null, $proposalId, 'target file already exists');
+                }
+                if (!rename($proposalPath, $targetPath)) {
+                    throw new ValidationException($proposalPath, null, $proposalId, 'failed to move proposal file');
+                }
+            }
+            if (!is_dir(dirname($acknowledgedPath))) {
+                mkdir(dirname($acknowledgedPath), 0777, true);
+            }
+            file_put_contents($acknowledgedPath, $acknowledgementLine, FILE_APPEND);
+
+            // Re-validate entire repo
+            $this->validateRepository($root);
+        } catch (\Throwable $e) {
+            // Rollback
+            if (is_file($targetPath) && $targetPath !== $proposalPath) {
+                rename($targetPath, $proposalPath);
+            }
+            file_put_contents($proposalPath, $originalProposalContent);
+            if ($originalAcknowledgedContent === null) {
+                if (is_file($acknowledgedPath)) {
+                    unlink($acknowledgedPath);
+                }
+            } else {
+                file_put_contents($acknowledgedPath, $originalAcknowledgedContent);
+            }
+            throw new ValidationException($proposalPath, null, $proposalId, 'proposal acknowledgement failed and was rolled back: ' . $e->getMessage());
+        }
+    }
+
+    public function generateAcknowledgementId(string $root, ?DateTimeImmutable $date = null): string
+    {
+        $dateObj = $date ?? new DateTimeImmutable('now');
+        $dateStr = $dateObj->format('Y-m-d');
+        $prefix = 'acknowledgement.' . $dateStr . '.';
+
+        $path = $root . '/history/acknowledged-proposals.jsonl';
+        $maxNum = 0;
+        if (is_file($path)) {
+            $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            if ($lines !== false) {
+                foreach ($lines as $line) {
+                    $decoded = json_decode($line, true);
+                    $id = $decoded['id'] ?? '';
+                    if (str_starts_with($id, $prefix)) {
+                        $suffix = substr($id, strlen($prefix));
+                        if (is_numeric($suffix)) {
+                            $maxNum = max($maxNum, (int)$suffix);
+                        }
+                    }
+                }
+            }
+        }
+
+        return $prefix . sprintf('%03d', $maxNum + 1);
+    }
+
+    /**
      * Retire an applied proposal once its durable change is fully captured in its
      * target skill/doc/memory home, so it stops being read into every future active
      * recall guidance pool. Distinct from `reject()` (which discards a candidate that

@@ -296,7 +296,12 @@ final class ProposalValidator
                 ProposalStatus::APPLIED,
                 ProposalStatus::RETIRED,
             ],
-            Action::NO_DURABLE_LEARNING, Action::REJECT => [
+            Action::NO_DURABLE_LEARNING => [
+                ProposalStatus::CANDIDATE,
+                ProposalStatus::REJECTED,
+                ProposalStatus::ACKNOWLEDGED,
+            ],
+            Action::REJECT => [
                 ProposalStatus::CANDIDATE,
                 ProposalStatus::REJECTED,
             ],
