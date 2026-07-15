@@ -303,6 +303,35 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
         self::assertContains('recall-selection.2026-06-18.001', $candidate['evolution_decision']['evidence_event_ids']);
     }
 
+    public function testStaleMemoryCandidateRetainsApprovedScopeJustification(): void
+    {
+        $this->writeFinding('finding.2026-06-18.001', 'PROJECT-1', ['src/Auth/UserService.php']);
+        $this->writeMemoryProposal(
+            ['finding.2026-06-18.001'],
+            ['src/Auth'],
+            'The directory-level procedure applies to the evidenced auth service.',
+        );
+        for ($i = 1; $i <= 3; $i++) {
+            $this->appendSelection(sprintf('recall-selection.2026-06-18.%03d', $i), "compilation.PROJECT-$i.001", "PROJECT-$i", 'proposal.2026-06-18.100', 'memory');
+            $this->appendOutcome(sprintf('guidance-outcome.2026-06-18.%03d', $i), "compilation.PROJECT-$i.001", "PROJECT-$i", 'proposal.2026-06-18.100', 'not_used', false);
+        }
+
+        $argv = ['agent-learning', 'guidance-evaluate', '--root', $this->root, '--write-candidates'];
+        ob_start();
+        try {
+            self::assertSame(0, (new Cli())->run($argv));
+        } finally {
+            ob_end_clean();
+        }
+
+        $files = glob($this->root . '/proposals/candidate/*.json');
+        self::assertIsArray($files);
+        self::assertCount(1, $files);
+        $candidate = json_decode((string)file_get_contents($files[0]), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('STALE_CANDIDATE', $candidate['evolution_decision']['decision_type']);
+        self::assertSame('The directory-level procedure applies to the evidenced auth service.', $candidate['scope_justification']);
+    }
+
     /**
      * @return array<string, \voku\AgentLearning\GuidanceUsageSummary>
      */
@@ -383,8 +412,13 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
 
     /**
      * @param list<string> $sourceFindings
+     * @param list<string> $scope
      */
-    private function writeMemoryProposal(array $sourceFindings = ['finding.2026-06-18.001']): void
+    private function writeMemoryProposal(
+        array $sourceFindings = ['finding.2026-06-18.001'],
+        array $scope = ['src/Auth'],
+        ?string $scopeJustification = null,
+    ): void
     {
         $record = [
             'schema_version' => '1.0',
@@ -393,7 +427,7 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
             'action' => 'ADD',
             'target_type' => GuidanceType::MEMORY->value,
             'target' => 'memory.auth',
-            'scope' => ['src/Auth'],
+            'scope' => $scope,
             'source_findings' => $sourceFindings,
             'new' => 'Procedure: before changing auth services, check the auth context boundary and validation command.',
             'reason' => 'Recurring auth work needs the same memory.',
@@ -405,10 +439,16 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
             'approved_at' => '2026-06-18T09:10:00+00:00',
             'recurring_procedure' => true,
         ];
+        if ($scopeJustification !== null) {
+            $record['scope_justification'] = $scopeJustification;
+        }
         file_put_contents($this->root . '/proposals/approved/proposal.2026-06-18.100.json', json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }
 
-    private function writeFinding(string $id, string $taskId): void
+    /**
+     * @param list<string> $scope
+     */
+    private function writeFinding(string $id, string $taskId, array $scope = ['src/Auth']): void
     {
         $record = [
             'id' => $id,
@@ -416,7 +456,7 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
             'session' => 'session_' . $taskId,
             'created_at' => '2026-06-18T08:00:00+00:00',
             'created_by' => 'test',
-            'scope' => ['src/Auth'],
+            'scope' => $scope,
             'observation' => 'Auth service changes repeatedly need context-boundary checks.',
             'evidence' => [['type' => 'file_reference', 'path' => 'src/Auth/UserService.php', 'line' => 1]],
             'hypothesis' => 'Auth service work benefits from checking the context boundary.',

@@ -4,6 +4,15 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.8.1] - 2026-07-15
+
+### Fixed
+
+- Preserve an approved memory proposal's non-empty `scope_justification` when
+  `guidance-evaluate --write-candidates` creates a stale-review candidate. This
+  keeps a valid broader scope reviewable instead of failing candidate validation
+  after the justification was dropped during projection.
+
 ## [0.8.0] - 2026-07-06
 
 ### Added
