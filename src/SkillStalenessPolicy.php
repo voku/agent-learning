@@ -23,6 +23,12 @@ final class SkillStalenessPolicy
             return null;
         }
 
+        $proposalExtras = [];
+        $scopeJustification = $sourceProposal?->raw['scope_justification'] ?? null;
+        if (is_string($scopeJustification) && trim($scopeJustification) !== '') {
+            $proposalExtras['scope_justification'] = $scopeJustification;
+        }
+
         return new EvolutionDecision(
             EvolutionDecisionType::STALE_CANDIDATE,
             $summary->guidanceId,
@@ -38,6 +44,7 @@ final class SkillStalenessPolicy
             Action::DELETE,
             $sourceProposal?->new,
             null,
+            $proposalExtras,
         );
     }
 }

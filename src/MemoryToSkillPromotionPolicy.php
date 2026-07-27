@@ -32,6 +32,12 @@ final class MemoryToSkillPromotionPolicy
             return null;
         }
 
+        $proposalExtras = [];
+        $scopeJustification = $sourceProposal->raw['scope_justification'] ?? null;
+        if (is_string($scopeJustification) && trim($scopeJustification) !== '') {
+            $proposalExtras['scope_justification'] = $scopeJustification;
+        }
+
         return new EvolutionDecision(
             EvolutionDecisionType::PROMOTION_CANDIDATE,
             $summary->guidanceId,
@@ -47,6 +53,7 @@ final class MemoryToSkillPromotionPolicy
             Action::ADD,
             null,
             $sourceProposal->new,
+            $proposalExtras,
         );
     }
 

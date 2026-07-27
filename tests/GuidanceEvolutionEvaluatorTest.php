@@ -332,6 +332,35 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
         self::assertSame('The directory-level procedure applies to the evidenced auth service.', $candidate['scope_justification']);
     }
 
+    public function testStaleSkillCandidateRetainsApprovedScopeJustification(): void
+    {
+        $this->writeFinding('finding.2026-06-18.001', 'PROJECT-1', ['src/Auth/UserService.php']);
+        $this->writeSkillProposal(
+            ['finding.2026-06-18.001'],
+            ['src/Auth', 'src/Auth/Onboarding'],
+            'The skill also documents the onboarding flow, which shares the auth context boundary.',
+        );
+        for ($i = 1; $i <= 3; $i++) {
+            $this->appendSelection(sprintf('recall-selection.2026-06-18.%03d', $i), "compilation.PROJECT-$i.001", "PROJECT-$i", 'proposal.2026-06-18.101', 'skill');
+            $this->appendOutcome(sprintf('guidance-outcome.2026-06-18.%03d', $i), "compilation.PROJECT-$i.001", "PROJECT-$i", 'proposal.2026-06-18.101', 'irrelevant', false);
+        }
+
+        $argv = ['agent-learning', 'guidance-evaluate', '--root', $this->root, '--write-candidates'];
+        ob_start();
+        try {
+            self::assertSame(0, (new Cli())->run($argv));
+        } finally {
+            ob_end_clean();
+        }
+
+        $files = glob($this->root . '/proposals/candidate/*.json');
+        self::assertIsArray($files);
+        self::assertCount(1, $files);
+        $candidate = json_decode((string)file_get_contents($files[0]), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('STALE_CANDIDATE', $candidate['evolution_decision']['decision_type']);
+        self::assertSame('The skill also documents the onboarding flow, which shares the auth context boundary.', $candidate['scope_justification']);
+    }
+
     /**
      * @return array<string, \voku\AgentLearning\GuidanceUsageSummary>
      */
@@ -443,6 +472,40 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
             $record['scope_justification'] = $scopeJustification;
         }
         file_put_contents($this->root . '/proposals/approved/proposal.2026-06-18.100.json', json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * @param list<string> $sourceFindings
+     * @param list<string> $scope
+     */
+    private function writeSkillProposal(
+        array $sourceFindings = ['finding.2026-06-18.001'],
+        array $scope = ['src/Auth'],
+        ?string $scopeJustification = null,
+    ): void
+    {
+        $record = [
+            'schema_version' => '1.0',
+            'id' => 'proposal.2026-06-18.101',
+            'created_at' => '2026-06-18T09:00:00+00:00',
+            'action' => 'ADD',
+            'target_type' => GuidanceType::SKILL->value,
+            'target' => 'itp-auth-context',
+            'scope' => $scope,
+            'source_findings' => $sourceFindings,
+            'new' => 'Procedure: before changing auth services, check the auth context boundary and validation command.',
+            'reason' => 'Recurring auth work needs the same skill guidance.',
+            'boundary' => 'Auth service work only.',
+            'validation' => ['vendor/bin/phpunit'],
+            'status' => 'approved',
+            'proposed_by' => 'test',
+            'approved_by' => 'test',
+            'approved_at' => '2026-06-18T09:10:00+00:00',
+        ];
+        if ($scopeJustification !== null) {
+            $record['scope_justification'] = $scopeJustification;
+        }
+        file_put_contents($this->root . '/proposals/approved/proposal.2026-06-18.101.json', json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }
 
     /**

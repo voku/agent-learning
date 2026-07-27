@@ -30,6 +30,12 @@ final class SkillToConstraintPromotionPolicy
             return null;
         }
 
+        $proposalExtras = ['constraint' => $sourceProposal->raw['constraint_candidate']];
+        $scopeJustification = $sourceProposal->raw['scope_justification'] ?? null;
+        if (is_string($scopeJustification) && trim($scopeJustification) !== '') {
+            $proposalExtras['scope_justification'] = $scopeJustification;
+        }
+
         return new EvolutionDecision(
             EvolutionDecisionType::PROMOTION_CANDIDATE,
             $summary->guidanceId,
@@ -45,7 +51,7 @@ final class SkillToConstraintPromotionPolicy
             Action::ADD,
             null,
             $sourceProposal->new,
-            ['constraint' => $sourceProposal->raw['constraint_candidate']],
+            $proposalExtras,
         );
     }
 

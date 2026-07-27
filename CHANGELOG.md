@@ -4,6 +4,24 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.8.5] - 2026-07-28
+
+### Fixed
+
+- `SkillStalenessPolicy`, `MemoryToSkillPromotionPolicy`, and
+  `SkillToConstraintPromotionPolicy` did not propagate an approved proposal's
+  `scope_justification` into the generated candidate's `proposalExtras`, unlike
+  `MemoryStalenessPolicy` (fixed in 0.8.4/d436428 for the memory tier only).
+  A `guidance-evaluate --write-candidates` run for a skill-tier STALE_CANDIDATE
+  or a memory-to-skill / skill-to-constraint PROMOTION_CANDIDATE whose source
+  proposal's scope was legitimately broader than any single cited finding
+  (and had a `scope_justification` explaining why) would hit
+  `ProposalValidator`'s "proposal scope is broader than source finding
+  evidence without justification" check and abort the entire
+  `write-candidates` batch, including every other pending candidate. All three
+  policies now build `proposalExtras['scope_justification']` from the source
+  proposal the same way `MemoryStalenessPolicy` does.
+
 ## [0.8.4] - 2026-07-15
 
 ### Added
