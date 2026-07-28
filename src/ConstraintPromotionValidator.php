@@ -44,6 +44,14 @@ final class ConstraintPromotionValidator
             throw new ValidationException($file, $line, $proposal->id, 'phpstan constraint target rule path must point to a PHPStan rule location');
         }
 
+        if ($constraint->engine === ConstraintEngine::PHPCS && !$this->hasCommandContaining($constraint->validationCommands, 'codesniffer') && !$this->hasCommandContaining($constraint->validationCommands, 'phpcs')) {
+            throw new ValidationException($file, $line, $proposal->id, 'phpcs constraint requires a phpcs validation command');
+        }
+
+        if ($constraint->engine === ConstraintEngine::PHPCS && !str_contains($constraint->targetRulePath, '/Sniffs/')) {
+            throw new ValidationException($file, $line, $proposal->id, 'phpcs constraint target rule path must point to a Sniffs location');
+        }
+
         if ($constraint->engine === ConstraintEngine::PHP_CS_FIXER && !$this->hasCommandContaining($constraint->validationCommands, 'php-cs-fixer')) {
             throw new ValidationException($file, $line, $proposal->id, 'php_cs_fixer constraint requires a php-cs-fixer validation command');
         }

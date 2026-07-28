@@ -42,6 +42,67 @@ final class ConstraintProposalValidationTest extends TestCase
         self::assertSame(['vendor/bin/phpstan analyse'], $proposal->validation);
     }
 
+    public function testAcceptsPhpcsConstraintProposalWithSniffPathAndCommand(): void
+    {
+        $record = $this->proposalRecord([
+            'constraint' => [
+                'rule_id' => 'project.no.redirect.in.unit.cest',
+                'engine' => 'phpcs',
+                'rule_class_name' => 'NoRedirectInUnitCestSniff',
+                'target_rule_path' => 'infra/githooks/StandardITPortal/Sniffs/NoRedirectInUnitCestSniff.php',
+                'registration_files' => ['infra/githooks/phpcs.xml'],
+                'scope' => ['src/'],
+                'violation' => 'A unit test calls a process-terminating redirect.',
+                'allowed_boundaries' => [],
+                'detectability' => 'static',
+                'false_positive_risk' => 'low',
+                'validation_commands' => ['make php_codesniffer'],
+                'example_rule_paths' => ['infra/githooks/StandardITPortal/Sniffs/ForbiddenPrintRSniff.php'],
+            ],
+        ]);
+
+        $proposal = (new ProposalValidator())->validateFile(
+            $this->writeProposal($record),
+            [
+                'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
+                'finding.2026-06-13.002' => $this->finding('finding.2026-06-13.002'),
+            ],
+        );
+
+        self::assertNotNull($proposal->constraint);
+        self::assertSame(ConstraintEngine::PHPCS, $proposal->constraint->engine);
+    }
+
+    public function testRejectsPhpcsConstraintProposalWithNonSniffTargetPath(): void
+    {
+        $record = $this->proposalRecord([
+            'constraint' => [
+                'rule_id' => 'project.no.redirect.in.unit.cest',
+                'engine' => 'phpcs',
+                'rule_class_name' => 'NoRedirectInUnitCestSniff',
+                'target_rule_path' => 'infra/githooks/StandardITPortal/PHPStan/NoRedirectInUnitCestRule.php',
+                'registration_files' => ['infra/githooks/phpcs.xml'],
+                'scope' => ['src/'],
+                'violation' => 'A unit test calls a process-terminating redirect.',
+                'allowed_boundaries' => [],
+                'detectability' => 'static',
+                'false_positive_risk' => 'low',
+                'validation_commands' => ['make php_codesniffer'],
+                'example_rule_paths' => ['infra/githooks/StandardITPortal/Sniffs/ForbiddenPrintRSniff.php'],
+            ],
+        ]);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('phpcs constraint target rule path must point to a Sniffs location');
+        (new ProposalValidator())->validateFile(
+            $this->writeProposal($record),
+            [
+                'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
+                'finding.2026-06-13.002' => $this->finding('finding.2026-06-13.002'),
+            ],
+        );
+    }
+
     public function testRejectsConstraintProposalWithoutSeveralFindingsOrCriticalIncident(): void
     {
         $record = $this->proposalRecord([

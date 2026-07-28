@@ -4,6 +4,22 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.8.6] - 2026-07-28
+
+### Added
+
+- `ConstraintEngine::PHPCS` (`phpcs`). Repositories that enforce constraints with
+  PHP_CodeSniffer sniffs previously had no honest way to express that: the enum
+  offered only `phpstan`, `php_cs_fixer`, `test`, and `ci`, and `php_cs_fixer`
+  is a different tool (php-cs-fixer) with a different rule location and command,
+  so reusing it would have mislabeled the constraint. Discovered downstream in
+  IT-Portal, where a `*_UnitCest.php` constraint had to be a phpcs sniff because
+  `phpstan.neon` excludes `*Cest.php` from analysis entirely, making an
+  equivalent PHPStan rule unable to ever fire. `ConstraintPromotionValidator`
+  now applies the matching symmetry checks for the new engine: a `phpcs`
+  constraint requires a phpcs/codesniffer validation command and a
+  `target_rule_path` pointing at a `/Sniffs/` location.
+
 ## [0.8.5] - 2026-07-28
 
 ### Fixed
