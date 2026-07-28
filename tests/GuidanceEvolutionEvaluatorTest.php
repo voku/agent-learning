@@ -303,6 +303,51 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
         self::assertContains('recall-selection.2026-06-18.001', $candidate['evolution_decision']['evidence_event_ids']);
     }
 
+    public function testRejectedCandidateIsNotRegeneratedOnTheNextRun(): void
+    {
+        $this->writeFinding('finding.2026-06-18.001', 'PROJECT-1');
+        $this->writeMemoryProposal();
+        for ($i = 1; $i <= 3; $i++) {
+            $this->appendSelection(sprintf('recall-selection.2026-06-18.%03d', $i), "compilation.PROJECT-$i.001", "PROJECT-$i", 'proposal.2026-06-18.100', 'memory');
+            $this->appendOutcome(sprintf('guidance-outcome.2026-06-18.%03d', $i), "compilation.PROJECT-$i.001", "PROJECT-$i", 'proposal.2026-06-18.100', 'not_used', false);
+        }
+
+        $argv = ['agent-learning', 'guidance-evaluate', '--root', $this->root, '--write-candidates'];
+        ob_start();
+        try {
+            self::assertSame(0, (new Cli())->run($argv));
+        } finally {
+            ob_end_clean();
+        }
+
+        $files = glob($this->root . '/proposals/candidate/*.json');
+        self::assertIsArray($files);
+        self::assertCount(1, $files);
+
+        // A human declines the candidate: it leaves candidate/ and lands in rejected/.
+        $rejectedDir = $this->root . '/proposals/rejected';
+        if (!is_dir($rejectedDir)) {
+            mkdir($rejectedDir, 0777, true);
+        }
+        $candidateId = pathinfo($files[0], PATHINFO_FILENAME);
+        $record = json_decode((string)file_get_contents($files[0]), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($record);
+        $record['status'] = 'rejected';
+        $record['reason'] = 'Reviewed: the guidance is still correct, the staleness signal is an outcome-logging gap.';
+        file_put_contents($rejectedDir . '/' . $candidateId . '.json', json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+        unlink($files[0]);
+
+        // The next projection run must respect that decision instead of recreating it.
+        ob_start();
+        try {
+            self::assertSame(0, (new Cli())->run($argv));
+        } finally {
+            ob_end_clean();
+        }
+
+        self::assertSame([], glob($this->root . '/proposals/candidate/*.json') ?: []);
+    }
+
     public function testStaleMemoryCandidateRetainsApprovedScopeJustification(): void
     {
         $this->writeFinding('finding.2026-06-18.001', 'PROJECT-1', ['src/Auth/UserService.php']);

@@ -4,6 +4,23 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.8.7] - 2026-07-28
+
+### Fixed
+
+- `guidance-evaluate --write-candidates` regenerated a proposal a reviewer had
+  already declined. `GuidanceCandidateProposalWriter::findExistingCandidate()`
+  only scanned `proposals/candidate/`, so once a candidate was rejected (and
+  therefore moved to `proposals/rejected/`) the next run no longer saw it and
+  wrote an identical decision under a fresh proposal ID. Reproduced downstream
+  in IT-Portal: rejecting five auto-generated candidates and re-running the
+  command immediately recreated all five. The lookup now also scans
+  `proposals/rejected/` and `proposals/acknowledged/`, so a terminal human
+  decision suppresses regeneration of the same
+  guidance_id + decision_type + source_tier + target_tier combination.
+  `approved`/`applied` are deliberately not included: those describe a change
+  that landed, not a decision to stop proposing.
+
 ## [0.8.6] - 2026-07-28
 
 ### Added

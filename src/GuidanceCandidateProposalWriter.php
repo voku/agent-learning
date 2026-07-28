@@ -130,33 +130,48 @@ final class GuidanceCandidateProposalWriter
         return $suffix;
     }
 
+    /**
+     * Directories whose contents suppress regeneration of the same evolution decision.
+     *
+     * `candidate` keeps the writer idempotent within the review queue. `rejected` and
+     * `acknowledged` are terminal human decisions: without them, declining a candidate only
+     * removes it from `candidate/`, so the very next `guidance-evaluate --write-candidates`
+     * run recreates an identical proposal under a fresh ID and the reviewer's "no" is
+     * discarded on every run.
+     *
+     * @var list<string>
+     */
+    private const array DECIDED_DIRECTORIES = ['candidate', 'rejected', 'acknowledged'];
+
     private function findExistingCandidate(string $root, EvolutionDecision $decision): ?string
     {
-        $dir = $root . '/proposals/candidate';
-        if (!is_dir($dir)) {
-            return null;
-        }
-        $files = glob($dir . '/*.json');
-        if ($files === false) {
-            return null;
-        }
-        sort($files);
-        foreach ($files as $file) {
-            $data = (new Json())->decodeObjectFile($file);
-            $evolution = $data['evolution_decision'] ?? null;
-            if (!is_array($evolution)) {
+        foreach (self::DECIDED_DIRECTORIES as $directory) {
+            $dir = $root . '/proposals/' . $directory;
+            if (!is_dir($dir)) {
                 continue;
             }
-            if (
-                ($evolution['guidance_id'] ?? null) === $decision->guidanceId
-                &&
-                ($evolution['decision_type'] ?? null) === $decision->type->value
-                &&
-                ($evolution['source_tier'] ?? null) === $decision->sourceTier->value
-                &&
-                ($evolution['target_tier'] ?? null) === $decision->targetTier?->value
-            ) {
-                return pathinfo($file, PATHINFO_FILENAME);
+            $files = glob($dir . '/*.json');
+            if ($files === false) {
+                continue;
+            }
+            sort($files);
+            foreach ($files as $file) {
+                $data = (new Json())->decodeObjectFile($file);
+                $evolution = $data['evolution_decision'] ?? null;
+                if (!is_array($evolution)) {
+                    continue;
+                }
+                if (
+                    ($evolution['guidance_id'] ?? null) === $decision->guidanceId
+                    &&
+                    ($evolution['decision_type'] ?? null) === $decision->type->value
+                    &&
+                    ($evolution['source_tier'] ?? null) === $decision->sourceTier->value
+                    &&
+                    ($evolution['target_tier'] ?? null) === $decision->targetTier?->value
+                ) {
+                    return pathinfo($file, PATHINFO_FILENAME);
+                }
             }
         }
 
