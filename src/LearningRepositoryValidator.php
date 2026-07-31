@@ -15,6 +15,7 @@ final class LearningRepositoryValidator
     {
         $findingsById = $this->validateFindings($root, $taskIdPattern);
         $proposalsById = (new ProposalRepository())->loadAll($root, $findingsById);
+        $this->validateConflictLineage($findingsById, $proposalsById, $root);
         (new DecisionHistoryValidator())->validateHistory($root, $proposalsById);
         $outcomes = (new OutcomeRepository())->loadAll($root, $proposalsById);
         $recallSelectionEvents = (new RecallSelectionEventRepository())->load($root);
@@ -46,5 +47,41 @@ final class LearningRepositoryValidator
         }
 
         return $findingsById;
+    }
+
+    /**
+     * @param array<string, Finding> $findingsById
+     * @param array<string, Proposal> $proposalsById
+     */
+    private function validateConflictLineage(array $findingsById, array $proposalsById, string $root): void
+    {
+        foreach ($findingsById as $finding) {
+            foreach ($this->conflictReferences($finding->raw) as $reference) {
+                if (!isset($findingsById[$reference])) {
+                    throw new ValidationException($root, null, $finding->id, 'conflicts_with references unknown finding: ' . $reference);
+                }
+            }
+        }
+        foreach ($proposalsById as $proposal) {
+            foreach ($this->conflictReferences($proposal->raw) as $reference) {
+                if (!isset($proposalsById[$reference])) {
+                    throw new ValidationException($root, null, $proposal->id, 'conflicts_with references unknown proposal: ' . $reference);
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $raw
+     * @return list<string>
+     */
+    private function conflictReferences(array $raw): array
+    {
+        $references = $raw['conflicts_with'] ?? [];
+        if (!is_array($references)) {
+            return [];
+        }
+
+        return array_values(array_filter($references, 'is_string'));
     }
 }

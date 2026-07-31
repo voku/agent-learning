@@ -4,6 +4,25 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.8.8] - 2026-07-31
+
+### Added
+
+- `dream`: a deterministic, human-reviewed guidance-maintenance command. It
+  rebuilds its result from immutable recall-selection and guidance-outcome
+  histories; audits missing versus unknown outcomes, unresolved file evidence,
+  and aged findings; reports compact machine-readable or text output; and
+  writes no durable guidance unless `--write-candidates` is explicitly passed.
+  Reports deliberately omit generated timestamps so equal inputs produce
+  byte-stable output.
+- Conservative `REPLACEMENT_CANDIDATE` production for exact, explicit applied
+  guidance successors, plus report-only `CONFLICT` records. A conflict needs
+  explicit `conflicts_with` lineage; unrelated wording under one pattern key is
+  not guessed to be contradictory.
+- Stable evolution decision keys. Candidate, rejected, and acknowledged review
+  records now suppress only an unchanged decision key, allowing materially new
+  evidence to create a new review candidate without replaying a rejected one.
+
 ## [0.8.7] - 2026-07-28
 
 ### Fixed

@@ -71,6 +71,7 @@ final class FindingValidator
         }
 
         $this->assertLearningTriage($finding, $file, $line);
+        $this->assertConflictReferences($finding->id, $finding->raw, $file, $line);
         $this->evidenceValidator->validate($finding->evidence, $file, $line, $finding->id);
     }
 
@@ -117,6 +118,25 @@ final class FindingValidator
                 . ' cannot use validation_status='
                 . $finding->validationStatus
             );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $raw
+     */
+    private function assertConflictReferences(string $id, array $raw, string $file, ?int $line): void
+    {
+        $references = $raw['conflicts_with'] ?? null;
+        if ($references === null) {
+            return;
+        }
+        if (!is_array($references) || $references === []) {
+            throw new ValidationException($file, $line, $id, 'conflicts_with must be a non-empty list of record IDs');
+        }
+        foreach ($references as $reference) {
+            if (!is_string($reference) || trim($reference) === '' || $reference === $id) {
+                throw new ValidationException($file, $line, $id, 'conflicts_with must contain distinct non-empty record IDs');
+            }
         }
     }
 }

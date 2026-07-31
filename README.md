@@ -55,6 +55,23 @@ A persistent record of approved or rejected proposals stored in JSON Lines (`.js
 * `decisions.jsonl` logs approved and applied mutations.
 * `rejected-proposals.jsonl` logs rejected candidate proposals with detailed reasons.
 
+### Dream maintenance cycle
+`agent-learning dream` is a deterministic, read-mostly maintenance pass over immutable recall-selection and guidance-outcome histories. It validates the learning root, audits evidence coverage, evaluates the existing promotion and staleness policies, and adds only two conservative maintenance signals:
+
+* `REPLACEMENT_CANDIDATE` when an applied proposal's exact wording is explicitly superseded by a later approved or applied `REPLACE` proposal for the same target.
+* `CONFLICT` only when otherwise matching validated findings or active guidance explicitly name the other record in `conflicts_with`. Different prose alone is not a conflict signal.
+
+The command never approves, applies, retires, deletes, or rewrites guidance. `--write-candidates` writes review records only; conflict records use `NO_DURABLE_LEARNING`, so a reviewer can acknowledge or reject the report without an executable mutation. Existing candidate, rejected, and acknowledged records suppress only the same stable decision key.
+
+```bash
+vendor/bin/agent-learning dream \
+  --root infra/doc/agent-learning \
+  --report .agent-loop/dream/latest.json \
+  --dry-run
+```
+
+Use `--format=json` for CI. The report has no generated timestamp, so equivalent immutable inputs yield byte-stable output. It reports outcome completeness, active guidance by tier, candidate queue age, suppressed decisions, outcome signals, and median finding-to-human-decision time. `--project-root` is optional because the learning-root configuration and legacy layout resolver determine it by default.
+
 ---
 
 ## Core Classes & APIs

@@ -61,6 +61,7 @@ final class GuidanceCandidateProposalWriter
             EvolutionDecisionType::PROMOTION_CANDIDATE,
             EvolutionDecisionType::STALE_CANDIDATE,
             EvolutionDecisionType::REPLACEMENT_CANDIDATE,
+            EvolutionDecisionType::CONFLICT,
         ], true)
             && $decision->proposalAction instanceof Action
             && $decision->sourceFindings !== [];
@@ -95,6 +96,7 @@ final class GuidanceCandidateProposalWriter
                 'evidence_event_ids' => $decision->evidenceEventIds,
                 'independent_task_ids' => $decision->independentTaskIds,
                 'remaining_uncertainty' => $decision->remainingUncertainty,
+                'decision_key' => $decision->stableKey(),
             ],
         ];
         if ($decision->oldText !== null) {
@@ -162,6 +164,9 @@ final class GuidanceCandidateProposalWriter
                     continue;
                 }
                 if (
+                    (($evolution['decision_key'] ?? null) === $decision->stableKey())
+                    ||
+                    (
                     ($evolution['guidance_id'] ?? null) === $decision->guidanceId
                     &&
                     ($evolution['decision_type'] ?? null) === $decision->type->value
@@ -169,6 +174,7 @@ final class GuidanceCandidateProposalWriter
                     ($evolution['source_tier'] ?? null) === $decision->sourceTier->value
                     &&
                     ($evolution['target_tier'] ?? null) === $decision->targetTier?->value
+                    )
                 ) {
                     return pathinfo($file, PATHINFO_FILENAME);
                 }
@@ -176,5 +182,22 @@ final class GuidanceCandidateProposalWriter
         }
 
         return null;
+    }
+
+    /**
+     * @param list<EvolutionDecision> $decisions
+     * @return list<string>
+     */
+    public function suppressedDecisionKeys(string $root, array $decisions): array
+    {
+        $keys = [];
+        foreach ($decisions as $decision) {
+            if ($this->findExistingCandidate($root, $decision) !== null) {
+                $keys[] = $decision->stableKey();
+            }
+        }
+        sort($keys);
+
+        return array_values(array_unique($keys));
     }
 }

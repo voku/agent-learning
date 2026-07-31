@@ -52,7 +52,7 @@ final class GuidanceEvolutionEvaluator
         }
 
         usort($decisions, static function (EvolutionDecision $a, EvolutionDecision $b): int {
-            return [$a->guidanceId, $a->type->value] <=> [$b->guidanceId, $b->type->value];
+            return [$a->guidanceId, $a->type->value, $a->stableKey()] <=> [$b->guidanceId, $b->type->value, $b->stableKey()];
         });
 
         return new GuidanceEvolutionResult($summaries, $decisions);

@@ -35,6 +35,7 @@ final class Cli
                 'constraint-activate' => $this->constraintActivateCommand($tokens),
                 'constraint-loop' => $this->constraintLoopCommand($tokens),
                 'guidance-evaluate' => $this->guidanceEvaluateCommand($tokens),
+                'dream' => $this->dreamCommand($tokens),
                 'backlog' => $this->backlogCommand($tokens),
                 'finding-transition' => $this->findingTransitionCommand($tokens),
                 'proposal-approve' => $this->proposalApproveCommand($tokens),
@@ -117,6 +118,66 @@ final class Cli
             foreach ($proposalIds as $proposalId) {
                 $this->write('- ' . $proposalId . "\n");
             }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Deterministically consolidate immutable learning evidence into a small review queue.
+     *
+     * @param list<string> $tokens
+     */
+    private function dreamCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $format = $this->stringOption($parsed['options'], 'format') ?? 'text';
+        if (!in_array($format, ['text', 'json'], true)) {
+            throw new ValidationException($root, null, null, 'dream --format must be text or json');
+        }
+        $reviewHorizonDays = $this->positiveIntOption($parsed['options'], 'review-horizon-days', 90);
+        $projectRoot = (new LearningProjectPaths())->projectRootForLearningRoot(
+            $root,
+            $this->stringOption($parsed['options'], 'project-root'),
+        );
+        $validation = (new LearningRepositoryValidator($this->findingLifecycle))->validate(
+            $root,
+            $this->stringOption($parsed['options'], 'task-id-pattern'),
+        );
+        $writer = new GuidanceCandidateProposalWriter();
+        $baseEvolution = (new GuidanceEvolutionEvaluator())->evaluate(
+            $validation->findingsById,
+            $validation->proposalsById,
+            $validation->recallSelectionEvents,
+            $validation->guidanceOutcomeEvents,
+        );
+        $replacement = (new ReplacementCandidatePolicy())->evaluate($validation->proposalsById, $validation->findingsById);
+        $conflicts = (new GuidanceConflictPolicy())->evaluate($validation->findingsById, $validation->proposalsById);
+        $suppressedKeys = $writer->suppressedDecisionKeys($root, array_merge($baseEvolution->decisions, $replacement, $conflicts));
+        $result = (new DreamingEvaluator())->evaluate(
+            $validation->findingsById,
+            $validation->proposalsById,
+            $validation->recallSelectionEvents,
+            $validation->guidanceOutcomeEvents,
+            $suppressedKeys,
+            $projectRoot,
+            $reviewHorizonDays,
+        );
+        $report = $this->dreamReport($result);
+        $reportPath = $this->stringOption($parsed['options'], 'report');
+        if ($reportPath !== null) {
+            $this->writeDreamReport($reportPath, $report);
+        }
+
+        $written = [];
+        if ($this->boolOption($parsed['options'], 'write-candidates') && !$this->boolOption($parsed['options'], 'dry-run')) {
+            $written = $writer->write($root, $result->decisions, $validation->findingsById);
+        }
+        if ($format === 'json') {
+            $this->write($report);
+        } else {
+            $this->write($this->dreamTextReport($result, $reportPath, $written, $this->boolOption($parsed['options'], 'dry-run')));
         }
 
         return 0;
@@ -588,6 +649,7 @@ final class Cli
             . "  constraint-activate  Write an active constraint manifest from an approved/applied proposal.\n"
             . "  constraint-loop      Export, apply, and activate a generated constraint proposal.\n"
             . "  guidance-evaluate    Project recall usage events and create reviewable candidate proposals.\n"
+            . "  dream                Audit immutable evidence and render a deterministic guidance-maintenance review queue.\n"
             . "  backlog              List validated findings not yet consolidated; exits non-zero while any remain.\n"
             . "  finding-transition   Transition a finding to a new state.\n"
             . "  proposal-approve     Approve a candidate proposal.\n"
@@ -617,6 +679,11 @@ final class Cli
             . "  --selection-history PATH Recall selection JSONL path for guidance-evaluate.\n"
             . "  --outcome-history PATH Guidance outcome JSONL path for guidance-evaluate.\n"
             . "  --write-candidates       Write only candidate proposal files from eligible decisions.\n"
+            . "  --dry-run                For dream: render the review queue without writing candidate proposals.\n"
+            . "  --report PATH            For dream: write the deterministic JSON report to PATH.\n"
+            . "  --format text|json       For dream: select human or machine-readable output.\n"
+            . "  --project-root PATH      For dream: resolve file-reference evidence against this project root.\n"
+            . "  --review-horizon-days N  For dream: warn about candidate/validated findings older than N days (default 90).\n"
             . "  --overwrite              Allow constraint-activate to replace an existing manifest.\n"
             . "  --approve-candidate      Allow constraint-loop to approve a candidate proposal before applying.\n"
             . "  --manifest PATH          Manifest output path for constraint-loop or constraint-activate.\n"
@@ -730,6 +797,22 @@ final class Cli
         }
 
         return $value;
+    }
+
+    /**
+     * @param array<string, bool|string|list<string>> $options
+     */
+    private function positiveIntOption(array $options, string $name, int $default): int
+    {
+        $value = $this->stringOption($options, $name);
+        if ($value === null) {
+            return $default;
+        }
+        if (preg_match('/^[1-9][0-9]*$/', $value) !== 1) {
+            throw new ValidationException('', null, null, '--' . $name . ' requires a positive integer');
+        }
+
+        return (int)$value;
     }
 
     /**
@@ -937,6 +1020,116 @@ final class Cli
         }
 
         return rtrim($prompt) . "\n\n---\n\n" . trim($addendum) . "\n";
+    }
+
+    private function dreamReport(DreamRunResult $result): string
+    {
+        $report = new \stdClass();
+        $report->evaluated_guidance_count = $result->evaluatedGuidanceCount;
+        $report->warnings = array_map(static function (DreamWarning $warning): \stdClass {
+            $item = new \stdClass();
+            $item->code = $warning->code;
+            $item->message = $warning->message;
+            $item->evidence_ids = $warning->evidenceIds;
+            $item->remediation = $warning->remediation;
+
+            return $item;
+        }, $result->warnings);
+        $report->decisions = array_map(fn (EvolutionDecision $decision): \stdClass => $this->dreamDecision($decision), $result->decisions);
+        $report->suppressed_decisions = array_map(fn (EvolutionDecision $decision): \stdClass => $this->dreamDecision($decision), $result->suppressedDecisions);
+        $metrics = new \stdClass();
+        $metrics->selected_guidance_count = $result->metrics->selectedGuidanceCount;
+        $metrics->explicit_outcome_count = $result->metrics->explicitOutcomeCount;
+        $metrics->candidate_queue_count = $result->metrics->candidateQueueCount;
+        $metrics->oldest_candidate_age_days = $result->metrics->oldestCandidateAgeDays;
+        $metrics->stale_candidate_count = $result->metrics->staleCandidateCount;
+        $metrics->suppressed_decision_count = $result->metrics->suppressedDecisionCount;
+        $metrics->duplicate_decision_count = $result->metrics->duplicateDecisionCount;
+        $metrics->median_finding_to_decision_hours = $result->metrics->medianFindingToDecisionHours;
+        $metrics->active_guidance_by_tier = $result->metrics->activeGuidanceByTier;
+        $metrics->outcome_signals = $result->metrics->outcomeSignals;
+        $report->metrics = $metrics;
+        $report->remaining_uncertainty = $result->remainingUncertainty;
+
+        return json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+    }
+
+    private function dreamDecision(EvolutionDecision $decision): \stdClass
+    {
+        $item = new \stdClass();
+        $item->decision_key = $decision->stableKey();
+        $item->type = $decision->type->value;
+        $item->guidance_id = $decision->guidanceId;
+        $item->source_tier = $decision->sourceTier->value;
+        $item->target_tier = $decision->targetTier?->value;
+        $item->evidence_event_count = count($decision->evidenceEventIds);
+        $item->evidence_event_ids = $this->boundedStrings($decision->evidenceEventIds);
+        $item->independent_task_count = count($decision->independentTaskIds);
+        $item->independent_task_ids = $this->boundedStrings($decision->independentTaskIds);
+        $item->reason = $decision->reason;
+        $item->remaining_uncertainty = $decision->remainingUncertainty;
+        $item->source_finding_count = count($decision->sourceFindings);
+        $item->source_findings = $this->boundedStrings($decision->sourceFindings);
+        $item->proposal_action = $decision->proposalAction?->value;
+        $item->old_text = $decision->oldText;
+        $item->new_text = $decision->newText;
+
+        return $item;
+    }
+
+    /**
+     * @param list<string> $values
+     * @return list<string>
+     */
+    private function boundedStrings(array $values): array
+    {
+        sort($values);
+
+        return array_slice($values, 0, 20);
+    }
+
+    private function writeDreamReport(string $path, string $report): void
+    {
+        $directory = dirname($path);
+        if (!is_dir($directory) && !mkdir($directory, 0777, true) && !is_dir($directory)) {
+            throw new ValidationException($path, null, null, 'cannot create dream report directory');
+        }
+        if (file_put_contents($path, $report) === false) {
+            throw new ValidationException($path, null, null, 'cannot write dream report');
+        }
+    }
+
+    /**
+     * @param list<string> $written
+     */
+    private function dreamTextReport(DreamRunResult $result, ?string $reportPath, array $written, bool $dryRun): string
+    {
+        $lines = [
+            'Dream maintenance review',
+            'Evaluated guidance: ' . $result->evaluatedGuidanceCount,
+            'Warnings: ' . count($result->warnings),
+            'Review decisions: ' . count($result->decisions),
+            'Suppressed unchanged decisions: ' . count($result->suppressedDecisions),
+        ];
+        foreach ($result->warnings as $warning) {
+            $evidenceIds = array_slice($warning->evidenceIds, 0, 5);
+            $suffix = count($warning->evidenceIds) > count($evidenceIds) ? ', …' : '';
+            $lines[] = '- warning ' . $warning->code . ': ' . $warning->message . ' [' . implode(', ', $evidenceIds) . $suffix . ']';
+        }
+        foreach ($result->decisions as $decision) {
+            $lines[] = '- ' . $decision->type->value . ' ' . $decision->guidanceId . ': ' . $decision->reason;
+        }
+        if ($reportPath !== null) {
+            $lines[] = 'Report: ' . $reportPath;
+        }
+        if ($dryRun) {
+            $lines[] = 'Dry run: no candidate proposals were written.';
+        } elseif ($written !== []) {
+            $lines[] = 'Candidate proposals written: ' . implode(', ', $written);
+        }
+        $lines[] = 'Uncertainty: ' . $result->remainingUncertainty;
+
+        return implode("\n", $lines) . "\n";
     }
 
     private function write(string $message): void
