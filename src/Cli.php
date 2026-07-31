@@ -1040,9 +1040,11 @@ final class Cli
         $metrics = new \stdClass();
         $metrics->selected_guidance_count = $result->metrics->selectedGuidanceCount;
         $metrics->explicit_outcome_count = $result->metrics->explicitOutcomeCount;
+        $metrics->outcome_completeness_rate = $result->metrics->outcomeCompletenessRate;
         $metrics->candidate_queue_count = $result->metrics->candidateQueueCount;
         $metrics->oldest_candidate_age_days = $result->metrics->oldestCandidateAgeDays;
         $metrics->stale_candidate_count = $result->metrics->staleCandidateCount;
+        $metrics->stale_candidate_rate = $result->metrics->staleCandidateRate;
         $metrics->suppressed_decision_count = $result->metrics->suppressedDecisionCount;
         $metrics->duplicate_decision_count = $result->metrics->duplicateDecisionCount;
         $metrics->median_finding_to_decision_hours = $result->metrics->medianFindingToDecisionHours;

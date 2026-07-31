@@ -90,6 +90,32 @@ final class DreamingEvaluatorTest extends TestCase
         self::assertSame(['TASK-2'], $decisions[0]->independentTaskIds);
     }
 
+    public function testReplacementPolicyAcceptsExplicitNewerFindingLineageAndHarmfulCorrectedSuccessor(): void
+    {
+        $oldFinding = $this->finding('finding.2026-06-01.001', 'TASK-1', 'old conclusion');
+        $newFinding = $this->finding('finding.2026-06-02.001', 'TASK-2', 'new conclusion', rawExtras: ['supersedes_findings' => [$oldFinding->id]]);
+        $old = $this->proposal('proposal.2026-06-01.001', ProposalStatus::APPLIED, Action::ADD, 'Use old wording.', null, [$oldFinding->id]);
+        $successor = $this->proposal(
+            'proposal.2026-06-02.001',
+            ProposalStatus::APPROVED,
+            Action::REPLACE,
+            'Use narrower corrected wording.',
+            'A differently formatted old wording.',
+            [$newFinding->id],
+            ['supersedes_proposal_id' => $old->id, 'corrects_proposal_id' => $old->id],
+        );
+
+        $decisions = (new ReplacementCandidatePolicy())->evaluate(
+            [$old->id => $old, $successor->id => $successor],
+            [$oldFinding->id => $oldFinding, $newFinding->id => $newFinding],
+            [$this->outcome('guidance-outcome.2026-06-02.001', 'TASK-3', 'harmful')],
+        );
+
+        self::assertCount(1, $decisions);
+        self::assertSame('Use narrower corrected wording.', $decisions[0]->newText);
+        self::assertContains('guidance-outcome.2026-06-02.001', $decisions[0]->evidenceEventIds);
+    }
+
     public function testConflictPolicyReportsConflictingValidatedConclusionsWithoutChoosingOne(): void
     {
         $left = $this->finding('finding.2026-06-01.001', 'TASK-1', 'Always validate before changing.', conflictsWith: ['finding.2026-06-02.001']);
@@ -104,8 +130,37 @@ final class DreamingEvaluatorTest extends TestCase
         self::assertNull($decisions[0]->newText);
     }
 
-    /** @param list<string> $conflictsWith */
-    private function finding(string $id, string $taskId, string $conclusion, string $path = 'src/Existing.php', array $conflictsWith = []): Finding
+    public function testConflictPolicyReportsExplicitLineageAndCrossTierDuplicatesWithoutMutation(): void
+    {
+        $source = $this->finding('finding.2026-06-01.001', 'TASK-1', 'validated source');
+        $contradiction = $this->finding(
+            'finding.2026-06-02.001',
+            'TASK-2',
+            'later invalidated evidence',
+            status: FindingStatus::SUPERSEDED,
+            rawExtras: ['contradicts_proposal_id' => 'proposal.2026-06-01.001'],
+        );
+        $memory = $this->proposal('proposal.2026-06-01.001', ProposalStatus::APPLIED, Action::ADD, 'Use one canonical rule.', null, [$source->id]);
+        $skill = $this->proposal('proposal.2026-06-02.001', ProposalStatus::APPROVED, Action::ADD, 'Use one canonical rule.', null, [$source->id], targetType: GuidanceType::SKILL->value);
+
+        $decisions = (new GuidanceConflictPolicy())->evaluate(
+            [$source->id => $source, $contradiction->id => $contradiction],
+            [$memory->id => $memory, $skill->id => $skill],
+        );
+
+        self::assertCount(2, $decisions);
+        foreach ($decisions as $decision) {
+            self::assertSame(Action::NO_DURABLE_LEARNING, $decision->proposalAction);
+        }
+        self::assertStringContainsString('conflict.duplicate', $decisions[0]->guidanceId . $decisions[1]->guidanceId);
+        self::assertStringContainsString('conflict.lineage', $decisions[0]->guidanceId . $decisions[1]->guidanceId);
+    }
+
+    /**
+     * @param list<string> $conflictsWith
+     * @param array<string, mixed> $rawExtras
+     */
+    private function finding(string $id, string $taskId, string $conclusion, string $path = 'src/Existing.php', array $conflictsWith = [], FindingStatus $status = FindingStatus::VALIDATED, array $rawExtras = []): Finding
     {
         return new Finding(
             $id,
@@ -120,9 +175,9 @@ final class DreamingEvaluatorTest extends TestCase
             $conclusion,
             'high',
             'validated',
-            FindingStatus::VALIDATED,
+            $status,
             'public',
-            $conflictsWith === [] ? [] : ['conflicts_with' => $conflictsWith],
+            array_merge($conflictsWith === [] ? [] : ['conflicts_with' => $conflictsWith], $rawExtras),
             patternKey: 'auth.context_boundary',
         );
     }
@@ -162,8 +217,12 @@ final class DreamingEvaluatorTest extends TestCase
         );
     }
 
-    /** @param list<string> $sourceFindings */
-    private function proposal(string $id, ProposalStatus $status, Action $action, string $new, ?string $old, array $sourceFindings): Proposal
+    /**
+     * @param list<string> $sourceFindings
+     * @param array<string, mixed> $raw
+     * @param list<string> $scope
+     */
+    private function proposal(string $id, ProposalStatus $status, Action $action, string $new, ?string $old, array $sourceFindings, array $raw = [], array $scope = ['src/Auth'], ?string $targetType = null): Proposal
     {
         $date = $id === 'proposal.2026-06-01.001' ? '2026-06-01T01:00:00+00:00' : '2026-06-02T01:00:00+00:00';
 
@@ -171,9 +230,9 @@ final class DreamingEvaluatorTest extends TestCase
             $id,
             $date,
             $action,
-            GuidanceType::MEMORY->value,
+            $targetType ?? GuidanceType::MEMORY->value,
             'memory.auth',
-            ['src/Auth'],
+            $scope,
             $sourceFindings,
             $old,
             $new,
@@ -184,7 +243,7 @@ final class DreamingEvaluatorTest extends TestCase
             'tester',
             'reviewer',
             $date,
-            [],
+            $raw,
             patternKey: 'auth.context_boundary',
         );
     }

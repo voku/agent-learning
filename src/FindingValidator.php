@@ -71,7 +71,7 @@ final class FindingValidator
         }
 
         $this->assertLearningTriage($finding, $file, $line);
-        $this->assertConflictReferences($finding->id, $finding->raw, $file, $line);
+        $this->assertLineageReferences($finding->id, $finding->raw, $file, $line);
         $this->evidenceValidator->validate($finding->evidence, $file, $line, $finding->id);
     }
 
@@ -124,19 +124,25 @@ final class FindingValidator
     /**
      * @param array<string, mixed> $raw
      */
-    private function assertConflictReferences(string $id, array $raw, string $file, ?int $line): void
+    private function assertLineageReferences(string $id, array $raw, string $file, ?int $line): void
     {
-        $references = $raw['conflicts_with'] ?? null;
-        if ($references === null) {
-            return;
-        }
-        if (!is_array($references) || $references === []) {
-            throw new ValidationException($file, $line, $id, 'conflicts_with must be a non-empty list of record IDs');
-        }
-        foreach ($references as $reference) {
-            if (!is_string($reference) || trim($reference) === '' || $reference === $id) {
-                throw new ValidationException($file, $line, $id, 'conflicts_with must contain distinct non-empty record IDs');
+        foreach (['conflicts_with', 'supersedes_findings'] as $field) {
+            $references = $raw[$field] ?? null;
+            if ($references === null) {
+                continue;
             }
+            if (!is_array($references) || $references === []) {
+                throw new ValidationException($file, $line, $id, $field . ' must be a non-empty list of finding IDs');
+            }
+            foreach ($references as $reference) {
+                if (!is_string($reference) || trim($reference) === '' || $reference === $id) {
+                    throw new ValidationException($file, $line, $id, $field . ' must contain distinct non-empty finding IDs');
+                }
+            }
+        }
+        $contradictedProposal = $raw['contradicts_proposal_id'] ?? null;
+        if ($contradictedProposal !== null && (!is_string($contradictedProposal) || trim($contradictedProposal) === '')) {
+            throw new ValidationException($file, $line, $id, 'contradicts_proposal_id must be a non-empty proposal ID');
         }
     }
 }

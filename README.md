@@ -56,12 +56,18 @@ A persistent record of approved or rejected proposals stored in JSON Lines (`.js
 * `rejected-proposals.jsonl` logs rejected candidate proposals with detailed reasons.
 
 ### Dream maintenance cycle
-`agent-learning dream` is a deterministic, read-mostly maintenance pass over immutable recall-selection and guidance-outcome histories. It validates the learning root, audits evidence coverage, evaluates the existing promotion and staleness policies, and adds only two conservative maintenance signals:
+`agent-learning dream` is a deterministic, read-mostly maintenance pass over immutable recall-selection and guidance-outcome histories. It validates the learning root, rebuilds projections, audits evidence coverage, evaluates promotion/staleness, and produces a byte-stable review report (except explicitly volatile proposal creation timestamps).
 
-* `REPLACEMENT_CANDIDATE` when an applied proposal's exact wording is explicitly superseded by a later approved or applied `REPLACE` proposal for the same target.
-* `CONFLICT` only when otherwise matching validated findings or active guidance explicitly name the other record in `conflicts_with`. Different prose alone is not a conflict signal.
+The immutable `DreamRunResult` contains evaluated guidance, bounded evidence/outcome warnings, generated and suppressed decisions, metrics, and remaining uncertainty. Its stable keys include evidence, sources, scope, target tier, wording, and explicit lineage. The report distinguishes missing outcomes from explicit `unknown`, and exposes outcome-completeness/stale-candidate rates, queue age, tier counts, signal distribution, duplicate suppression, and time from finding to recorded decision.
 
-The command never approves, applies, retires, deletes, or rewrites guidance. `--write-candidates` writes review records only; conflict records use `NO_DURABLE_LEARNING`, so a reviewer can acknowledge or reject the report without an executable mutation. Existing candidate, rejected, and acknowledged records suppress only the same stable decision key.
+The maintenance policies require bounded deterministic identity or explicit lineage:
+
+* `REPLACEMENT_CANDIDATE` requires an approved/applied `REPLACE` successor for the same target, supported by exact old wording, explicit `supersedes_proposal_id`, harmful outcome plus `corrects_proposal_id`, newer validated `supersedes_findings`, or a strict scope narrowing.
+* `CONFLICT` reports explicit `conflicts_with`, a later invalidated/superseded finding with `contradicts_proposal_id`, or exact normalized duplicate active wording with overlapping scope and source evidence across tiers. Different prose alone is never guessed to be contradictory.
+
+The command never approves, applies, retires, deletes, archives, or rewrites guidance. `--write-candidates` writes review records only; conflict records use `NO_DURABLE_LEARNING`, so a reviewer can acknowledge or reject the report without an executable mutation. Existing candidate, rejected, and acknowledged records suppress only the same stable decision key.
+
+Review a stale/replacement/conflict result by preserving the decision record first, then explicitly acknowledge/reject it or create/approve/apply a separately reviewed `REPLACE`/`DELETE` proposal. Retire previously applied guidance only with `proposal-retire` and an explicit reason; the proposal remains auditable in `proposals/retired/` and immutable history, but is excluded from active recall. Archive or supersede a finding through its lifecycle transition with a recorded reason; a replacement must retain validated source-finding lineage.
 
 ```bash
 vendor/bin/agent-learning dream \

@@ -13,9 +13,11 @@ final readonly class DreamMetrics
     public function __construct(
         public int $selectedGuidanceCount,
         public int $explicitOutcomeCount,
+        public float $outcomeCompletenessRate,
         public int $candidateQueueCount,
         public ?int $oldestCandidateAgeDays,
         public int $staleCandidateCount,
+        public float $staleCandidateRate,
         public int $suppressedDecisionCount,
         public int $duplicateDecisionCount,
         public ?int $medianFindingToDecisionHours,

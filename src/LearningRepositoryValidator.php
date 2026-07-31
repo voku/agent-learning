@@ -15,7 +15,7 @@ final class LearningRepositoryValidator
     {
         $findingsById = $this->validateFindings($root, $taskIdPattern);
         $proposalsById = (new ProposalRepository())->loadAll($root, $findingsById);
-        $this->validateConflictLineage($findingsById, $proposalsById, $root);
+        $this->validateLineage($findingsById, $proposalsById, $root);
         (new DecisionHistoryValidator())->validateHistory($root, $proposalsById);
         $outcomes = (new OutcomeRepository())->loadAll($root, $proposalsById);
         $recallSelectionEvents = (new RecallSelectionEventRepository())->load($root);
@@ -53,19 +53,23 @@ final class LearningRepositoryValidator
      * @param array<string, Finding> $findingsById
      * @param array<string, Proposal> $proposalsById
      */
-    private function validateConflictLineage(array $findingsById, array $proposalsById, string $root): void
+    private function validateLineage(array $findingsById, array $proposalsById, string $root): void
     {
         foreach ($findingsById as $finding) {
-            foreach ($this->conflictReferences($finding->raw) as $reference) {
+            foreach ($this->findingReferences($finding->raw) as $reference) {
                 if (!isset($findingsById[$reference])) {
-                    throw new ValidationException($root, null, $finding->id, 'conflicts_with references unknown finding: ' . $reference);
+                    throw new ValidationException($root, null, $finding->id, 'finding lineage references unknown finding: ' . $reference);
                 }
+            }
+            $proposalReference = $finding->raw['contradicts_proposal_id'] ?? null;
+            if (is_string($proposalReference) && !isset($proposalsById[$proposalReference])) {
+                throw new ValidationException($root, null, $finding->id, 'contradicts_proposal_id references unknown proposal: ' . $proposalReference);
             }
         }
         foreach ($proposalsById as $proposal) {
-            foreach ($this->conflictReferences($proposal->raw) as $reference) {
+            foreach ($this->proposalReferences($proposal->raw) as $reference) {
                 if (!isset($proposalsById[$reference])) {
-                    throw new ValidationException($root, null, $proposal->id, 'conflicts_with references unknown proposal: ' . $reference);
+                    throw new ValidationException($root, null, $proposal->id, 'proposal lineage references unknown proposal: ' . $reference);
                 }
             }
         }
@@ -75,11 +79,33 @@ final class LearningRepositoryValidator
      * @param array<string, mixed> $raw
      * @return list<string>
      */
-    private function conflictReferences(array $raw): array
+    private function findingReferences(array $raw): array
+    {
+        $references = [];
+        foreach (['conflicts_with', 'supersedes_findings'] as $field) {
+            $value = $raw[$field] ?? [];
+            if (is_array($value)) {
+                $references = array_merge($references, $value);
+            }
+        }
+
+        return array_values(array_filter($references, 'is_string'));
+    }
+
+    /**
+     * @param array<string, mixed> $raw
+     * @return list<string>
+     */
+    private function proposalReferences(array $raw): array
     {
         $references = $raw['conflicts_with'] ?? [];
         if (!is_array($references)) {
-            return [];
+            $references = [];
+        }
+        foreach (['supersedes_proposal_id', 'corrects_proposal_id'] as $field) {
+            if (is_string($raw[$field] ?? null)) {
+                $references[] = $raw[$field];
+            }
         }
 
         return array_values(array_filter($references, 'is_string'));

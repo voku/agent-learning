@@ -10,12 +10,14 @@ final class EvidenceQualityAuditor
 {
     /**
      * @param array<string, Finding> $findingsById
+     * @param array<string, Proposal> $proposalsById
      * @param list<RecallSelectionEvent> $selectionEvents
      * @param list<GuidanceOutcomeEvent> $outcomeEvents
      * @return list<DreamWarning>
      */
     public function audit(
         array $findingsById,
+        array $proposalsById,
         array $selectionEvents,
         array $outcomeEvents,
         ?string $projectRoot,
@@ -103,6 +105,31 @@ final class EvidenceQualityAuditor
                 'File-reference evidence no longer resolves under the supplied project root.',
                 $this->bounded($danglingReferenceIds),
                 'Update the evidence reference or record why the source is intentionally unavailable.',
+            );
+        }
+
+        $incompleteLineageIds = [];
+        foreach ($proposalsById as $proposal) {
+            if (!in_array($proposal->status, [ProposalStatus::APPROVED, ProposalStatus::APPLIED, ProposalStatus::RETIRED], true)) {
+                continue;
+            }
+            if ($proposal->sourceFindings === [] || $proposal->approvedBy === null || $proposal->approvedAt === null) {
+                $incompleteLineageIds[] = $proposal->id;
+                continue;
+            }
+            foreach ($proposal->sourceFindings as $findingId) {
+                if (!isset($findingsById[$findingId])) {
+                    $incompleteLineageIds[] = $proposal->id . ':source:' . $findingId;
+                }
+            }
+        }
+        if ($incompleteLineageIds !== []) {
+            sort($incompleteLineageIds);
+            $warnings[] = new DreamWarning(
+                'guidance_lineage_incomplete',
+                'Applied, approved, or retired guidance has incomplete source-finding or decision lineage.',
+                $this->bounded($incompleteLineageIds),
+                'Restore the source finding and recorded reviewer decision before changing active guidance.',
             );
         }
 

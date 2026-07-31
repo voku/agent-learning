@@ -17,6 +17,12 @@ final class GuidanceConflictPolicy
         foreach ($this->proposalConflicts($proposalsById, $findingsById) as $decision) {
             $decisions[] = $decision;
         }
+        foreach ($this->lineageConflicts($findingsById, $proposalsById) as $decision) {
+            $decisions[] = $decision;
+        }
+        foreach ($this->duplicateGuidanceConflicts($proposalsById, $findingsById) as $decision) {
+            $decisions[] = $decision;
+        }
         usort($decisions, static fn (EvolutionDecision $a, EvolutionDecision $b): int => [$a->guidanceId, $a->stableKey()] <=> [$b->guidanceId, $b->stableKey()]);
 
         return $decisions;
@@ -133,6 +139,107 @@ final class GuidanceConflictPolicy
     }
 
     /**
+     * A later invalidated or superseded finding can contradict active guidance only when
+     * it names that proposal. This deliberately avoids inferring contradiction from prose.
+     *
+     * @param array<string, Finding> $findingsById
+     * @param array<string, Proposal> $proposalsById
+     * @return list<EvolutionDecision>
+     */
+    private function lineageConflicts(array $findingsById, array $proposalsById): array
+    {
+        $decisions = [];
+        foreach ($findingsById as $finding) {
+            if (!in_array($finding->status, [FindingStatus::INVALIDATED, FindingStatus::SUPERSEDED], true)) {
+                continue;
+            }
+            $proposalId = $finding->raw['contradicts_proposal_id'] ?? null;
+            $proposal = is_string($proposalId) ? ($proposalsById[$proposalId] ?? null) : null;
+            if (!$proposal instanceof Proposal || !in_array($proposal->status, [ProposalStatus::APPROVED, ProposalStatus::APPLIED], true)) {
+                continue;
+            }
+            $tier = GuidanceType::tryFrom((string)$proposal->targetType) ?? GuidanceType::MEMORY;
+            $scope = $proposal->scope;
+            sort($scope);
+            $decisions[] = new EvolutionDecision(
+                EvolutionDecisionType::CONFLICT,
+                'conflict.lineage.' . $proposal->id . '.' . $finding->id,
+                $tier,
+                null,
+                ['finding:' . $finding->id, 'proposal:' . $proposal->id],
+                [$finding->taskId],
+                'A later invalidated or superseded finding explicitly contradicts active guidance.',
+                'The lineage establishes review urgency, not whether to replace, retire, narrow, or retain the guidance.',
+                $scope,
+                ['manual review required'],
+                array_values(array_unique(array_merge([$finding->id], $proposal->sourceFindings))),
+                Action::NO_DURABLE_LEARNING,
+                proposalExtras: ['pattern_key' => $proposal->patternKey, 'contradicted_proposal_id' => $proposal->id],
+            );
+        }
+
+        return $decisions;
+    }
+
+    /**
+     * Exact wording, overlapping scope, and shared evidence are a bounded duplicate
+     * identity. Different tiers are reported because a human must choose the canonical
+     * home; the policy never moves or retires either guidance item.
+     *
+     * @param array<string, Proposal> $proposalsById
+     * @param array<string, Finding> $findingsById
+     * @return list<EvolutionDecision>
+     */
+    private function duplicateGuidanceConflicts(array $proposalsById, array $findingsById): array
+    {
+        $proposals = array_values(array_filter($proposalsById, static fn (Proposal $proposal): bool => in_array($proposal->status, [ProposalStatus::APPROVED, ProposalStatus::APPLIED], true) && $proposal->new !== null && trim($proposal->new) !== ''));
+        usort($proposals, static fn (Proposal $a, Proposal $b): int => $a->id <=> $b->id);
+        $decisions = [];
+        for ($first = 0, $count = count($proposals); $first < $count; $first++) {
+            for ($second = $first + 1; $second < $count; $second++) {
+                $left = $proposals[$first];
+                $right = $proposals[$second];
+                if (
+                    $left->targetType === $right->targetType
+                    || $this->normalise((string)$left->new) !== $this->normalise((string)$right->new)
+                    || !$this->scopeOverlaps($left->scope, $right->scope)
+                    || array_intersect($left->sourceFindings, $right->sourceFindings) === []
+                ) {
+                    continue;
+                }
+                $sourceFindings = array_values(array_unique(array_merge($left->sourceFindings, $right->sourceFindings)));
+                sort($sourceFindings);
+                $taskIds = $this->taskIds($sourceFindings, $findingsById);
+                $scope = array_values(array_unique(array_merge($left->scope, $right->scope)));
+                sort($scope);
+                $sourceTier = GuidanceType::tryFrom((string)$left->targetType) ?? GuidanceType::MEMORY;
+                $targetTier = GuidanceType::tryFrom((string)$right->targetType) ?? GuidanceType::MEMORY;
+                $decisions[] = new EvolutionDecision(
+                    EvolutionDecisionType::CONFLICT,
+                    'conflict.duplicate.' . $left->id . '.' . $right->id,
+                    $sourceTier,
+                    null,
+                    ['proposal:' . $left->id, 'proposal:' . $right->id],
+                    $taskIds,
+                    'Active guidance has exact normalized wording, overlapping scope, and shared source findings in different ownership tiers.',
+                    'A maintainer must choose a canonical tier or document why both copies are intentionally active.',
+                    $scope,
+                    ['manual review required'],
+                    $sourceFindings,
+                    Action::NO_DURABLE_LEARNING,
+                    proposalExtras: [
+                        'pattern_key' => $left->patternKey ?? $right->patternKey,
+                        'duplicate_of_proposal_id' => $right->id,
+                        'other_tier' => $targetTier->value,
+                    ],
+                );
+            }
+        }
+
+        return $decisions;
+    }
+
+    /**
      * @param list<string> $left
      * @param list<string> $right
      */
@@ -153,5 +260,30 @@ final class GuidanceConflictPolicy
         }
 
         return false;
+    }
+
+    /**
+     * @param list<string> $findingIds
+     * @param array<string, Finding> $findingsById
+     * @return list<string>
+     */
+    private function taskIds(array $findingIds, array $findingsById): array
+    {
+        $taskIds = [];
+        foreach ($findingIds as $findingId) {
+            if (isset($findingsById[$findingId])) {
+                $taskIds[$findingsById[$findingId]->taskId] = true;
+            }
+        }
+        /** @var list<string> $result */
+        $result = array_keys($taskIds);
+        sort($result);
+
+        return $result;
+    }
+
+    private function normalise(string $text): string
+    {
+        return preg_replace('/\s+/', ' ', trim($text)) ?? trim($text);
     }
 }

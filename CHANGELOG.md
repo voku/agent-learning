@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.8.10] - 2026-07-31
+
+### Added
+
+- Extend Agent Dreaming replacement detection with explicit newer-finding lineage,
+  harmful-outcome corrected successors, and scope narrowing; extend conflict
+  detection with contradicted guidance lineage and exact cross-tier duplicates.
+- Validate the optional explicit lineage fields used by those policies and add
+  outcome-completeness and stale-candidate rates to the deterministic report.
+
+### Changed
+
+- Document the DreamRunResult contract and the explicit human review/forgetting
+  flow without creating another documentation tree.
+
 All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.

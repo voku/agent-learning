@@ -181,7 +181,7 @@ final class ProposalValidator
         }
 
         $this->assertLearningDecision($proposal, $file, $line);
-        $this->assertConflictReferences($proposal->id, $proposal->raw, $file, $line);
+        $this->assertLineageReferences($proposal->id, $proposal->raw, $file, $line);
 
         $evidenceScope = [];
         foreach ($proposal->sourceFindings as $findingId) {
@@ -324,18 +324,23 @@ final class ProposalValidator
     /**
      * @param array<string, mixed> $raw
      */
-    private function assertConflictReferences(string $id, array $raw, string $file, ?int $line): void
+    private function assertLineageReferences(string $id, array $raw, string $file, ?int $line): void
     {
         $references = $raw['conflicts_with'] ?? null;
-        if ($references === null) {
-            return;
+        if ($references !== null) {
+            if (!is_array($references) || $references === []) {
+                throw new ValidationException($file, $line, $id, 'conflicts_with must be a non-empty list of proposal IDs');
+            }
+            foreach ($references as $reference) {
+                if (!is_string($reference) || trim($reference) === '' || $reference === $id) {
+                    throw new ValidationException($file, $line, $id, 'conflicts_with must contain distinct non-empty proposal IDs');
+                }
+            }
         }
-        if (!is_array($references) || $references === []) {
-            throw new ValidationException($file, $line, $id, 'conflicts_with must be a non-empty list of record IDs');
-        }
-        foreach ($references as $reference) {
-            if (!is_string($reference) || trim($reference) === '' || $reference === $id) {
-                throw new ValidationException($file, $line, $id, 'conflicts_with must contain distinct non-empty record IDs');
+        foreach (['supersedes_proposal_id', 'corrects_proposal_id'] as $field) {
+            $reference = $raw[$field] ?? null;
+            if ($reference !== null && (!is_string($reference) || trim($reference) === '' || $reference === $id)) {
+                throw new ValidationException($file, $line, $id, $field . ' must be a non-empty other proposal ID');
             }
         }
     }

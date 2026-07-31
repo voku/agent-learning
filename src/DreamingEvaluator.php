@@ -36,7 +36,7 @@ final class DreamingEvaluator
         $now ??= new DateTimeImmutable('now');
         $evolution = $this->evolutionEvaluator->evaluate($findingsById, $proposalsById, $selectionEvents, $outcomeEvents);
         $decisions = $evolution->decisions;
-        foreach ($this->replacementPolicy->evaluate($proposalsById, $findingsById) as $decision) {
+        foreach ($this->replacementPolicy->evaluate($proposalsById, $findingsById, $outcomeEvents) as $decision) {
             $decisions[] = $decision;
         }
         foreach ($this->conflictPolicy->evaluate($findingsById, $proposalsById) as $decision) {
@@ -57,7 +57,7 @@ final class DreamingEvaluator
             $reviewable[] = $decision;
         }
 
-        $warnings = $this->evidenceQualityAuditor->audit($findingsById, $selectionEvents, $outcomeEvents, $projectRoot, $reviewHorizonDays, $now);
+        $warnings = $this->evidenceQualityAuditor->audit($findingsById, $proposalsById, $selectionEvents, $outcomeEvents, $projectRoot, $reviewHorizonDays, $now);
         return new DreamRunResult(
             count($evolution->summaries),
             $warnings,
@@ -139,12 +139,17 @@ final class DreamingEvaluator
         }
         $staleCount = count(array_filter(array_merge($decisions, $suppressed), static fn (EvolutionDecision $decision): bool => $decision->type === EvolutionDecisionType::STALE_CANDIDATE));
 
+        $selectedCount = count(array_filter($selectionEvents, static fn (RecallSelectionEvent $event): bool => $event->selected));
+        $candidateCount = count(array_filter($proposalsById, static fn (Proposal $proposal): bool => $proposal->status === ProposalStatus::CANDIDATE));
+
         return new DreamMetrics(
-            count(array_filter($selectionEvents, static fn (RecallSelectionEvent $event): bool => $event->selected)),
+            $selectedCount,
             count($outcomeEvents),
-            count(array_filter($proposalsById, static fn (Proposal $proposal): bool => $proposal->status === ProposalStatus::CANDIDATE)),
+            $selectedCount === 0 ? 1.0 : min(1.0, count($outcomeEvents) / $selectedCount),
+            $candidateCount,
             $candidateAges[0] ?? null,
             $staleCount,
+            $candidateCount === 0 ? 0.0 : $staleCount / $candidateCount,
             count($suppressed),
             count($decisions) + count($suppressed) - count(array_unique(array_map(static fn (EvolutionDecision $decision): string => $decision->stableKey(), array_merge($decisions, $suppressed)))),
             $median,
