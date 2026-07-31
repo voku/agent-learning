@@ -4,6 +4,15 @@ All notable changes to `voku/agent-learning` will be documented in this file.
 
 The format follows Keep a Changelog, and this project uses semantic versioning where practical.
 
+## [0.8.9] - 2026-07-31
+
+### Fixed
+
+- Include the Dreaming value objects, evaluator, evidence-quality auditor, and
+  replacement/conflict policies in the package archive. Version 0.8.8 wired
+  the CLI to those classes but omitted the newly added source files, causing
+  `agent-loop learn dream` to fail at runtime with a missing-class error.
+
 ## [0.8.8] - 2026-07-31
 
 ### Added
