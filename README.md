@@ -56,9 +56,9 @@ A persistent record of approved or rejected proposals stored in JSON Lines (`.js
 * `rejected-proposals.jsonl` logs rejected candidate proposals with detailed reasons.
 
 ### Dream maintenance cycle
-`agent-learning dream` is a deterministic, read-mostly maintenance pass over immutable recall-selection and guidance-outcome histories. It validates the learning root, rebuilds projections, audits evidence coverage, evaluates promotion/staleness, and produces a byte-stable review report (except explicitly volatile proposal creation timestamps).
+`agent-learning dream` is a deterministic, read-mostly maintenance pass over immutable recall-selection and guidance-outcome histories. It validates the learning root, previews compact history projections, audits evidence coverage, evaluates promotion/staleness, and produces a byte-stable v1 review report (except explicitly volatile proposal creation timestamps).
 
-The immutable `DreamRunResult` contains evaluated guidance, bounded evidence/outcome warnings, generated and suppressed decisions, metrics, and remaining uncertainty. Its stable keys include evidence, sources, scope, target tier, wording, and explicit lineage. The report distinguishes missing outcomes from explicit `unknown`, and exposes outcome-completeness/stale-candidate rates, queue age, tier counts, signal distribution, duplicate suppression, and time from finding to recorded decision.
+The immutable `DreamRunResult` contains evaluated guidance, bounded evidence/outcome warnings, generated and suppressed decisions, metrics, and remaining uncertainty. Its stable keys include evidence, sources, scope, target tier, wording, and explicit lineage. Outcome completeness joins the selected `(compilation_id, guidance_id)` identities and is `null` when no guidance was selected; it never treats an empty history as 100% complete. The stale-candidate rate uses the reviewable decision population, and duplicate decisions measure producer overlap before deduplication.
 
 The maintenance policies require bounded deterministic identity or explicit lineage:
 
@@ -77,6 +77,17 @@ vendor/bin/agent-learning dream \
 ```
 
 Use `--format=json` for CI. The report has no generated timestamp, so equivalent immutable inputs yield byte-stable output. It reports outcome completeness, active guidance by tier, candidate queue age, suppressed decisions, outcome signals, and median finding-to-human-decision time. `--project-root` is optional because the learning-root configuration and legacy layout resolver determine it by default.
+
+### Compact history projections
+
+Raw findings, proposals, and event histories remain the audit source. Create compact, reproducible working views only with an explicit write command:
+
+```bash
+vendor/bin/agent-learning history-rebuild --root infra/doc/agent-learning
+vendor/bin/agent-learning history-status --root infra/doc/agent-learning
+```
+
+`history-rebuild` writes `history/active-guidance.snapshot.json`, `history/chronicle.jsonl`, and `history/projection-manifest.json`. The snapshot contains only approved/applied guidance; the chronicle records bounded lifecycle summaries for retired, rejected, acknowledged, superseded, archived, invalidated, and consolidated material. Both retain source IDs and content digests. The manifest hashes every raw input, so `history-status` fails clearly after source or projection corruption; rebuild to recover from any complete immutable source history. Dream reports expose source files/bytes, projection size, compression ratio, and an opt-in rebuild measurement via `--include-runtime`.
 
 ---
 

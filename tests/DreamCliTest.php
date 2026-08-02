@@ -65,8 +65,33 @@ final class DreamCliTest extends TestCase
         self::assertSame($first, (string)file_get_contents($report));
         self::assertSame([], glob($this->root . '/proposals/candidate/*.json') ?: []);
         $reportData = json_decode($first, true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('1.0', $reportData['schema_version']);
+        self::assertSame('agent-learning-dream', $reportData['report_type']);
         self::assertSame(0, $reportData['evaluated_guidance_count']);
         self::assertArrayHasKey('metrics', $reportData);
+    }
+
+    public function testHistoryProjectionDetectsStalenessAndRecoversAfterRebuild(): void
+    {
+        self::assertSame(0, (new Cli())->run([
+            'agent-learning', 'history-rebuild', '--root', $this->root,
+        ]));
+        self::assertSame(0, (new Cli())->run([
+            'agent-learning', 'history-status', '--root', $this->root,
+        ]));
+
+        $snapshot = $this->root . '/history/active-guidance.snapshot.json';
+        file_put_contents($snapshot, "corrupted\n");
+        self::assertSame(1, (new Cli())->run([
+            'agent-learning', 'history-status', '--root', $this->root,
+        ]));
+
+        self::assertSame(0, (new Cli())->run([
+            'agent-learning', 'history-rebuild', '--root', $this->root,
+        ]));
+        self::assertSame(0, (new Cli())->run([
+            'agent-learning', 'history-status', '--root', $this->root,
+        ]));
     }
 
     private function removeDirectory(string $directory): void

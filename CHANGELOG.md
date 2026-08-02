@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.8.11] - 2026-08-02
+
+### Added
+
+- Add explicit `history-rebuild` and `history-status` commands. They produce
+  deterministic `active-guidance.snapshot.json`, `chronicle.jsonl`, and a
+  source-digest manifest from immutable learning evidence, and fail clearly
+  when a compact projection is missing, corrupted, or stale.
+- Include compact-history inventory metrics in the schema-versioned Dream
+  report: active/archived records, files and bytes read, projection size, and
+  compression ratio. Runtime remains opt-in so standard reports stay byte-stable.
+
+### Fixed
+
+- Calculate outcome completeness from unique selected
+  `(compilation_id, guidance_id)` identities, report no rate for an empty
+  selection history, count producer decision overlap before deduplication, and
+  use the reviewable decision population for the stale-candidate rate.
+
 ## [0.8.10] - 2026-07-31
 
 ### Added

@@ -10,6 +10,7 @@ use voku\AgentLearning\Action;
 use voku\AgentLearning\DreamingEvaluator;
 use voku\AgentLearning\DreamWarning;
 use voku\AgentLearning\EvolutionDecisionType;
+use voku\AgentLearning\EvolutionDecision;
 use voku\AgentLearning\Finding;
 use voku\AgentLearning\FindingStatus;
 use voku\AgentLearning\GuidanceConflictPolicy;
@@ -49,11 +50,69 @@ final class DreamingEvaluatorTest extends TestCase
         self::assertSame(['evidence_reference_unresolvable', 'finding_review_horizon_exceeded', 'outcome_missing'], array_map(static fn (DreamWarning $warning): string => $warning->code, $first->warnings));
         self::assertSame(1, $first->metrics->selectedGuidanceCount);
         self::assertSame(0, $first->metrics->explicitOutcomeCount);
+        self::assertSame(0.0, $first->metrics->outcomeCompletenessRate);
 
         $unknown = $this->outcome('guidance-outcome.2026-06-01.001', 'TASK-1', 'unknown');
         $withUnknown = $evaluator->evaluate([$finding->id => $finding], [], [$selection], [$unknown], projectRoot: $this->projectRoot, reviewHorizonDays: 20, now: $now);
         self::assertSame(['evidence_reference_unresolvable', 'finding_review_horizon_exceeded', 'outcome_unknown'], array_map(static fn (DreamWarning $warning): string => $warning->code, $withUnknown->warnings));
         self::assertSame(1, $withUnknown->metrics->outcomeSignals['unknown']);
+    }
+
+    public function testMetricsJoinOutcomesBySelectedIdentityAndLeaveAnEmptyHistoryUndefined(): void
+    {
+        $finding = $this->finding('finding.2026-06-01.001', 'TASK-1', 'one conclusion');
+        $selection = $this->selection('recall-selection.2026-06-01.001', 'TASK-1');
+        $duplicateSelection = $this->selection('recall-selection.2026-06-01.002', 'TASK-1');
+        $outcome = $this->outcome('guidance-outcome.2026-06-01.001', 'TASK-1', 'helpful');
+        $duplicateOutcome = $this->outcome('guidance-outcome.2026-06-01.002', 'TASK-1', 'helpful');
+        $evaluator = new DreamingEvaluator();
+
+        $empty = $evaluator->evaluate([$finding->id => $finding], [], [], []);
+        self::assertSame(0, $empty->metrics->selectedGuidanceCount);
+        self::assertNull($empty->metrics->outcomeCompletenessRate);
+
+        $result = $evaluator->evaluate(
+            [$finding->id => $finding],
+            [],
+            [$selection, $duplicateSelection],
+            [$outcome, $duplicateOutcome],
+        );
+        self::assertSame(1, $result->metrics->selectedGuidanceCount);
+        self::assertSame(1, $result->metrics->explicitOutcomeCount);
+        self::assertSame(1.0, $result->metrics->outcomeCompletenessRate);
+    }
+
+    public function testMetricsMeasureDuplicateProducerOverlapBeforeDeduplication(): void
+    {
+        $decision = new EvolutionDecision(
+            EvolutionDecisionType::NO_ACTION,
+            'proposal.2026-06-01.001',
+            GuidanceType::MEMORY,
+            null,
+            [],
+            [],
+            'No action.',
+            'No uncertainty.',
+            [],
+            [],
+        );
+        $evaluator = new DreamingEvaluator();
+        $metrics = new \ReflectionMethod($evaluator, 'metrics');
+        $result = $metrics->invoke(
+            $evaluator,
+            [],
+            [],
+            [],
+            [],
+            [$decision],
+            [],
+            1,
+            [],
+            new DateTimeImmutable('2026-07-01T00:00:00+00:00'),
+        );
+
+        self::assertSame(1, $result->duplicateDecisionCount);
+        self::assertSame(1, $result->reviewableDecisionCount);
     }
 
     public function testReplacementPolicyRequiresExplicitSuccessor(): void

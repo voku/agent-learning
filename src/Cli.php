@@ -36,6 +36,8 @@ final class Cli
                 'constraint-loop' => $this->constraintLoopCommand($tokens),
                 'guidance-evaluate' => $this->guidanceEvaluateCommand($tokens),
                 'dream' => $this->dreamCommand($tokens),
+                'history-rebuild' => $this->historyRebuildCommand($tokens),
+                'history-status' => $this->historyStatusCommand($tokens),
                 'backlog' => $this->backlogCommand($tokens),
                 'finding-transition' => $this->findingTransitionCommand($tokens),
                 'proposal-approve' => $this->proposalApproveCommand($tokens),
@@ -155,6 +157,9 @@ final class Cli
         $replacement = (new ReplacementCandidatePolicy())->evaluate($validation->proposalsById, $validation->findingsById);
         $conflicts = (new GuidanceConflictPolicy())->evaluate($validation->findingsById, $validation->proposalsById);
         $suppressedKeys = $writer->suppressedDecisionKeys($root, array_merge($baseEvolution->decisions, $replacement, $conflicts));
+        $projectionStartedAt = hrtime(true);
+        $projection = (new HistoryProjectionBuilder())->build($root, $validation->findingsById, $validation->proposalsById);
+        $projectionRuntimeMilliseconds = intdiv(hrtime(true) - $projectionStartedAt, 1_000_000);
         $result = (new DreamingEvaluator())->evaluate(
             $validation->findingsById,
             $validation->proposalsById,
@@ -164,7 +169,11 @@ final class Cli
             $projectRoot,
             $reviewHorizonDays,
         );
-        $report = $this->dreamReport($result);
+        $report = $this->dreamReport(
+            $result,
+            $projection,
+            $this->boolOption($parsed['options'], 'include-runtime') ? $projectionRuntimeMilliseconds : null,
+        );
         $reportPath = $this->stringOption($parsed['options'], 'report');
         if ($reportPath !== null) {
             $this->writeDreamReport($reportPath, $report);
@@ -177,8 +186,72 @@ final class Cli
         if ($format === 'json') {
             $this->write($report);
         } else {
-            $this->write($this->dreamTextReport($result, $reportPath, $written, $this->boolOption($parsed['options'], 'dry-run')));
+            $this->write($this->dreamTextReport($result, $projection, $reportPath, $written, $this->boolOption($parsed['options'], 'dry-run')));
         }
+
+        return 0;
+    }
+
+    /**
+     * Explicitly write compact active and historical projections from immutable evidence.
+     *
+     * @param list<string> $tokens
+     */
+    private function historyRebuildCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $validation = (new LearningRepositoryValidator($this->findingLifecycle))->validate(
+            $root,
+            $this->stringOption($parsed['options'], 'task-id-pattern'),
+        );
+        $startedAt = hrtime(true);
+        $projection = (new HistoryProjectionBuilder())->build($root, $validation->findingsById, $validation->proposalsById);
+        $runtimeMilliseconds = intdiv(hrtime(true) - $startedAt, 1_000_000);
+        if (!$this->boolOption($parsed['options'], 'dry-run')) {
+            (new HistoryProjectionBuilder())->write($root, $projection);
+        }
+
+        $this->write(sprintf(
+            "History projection %s: active=%d archived=%d source_files=%d source_bytes=%d projection_bytes=%d compression_ratio=%s rebuild_ms=%d source_digest=%s\n",
+            $this->boolOption($parsed['options'], 'dry-run') ? 'previewed' : 'rebuilt',
+            $projection->activeGuidanceRecordCount,
+            $projection->archivedRecordCount,
+            count($projection->sourceFiles),
+            $projection->sourceBytes,
+            $projection->projectionBytes(),
+            $projection->compressionRatio() === null ? 'n/a' : number_format($projection->compressionRatio(), 3, '.', ''),
+            $runtimeMilliseconds,
+            $projection->inputDigest,
+        ));
+
+        return 0;
+    }
+
+    /**
+     * Fail clearly if a compact history view no longer matches immutable evidence.
+     *
+     * @param list<string> $tokens
+     */
+    private function historyStatusCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $validation = (new LearningRepositoryValidator($this->findingLifecycle))->validate(
+            $root,
+            $this->stringOption($parsed['options'], 'task-id-pattern'),
+        );
+        $projection = (new HistoryProjectionBuilder())->assertFresh($root, $validation->findingsById, $validation->proposalsById);
+        $this->write(sprintf(
+            "History projection is fresh: active=%d archived=%d source_files=%d source_bytes=%d projection_bytes=%d compression_ratio=%s source_digest=%s\n",
+            $projection->activeGuidanceRecordCount,
+            $projection->archivedRecordCount,
+            count($projection->sourceFiles),
+            $projection->sourceBytes,
+            $projection->projectionBytes(),
+            $projection->compressionRatio() === null ? 'n/a' : number_format($projection->compressionRatio(), 3, '.', ''),
+            $projection->inputDigest,
+        ));
 
         return 0;
     }
@@ -650,6 +723,8 @@ final class Cli
             . "  constraint-loop      Export, apply, and activate a generated constraint proposal.\n"
             . "  guidance-evaluate    Project recall usage events and create reviewable candidate proposals.\n"
             . "  dream                Audit immutable evidence and render a deterministic guidance-maintenance review queue.\n"
+            . "  history-rebuild      Explicitly write compact active-guidance and chronicle projections.\n"
+            . "  history-status       Fail when compact history projections are missing, corrupt, or stale.\n"
             . "  backlog              List validated findings not yet consolidated; exits non-zero while any remain.\n"
             . "  finding-transition   Transition a finding to a new state.\n"
             . "  proposal-approve     Approve a candidate proposal.\n"
@@ -684,6 +759,7 @@ final class Cli
             . "  --format text|json       For dream: select human or machine-readable output.\n"
             . "  --project-root PATH      For dream: resolve file-reference evidence against this project root.\n"
             . "  --review-horizon-days N  For dream: warn about candidate/validated findings older than N days (default 90).\n"
+            . "  --include-runtime    For dream: include a volatile projection rebuild measurement in the JSON report.\n"
             . "  --overwrite              Allow constraint-activate to replace an existing manifest.\n"
             . "  --approve-candidate      Allow constraint-loop to approve a candidate proposal before applying.\n"
             . "  --manifest PATH          Manifest output path for constraint-loop or constraint-activate.\n"
@@ -1022,9 +1098,11 @@ final class Cli
         return rtrim($prompt) . "\n\n---\n\n" . trim($addendum) . "\n";
     }
 
-    private function dreamReport(DreamRunResult $result): string
+    private function dreamReport(DreamRunResult $result, HistoryProjection $projection, ?int $projectionRuntimeMilliseconds): string
     {
         $report = new \stdClass();
+        $report->schema_version = '1.0';
+        $report->report_type = 'agent-learning-dream';
         $report->evaluated_guidance_count = $result->evaluatedGuidanceCount;
         $report->warnings = array_map(static function (DreamWarning $warning): \stdClass {
             $item = new \stdClass();
@@ -1047,10 +1125,22 @@ final class Cli
         $metrics->stale_candidate_rate = $result->metrics->staleCandidateRate;
         $metrics->suppressed_decision_count = $result->metrics->suppressedDecisionCount;
         $metrics->duplicate_decision_count = $result->metrics->duplicateDecisionCount;
+        $metrics->reviewable_decision_count = $result->metrics->reviewableDecisionCount;
         $metrics->median_finding_to_decision_hours = $result->metrics->medianFindingToDecisionHours;
         $metrics->active_guidance_by_tier = $result->metrics->activeGuidanceByTier;
         $metrics->outcome_signals = $result->metrics->outcomeSignals;
         $report->metrics = $metrics;
+        $historyProjection = new \stdClass();
+        $historyProjection->schema_version = '1.0';
+        $historyProjection->source_digest = $projection->inputDigest;
+        $historyProjection->active_guidance_record_count = $projection->activeGuidanceRecordCount;
+        $historyProjection->archived_record_count = $projection->archivedRecordCount;
+        $historyProjection->files_read = count($projection->sourceFiles);
+        $historyProjection->bytes_read = $projection->sourceBytes;
+        $historyProjection->projection_bytes = $projection->projectionBytes();
+        $historyProjection->compression_ratio = $projection->compressionRatio();
+        $historyProjection->rebuild_runtime_milliseconds = $projectionRuntimeMilliseconds;
+        $report->history_projection = $historyProjection;
         $report->remaining_uncertainty = $result->remainingUncertainty;
 
         return json_encode($report, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
@@ -1104,7 +1194,7 @@ final class Cli
     /**
      * @param list<string> $written
      */
-    private function dreamTextReport(DreamRunResult $result, ?string $reportPath, array $written, bool $dryRun): string
+    private function dreamTextReport(DreamRunResult $result, HistoryProjection $projection, ?string $reportPath, array $written, bool $dryRun): string
     {
         $lines = [
             'Dream maintenance review',
@@ -1112,6 +1202,7 @@ final class Cli
             'Warnings: ' . count($result->warnings),
             'Review decisions: ' . count($result->decisions),
             'Suppressed unchanged decisions: ' . count($result->suppressedDecisions),
+            'History projection: active=' . $projection->activeGuidanceRecordCount . ' archived=' . $projection->archivedRecordCount . ' files=' . count($projection->sourceFiles) . ' bytes=' . $projection->sourceBytes,
         ];
         foreach ($result->warnings as $warning) {
             $evidenceIds = array_slice($warning->evidenceIds, 0, 5);

@@ -42,7 +42,9 @@ final class DreamingEvaluator
         foreach ($this->conflictPolicy->evaluate($findingsById, $proposalsById) as $decision) {
             $decisions[] = $decision;
         }
+        $rawDecisionCount = count($decisions);
         $decisions = $this->uniqueDecisions($decisions);
+        $duplicateDecisionCount = $rawDecisionCount - count($decisions);
         $suppressedLookup = array_fill_keys($suppressedDecisionKeys, true);
         $suppressed = [];
         $reviewable = [];
@@ -63,7 +65,7 @@ final class DreamingEvaluator
             $warnings,
             $reviewable,
             $suppressed,
-            $this->metrics($evolution->summaries, $proposalsById, $selectionEvents, $outcomeEvents, $reviewable, $suppressed, $findingsById, $now),
+            $this->metrics($evolution->summaries, $proposalsById, $selectionEvents, $outcomeEvents, $reviewable, $suppressed, $duplicateDecisionCount, $findingsById, $now),
             'The run observes immutable histories and structurally valid repository state. It cannot prove that a human-reviewed candidate should be accepted.',
         );
     }
@@ -92,7 +94,7 @@ final class DreamingEvaluator
      * @param list<EvolutionDecision> $suppressed
      * @param array<string, Finding> $findingsById
      */
-    private function metrics(array $summaries, array $proposalsById, array $selectionEvents, array $outcomeEvents, array $decisions, array $suppressed, array $findingsById, DateTimeImmutable $now): DreamMetrics
+    private function metrics(array $summaries, array $proposalsById, array $selectionEvents, array $outcomeEvents, array $decisions, array $suppressed, int $duplicateDecisionCount, array $findingsById, DateTimeImmutable $now): DreamMetrics
     {
         $activeByTier = [];
         $candidateAges = [];
@@ -137,21 +139,37 @@ final class DreamingEvaluator
             $signalCounts['not_used'] += $summary->notUsedCount;
             $signalCounts['unknown'] += $summary->unknownCount;
         }
+        $reviewableDecisionCount = count($decisions) + count($suppressed);
         $staleCount = count(array_filter(array_merge($decisions, $suppressed), static fn (EvolutionDecision $decision): bool => $decision->type === EvolutionDecisionType::STALE_CANDIDATE));
 
-        $selectedCount = count(array_filter($selectionEvents, static fn (RecallSelectionEvent $event): bool => $event->selected));
+        $selectedIdentities = [];
+        foreach ($selectionEvents as $event) {
+            if ($event->selected) {
+                $selectedIdentities[$event->compilationId . "\0" . $event->guidanceId] = true;
+            }
+        }
+        $matchedOutcomeIdentities = [];
+        foreach ($outcomeEvents as $event) {
+            $identity = $event->compilationId . "\0" . $event->guidanceId;
+            if (isset($selectedIdentities[$identity])) {
+                $matchedOutcomeIdentities[$identity] = true;
+            }
+        }
+        $selectedCount = count($selectedIdentities);
+        $explicitOutcomeCount = count($matchedOutcomeIdentities);
         $candidateCount = count(array_filter($proposalsById, static fn (Proposal $proposal): bool => $proposal->status === ProposalStatus::CANDIDATE));
 
         return new DreamMetrics(
             $selectedCount,
-            count($outcomeEvents),
-            $selectedCount === 0 ? 1.0 : min(1.0, count($outcomeEvents) / $selectedCount),
+            $explicitOutcomeCount,
+            $selectedCount === 0 ? null : $explicitOutcomeCount / $selectedCount,
             $candidateCount,
             $candidateAges[0] ?? null,
             $staleCount,
-            $candidateCount === 0 ? 0.0 : $staleCount / $candidateCount,
+            $reviewableDecisionCount === 0 ? 0.0 : $staleCount / $reviewableDecisionCount,
             count($suppressed),
-            count($decisions) + count($suppressed) - count(array_unique(array_map(static fn (EvolutionDecision $decision): string => $decision->stableKey(), array_merge($decisions, $suppressed)))),
+            $duplicateDecisionCount,
+            $reviewableDecisionCount,
             $median,
             $activeByTier,
             $signalCounts,
