@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.12] - 2026-08-03
+
+### Changed
+
+- Replaced host-project-specific release notes with repository-neutral wording.
+- Migrated PHPUnit data providers to attributes, removing PHPUnit 12
+  deprecation warnings from the release suite.
+
 ## [0.8.11] - 2026-08-02
 
 ### Added
@@ -75,7 +83,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
   only scanned `proposals/candidate/`, so once a candidate was rejected (and
   therefore moved to `proposals/rejected/`) the next run no longer saw it and
   wrote an identical decision under a fresh proposal ID. Reproduced downstream
-  in IT-Portal: rejecting five auto-generated candidates and re-running the
+  in a downstream repository: rejecting five auto-generated candidates and re-running the
   command immediately recreated all five. The lookup now also scans
   `proposals/rejected/` and `proposals/acknowledged/`, so a terminal human
   decision suppresses regeneration of the same
@@ -92,7 +100,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
   offered only `phpstan`, `php_cs_fixer`, `test`, and `ci`, and `php_cs_fixer`
   is a different tool (php-cs-fixer) with a different rule location and command,
   so reusing it would have mislabeled the constraint. Discovered downstream in
-  IT-Portal, where a `*_UnitCest.php` constraint had to be a phpcs sniff because
+  a downstream repository, where a `*_UnitCest.php` constraint had to be a phpcs sniff because
   `phpstan.neon` excludes `*Cest.php` from analysis entirely, making an
   equivalent PHPStan rule unable to ever fire. `ConstraintPromotionValidator`
   now applies the matching symmetry checks for the new engine: a `phpcs`
@@ -317,7 +325,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 - Replace the project-specific default task ID pattern with a generic default that accepts IDs like `PROJECT-123`, `GH-123`, and `TODO@path`.
 - Rename `DecisionRecorder` to `DecisionHistoryValidator` because the class validates history and does not record decisions yet.
 - Document the difference between proposal actions and proposal lifecycle status.
-- Remove IT-Portal-specific examples and local filesystem links from package documentation and fixtures.
+- Remove host-project-specific examples and local filesystem links from package documentation and fixtures.
 
 ### Fixed
 

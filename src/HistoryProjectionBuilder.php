@@ -19,8 +19,6 @@ final class HistoryProjectionBuilder
 
     private const string CHRONICLE_PATH = 'history/chronicle.jsonl';
 
-    private const string MANIFEST_PATH = 'history/projection-manifest.json';
-
     /**
      * @param array<string, Finding> $findingsById
      * @param array<string, Proposal> $proposalsById
@@ -218,13 +216,16 @@ final class HistoryProjectionBuilder
         return $this->sorted($ids);
     }
 
-    /** @param array<string, mixed> $value */
+    /** @param array<mixed> $value */
     private function digest(array $value): string
     {
         return hash('sha256', $this->json($this->sortRecursively($value), false));
     }
 
-    /** @param array<string, mixed> $value */
+    /**
+     * @param array<mixed> $value
+     * @return array<mixed>
+     */
     private function sortRecursively(array $value): array
     {
         foreach ($value as $key => $item) {
@@ -239,7 +240,10 @@ final class HistoryProjectionBuilder
         return $value;
     }
 
-    /** @param list<string> $values @return list<string> */
+    /**
+     * @param list<string> $values
+     * @return list<string>
+     */
     private function sorted(array $values): array
     {
         sort($values);
@@ -247,7 +251,7 @@ final class HistoryProjectionBuilder
         return $values;
     }
 
-    /** @param array<string, mixed> $value */
+    /** @param array<mixed> $value */
     private function json(array $value, bool $pretty = true): string
     {
         $flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR;

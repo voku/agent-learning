@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use voku\AgentLearning\Action;
 use voku\AgentLearning\LearningClassification;
@@ -34,9 +35,7 @@ final class ProposalValidatorTest extends TestCase
         yield 'REJECT rejected' => [Action::REJECT, ProposalStatus::REJECTED];
     }
 
-    /**
-     * @dataProvider supportedActionStatusCombinations
-     */
+    #[DataProvider('supportedActionStatusCombinations')]
     public function testSupportedActionStatusCombinations(Action $action, ProposalStatus $status): void
     {
         $proposal = $this->createProposal($action, $status);
@@ -58,9 +57,7 @@ final class ProposalValidatorTest extends TestCase
         yield 'REJECT retired' => [Action::REJECT, ProposalStatus::RETIRED];
     }
 
-    /**
-     * @dataProvider unsupportedActionStatusCombinations
-     */
+    #[DataProvider('unsupportedActionStatusCombinations')]
     public function testUnsupportedActionStatusCombinationsFail(Action $action, ProposalStatus $status): void
     {
         $proposal = $this->createProposal($action, $status);

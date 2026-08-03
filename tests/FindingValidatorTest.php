@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use voku\AgentLearning\Finding;
 use voku\AgentLearning\FindingStatus;
@@ -92,9 +93,7 @@ final class FindingValidatorTest extends TestCase
         yield 'archived invalidated' => [FindingStatus::ARCHIVED, 'invalidated'];
     }
 
-    /**
-     * @dataProvider supportedLifecycleCombinations
-     */
+    #[DataProvider('supportedLifecycleCombinations')]
     public function testSupportedLifecycleCombinations(FindingStatus $status, string $validationStatus): void
     {
         $validator = new FindingValidator();
@@ -117,9 +116,7 @@ final class FindingValidatorTest extends TestCase
         yield 'rejected unverified' => [FindingStatus::REJECTED, 'unverified'];
     }
 
-    /**
-     * @dataProvider unsupportedLifecycleCombinations
-     */
+    #[DataProvider('unsupportedLifecycleCombinations')]
     public function testUnsupportedLifecycleCombinationsFail(FindingStatus $status, string $validationStatus): void
     {
         $validator = new FindingValidator();
