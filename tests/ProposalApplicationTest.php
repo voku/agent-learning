@@ -20,18 +20,16 @@ final class ProposalApplicationTest extends TestCase
         mkdir($this->root . '/proposals/approved', 0777, true);
         mkdir($this->root . '/proposals/applied', 0777, true);
         mkdir($this->root . '/history', 0777, true);
+        mkdir($this->root . '/skills', 0777, true);
 
-        // Copy a validated finding fixture
         copy(__DIR__ . '/fixtures/findings/finding.2026-06-08.001.json', $this->root . '/findings/validated/finding.2026-06-08.001.json');
 
-        // Copy approved proposal
         $proposal = json_decode((string)file_get_contents(__DIR__ . '/fixtures/proposals/proposal.2026-06-08.001.json'), true);
         $proposal['status'] = 'approved';
         $proposal['approved_by'] = 'maintainer';
         $proposal['approved_at'] = '2026-06-08T13:00:00+00:00';
         file_put_contents($this->root . '/proposals/approved/proposal.2026-06-08.001.json', json_encode($proposal));
 
-        // Create initial decisions.jsonl with approval
         $approvalRecord = [
             'id' => 'decision.2026-06-08.001',
             'proposal_id' => 'proposal.2026-06-08.001',
@@ -47,40 +45,107 @@ final class ProposalApplicationTest extends TestCase
         $this->removeDirectory($this->root);
     }
 
-    public function testMarksAppliedSuccessfully(): void
+    public function testMarksAppliedOnlyWhenCanonicalTargetMatchesEvidence(): void
     {
-        $validationFile = $this->root . '/validation.json';
-        file_put_contents($validationFile, '{"tests_passed": true}');
+        $target = $this->root . '/skills/agent-learning-cli.md';
+        file_put_contents($target, 'Call the packaged Composer bin entrypoint and keep consuming-project scripts as wrappers.');
+        $validationFile = $this->validationFile([
+            'tests_passed' => true,
+            'target_source_ref' => 'skills/agent-learning-cli.md',
+            'target_content_hash' => hash_file('sha256', $target),
+        ]);
 
         $manager = new ProposalTransitionManager();
         $manager->apply($this->root, 'proposal.2026-06-08.001', 'lars', 'commit123', $validationFile);
 
         self::assertFileDoesNotExist($this->root . '/proposals/approved/proposal.2026-06-08.001.json');
-        self::assertFileExists($this->root . '/proposals/applied/proposal.2026-06-08.001.json');
+        $appliedPath = $this->root . '/proposals/applied/proposal.2026-06-08.001.json';
+        self::assertFileExists($appliedPath);
+
+        $appliedProposal = json_decode((string) file_get_contents($appliedPath), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('applied', $appliedProposal['status']);
+        self::assertSame('skills/agent-learning-cli.md', $appliedProposal['applied_validation']['target_source_ref']);
+        self::assertSame(hash_file('sha256', $target), $appliedProposal['applied_validation']['target_content_hash']);
 
         $decisions = file($this->root . '/history/decisions.jsonl', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         self::assertIsArray($decisions);
         self::assertCount(2, $decisions);
         self::assertStringContainsString('"status":"applied"', $decisions[1]);
         self::assertStringContainsString('"commit":"commit123"', $decisions[1]);
-        self::assertStringContainsString('"tests_passed"', $decisions[1]);
+        self::assertStringContainsString('"target_source_ref":"skills\/agent-learning-cli.md"', $decisions[1]);
+    }
+
+    public function testApplyRollsBackWhenPhysicalTargetProofIsMissing(): void
+    {
+        $validationFile = $this->validationFile(['tests_passed' => true]);
+        $manager = new ProposalTransitionManager();
+
+        try {
+            $manager->apply($this->root, 'proposal.2026-06-08.001', 'lars', 'commit123', $validationFile);
+            self::fail('Expected canonical-target validation to reject the apply transition.');
+        } catch (ValidationException $exception) {
+            self::assertStringContainsString('target_source_ref', $exception->getMessage());
+        }
+
+        self::assertFileExists($this->root . '/proposals/approved/proposal.2026-06-08.001.json');
+        self::assertFileDoesNotExist($this->root . '/proposals/applied/proposal.2026-06-08.001.json');
+        $decisions = file($this->root . '/history/decisions.jsonl', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        self::assertIsArray($decisions);
+        self::assertCount(1, $decisions);
+    }
+
+    public function testApplyRollsBackWhenTargetHashDoesNotMatch(): void
+    {
+        $target = $this->root . '/skills/agent-learning-cli.md';
+        file_put_contents($target, 'Call the packaged Composer bin entrypoint and keep consuming-project scripts as wrappers.');
+        $validationFile = $this->validationFile([
+            'target_source_ref' => 'skills/agent-learning-cli.md',
+            'target_content_hash' => str_repeat('0', 64),
+        ]);
+
+        $manager = new ProposalTransitionManager();
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('target_content_hash does not match target file');
+        $manager->apply($this->root, 'proposal.2026-06-08.001', 'lars', 'commit123', $validationFile);
+    }
+
+    public function testApplyRollsBackWhenReplacementWordingDidNotLand(): void
+    {
+        $target = $this->root . '/skills/agent-learning-cli.md';
+        file_put_contents($target, 'Unrelated target contents.');
+        $validationFile = $this->validationFile([
+            'target_source_ref' => 'skills/agent-learning-cli.md',
+            'target_content_hash' => hash_file('sha256', $target),
+        ]);
+
+        $manager = new ProposalTransitionManager();
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('replacement guidance wording is not present');
+        $manager->apply($this->root, 'proposal.2026-06-08.001', 'lars', 'commit123', $validationFile);
     }
 
     public function testCannotApplyCandidateProposal(): void
     {
-        // Copy candidate proposal
         $proposal = json_decode((string)file_get_contents(__DIR__ . '/fixtures/proposals/proposal.2026-06-08.001.json'), true);
         $proposal['id'] = 'proposal.candidate.001';
         $proposal['status'] = 'candidate';
         file_put_contents($this->root . '/proposals/candidate/proposal.candidate.001.json', json_encode($proposal));
 
-        $validationFile = $this->root . '/validation.json';
-        file_put_contents($validationFile, '{"tests_passed": true}');
+        $validationFile = $this->validationFile(['tests_passed' => true]);
 
         $manager = new ProposalTransitionManager();
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('proposal is not approved');
         $manager->apply($this->root, 'proposal.candidate.001', 'lars', 'commit123', $validationFile);
+    }
+
+    /** @param array<string, mixed> $data */
+    private function validationFile(array $data): string
+    {
+        $path = $this->root . '/validation-' . bin2hex(random_bytes(4)) . '.json';
+        file_put_contents($path, json_encode($data, JSON_THROW_ON_ERROR));
+
+        return $path;
     }
 
     private function removeDirectory(string $dir): void
