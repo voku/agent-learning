@@ -72,7 +72,7 @@ final class ProposalApplicationTest extends TestCase
         self::assertCount(2, $decisions);
         self::assertStringContainsString('"status":"applied"', $decisions[1]);
         self::assertStringContainsString('"commit":"commit123"', $decisions[1]);
-        self::assertStringContainsString('"target_source_ref":"skills\/agent-learning-cli.md"', $decisions[1]);
+        self::assertStringContainsString('"target_source_ref":"skills/agent-learning-cli.md"', $decisions[1]);
     }
 
     public function testApplyRollsBackWhenPhysicalTargetProofIsMissing(): void
