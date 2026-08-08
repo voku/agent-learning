@@ -15,7 +15,6 @@ use voku\AgentLearning\FindingTransitionManager;
 use voku\AgentLearning\FindingValidator;
 use voku\AgentLearning\OutcomeRepository;
 use voku\AgentLearning\ProposalImporter;
-use voku\AgentLearning\ProposalStatus;
 use voku\AgentLearning\ProposalTransitionManager;
 use voku\AgentLearning\RejectedGuidanceRepository;
 use voku\AgentLearning\RejectedGuidanceSelector;
@@ -34,6 +33,7 @@ final class LearningLoopIntegrationTest extends TestCase
         mkdir($this->root . '/proposals/rejected', 0777, true);
         mkdir($this->root . '/proposals/applied', 0777, true);
         mkdir($this->root . '/history', 0777, true);
+        mkdir($this->root . '/skills', 0777, true);
     }
 
     protected function tearDown(): void
@@ -43,7 +43,6 @@ final class LearningLoopIntegrationTest extends TestCase
 
     public function testCompleteGovernedLearningLoop(): void
     {
-        // 1. Import candidate findings from two separate tasks
         $finding1Data = json_decode((string)file_get_contents(__DIR__ . '/fixtures/findings/finding.2026-06-08.001.json'), true);
         $finding1Data['status'] = 'candidate';
         $finding1Data['validation_status'] = 'unverified';
@@ -54,7 +53,6 @@ final class LearningLoopIntegrationTest extends TestCase
         $finding2Data['validation_status'] = 'unverified';
         file_put_contents($this->root . '/findings/candidate/finding.2026-06-08.002.json', json_encode($finding2Data));
 
-        // 2. Validate and transition them to validated
         $ftManager = new FindingTransitionManager();
         $ftManager->transition($this->root, 'finding.2026-06-08.001', FindingStatus::VALIDATED, 'maintainer');
         $ftManager->transition($this->root, 'finding.2026-06-08.002', FindingStatus::VALIDATED, 'maintainer');
@@ -62,7 +60,6 @@ final class LearningLoopIntegrationTest extends TestCase
         self::assertFileExists($this->root . '/findings/validated/finding.2026-06-08.001.json');
         self::assertFileExists($this->root . '/findings/validated/finding.2026-06-08.002.json');
 
-        // 3. Select them by shared scope
         $findingValidator = new FindingValidator();
         $findingLifecycle = new FindingLifecycle();
         $findingsById = [];
@@ -81,13 +78,10 @@ final class LearningLoopIntegrationTest extends TestCase
         self::assertCount(1, $selectedFindings);
         self::assertSame('finding.2026-06-08.001', $selectedFindings[0]->id);
 
-        // 4. Load one relevant active memory entry
         $memoryFile = $this->root . '/MEMORY.md';
         file_put_contents($memoryFile, "<!-- id: global-memory -->\n<!-- type: memory -->\nActive guidance memory content");
-        $activeRepo = new ActiveGuidanceRepository();
-        $activeGuidance = $activeRepo->loadAll($this->root, ['MEMORY.md']);
+        $activeGuidance = (new ActiveGuidanceRepository())->loadAll($this->root, ['MEMORY.md']);
 
-        // 5. Load one relevant rejected proposal (create mock rejected proposal first)
         $proposalData = json_decode((string)file_get_contents(__DIR__ . '/fixtures/proposals/proposal.2026-06-08.002.json'), true);
         file_put_contents($this->root . '/proposals/rejected/proposal.2026-06-08.002.json', json_encode($proposalData));
         $rejectionRecord = [
@@ -100,12 +94,10 @@ final class LearningLoopIntegrationTest extends TestCase
         $allRejected = (new RejectedGuidanceRepository())->loadAll($this->root);
         $rejectedGuidance = (new RejectedGuidanceSelector())->select($allRejected, ['src/'], ['finding.2026-06-08.001']);
 
-        // 6. Generate safe consolidation input
         $input = new ConsolidationInput($selection, $selectedFindings, $activeGuidance, $rejectedGuidance);
         $prompt = (new ConsolidationPromptBuilder())->build($input);
         self::assertStringContainsString('untrusted repository data', strtolower($prompt));
 
-        // 7. Receive one strict JSON REPLACE result
         $llmOutput = [
             'action' => 'REPLACE',
             'source_findings' => ['finding.2026-06-08.001'],
@@ -121,23 +113,24 @@ final class LearningLoopIntegrationTest extends TestCase
         $resultFile = $this->root . '/consolidation-result.json';
         file_put_contents($resultFile, json_encode($llmOutput));
 
-        // 8. Import it as candidate proposal
-        $importer = new ProposalImporter();
-        $proposalId = $importer->import($this->root, $resultFile);
+        $proposalId = (new ProposalImporter())->import($this->root, $resultFile);
         self::assertFileExists($this->root . '/proposals/candidate/' . $proposalId . '.json');
 
-        // 9. Human approves it
         $ptManager = new ProposalTransitionManager();
         $ptManager->approve($this->root, $proposalId, 'lars');
         self::assertFileExists($this->root . '/proposals/approved/' . $proposalId . '.json');
 
-        // 10. Mark applied with commit and validation evidence
+        $skillPath = $this->root . '/skills/auth-context.md';
+        file_put_contents($skillPath, 'New refined wrapper code.');
         $validationFile = $this->root . '/validation-result.json';
-        file_put_contents($validationFile, '{"passed": true}');
+        file_put_contents($validationFile, json_encode([
+            'passed' => true,
+            'target_source_ref' => 'skills/auth-context.md',
+            'target_content_hash' => hash_file('sha256', $skillPath),
+        ], JSON_THROW_ON_ERROR));
         $ptManager->apply($this->root, $proposalId, 'lars', 'commit_sha_xyz', $validationFile);
         self::assertFileExists($this->root . '/proposals/applied/' . $proposalId . '.json');
 
-        // 11. Record outcome
         $outcomeRecord = [
             'id' => 'outcome.2026-06-20.001',
             'task_id' => 'PROJECT-204',
@@ -153,7 +146,6 @@ final class LearningLoopIntegrationTest extends TestCase
         $outcomeRepo = new OutcomeRepository();
         $outcomeRepo->record($this->root, $outcomeRecord);
 
-        // 12. Run validation successfully
         $outcomes = $outcomeRepo->loadAll($this->root);
         self::assertCount(1, $outcomes);
     }
