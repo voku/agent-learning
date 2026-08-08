@@ -18,15 +18,21 @@ final class OutcomeRepositoryTest extends TestCase
         mkdir($this->root . '/findings/validated', 0777, true);
         mkdir($this->root . '/proposals/applied', 0777, true);
         mkdir($this->root . '/history', 0777, true);
+        mkdir($this->root . '/skills', 0777, true);
 
-        // Copy a validated finding fixture
         copy(__DIR__ . '/fixtures/findings/finding.2026-06-08.001.json', $this->root . '/findings/validated/finding.2026-06-08.001.json');
 
-        // Copy applied proposal
+        $target = $this->root . '/skills/agent-learning-cli.md';
+        file_put_contents($target, 'Call the packaged Composer bin entrypoint and keep consuming-project scripts as wrappers.');
+
         $proposal = json_decode((string)file_get_contents(__DIR__ . '/fixtures/proposals/proposal.2026-06-08.001.json'), true);
         $proposal['status'] = 'applied';
         $proposal['approved_by'] = 'maintainer';
         $proposal['approved_at'] = '2026-06-08T13:00:00+00:00';
+        $proposal['applied_validation'] = [
+            'target_source_ref' => 'skills/agent-learning-cli.md',
+            'target_content_hash' => hash_file('sha256', $target),
+        ];
         file_put_contents($this->root . '/proposals/applied/proposal.2026-06-08.001.json', json_encode($proposal));
     }
 
@@ -64,7 +70,7 @@ final class OutcomeRepositoryTest extends TestCase
         $record = [
             'id' => 'outcome.2026-06-20.002',
             'task_id' => 'PROJECT-205',
-            'applied_proposals' => ['proposal.2026-06-08.001'],
+            'applied_proposals' => [],
             'guidance_used' => ['constraint.project.inline-template.render-data'],
             'result' => 'violation_detected',
             'recorded_by' => 'lars',

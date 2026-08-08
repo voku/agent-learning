@@ -12,6 +12,7 @@ final class ProposalRepository
     public function __construct(
         private readonly ProposalValidator $validator = new ProposalValidator(),
         private readonly ProposalLifecycle $lifecycle = new ProposalLifecycle(),
+        private readonly AppliedGuidanceTargetValidator $appliedGuidanceTargetValidator = new AppliedGuidanceTargetValidator(),
     ) {
     }
 
@@ -27,6 +28,7 @@ final class ProposalRepository
             foreach ($this->jsonFiles($root . '/proposals/' . $statusDirectory) as $file) {
                 $proposal = $this->validator->validateFile($file, $findingsById);
                 $this->lifecycle->assertPathMatchesStatus($proposal, $file, $root);
+                $this->appliedGuidanceTargetValidator->validate($proposal, $root, $file);
                 if (isset($proposals[$proposal->id])) {
                     throw new ValidationException($file, null, $proposal->id, 'duplicate proposal ID');
                 }
