@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.9.0] - 2026-08-09
+
+### Changed
+
+- **Breaking:** `APPLIED` Memory/Skill guidance must now prove that the reviewed
+  mutation physically exists in a concrete canonical target under the configured
+  project root. `applied_validation` requires `target_source_ref` and a SHA-256
+  `target_content_hash`; repository validation checks the real file and the
+  action postcondition before accepting the applied state.
+- `ADD` requires the new wording to be present, `REPLACE` requires the new wording
+  to be present and the old wording absent, and `DELETE` requires the old wording
+  to be absent. A semantic proposal target alone is no longer sufficient proof
+  that application happened.
+- Application proof and authority handoff remain separate. A physically changed
+  Skill or Memory file is evidence that the mutation landed; it does not by itself
+  prove a downstream recall consumer selects that canonical source.
+
+### Fixed
+
+- `ProposalTransitionManager::apply()` now fails repository re-validation and
+  rolls back to `approved` when Memory/Skill application evidence is missing,
+  points outside the configured project root, references a missing file, carries
+  the wrong content hash, or does not satisfy the proposed mutation.
+- Successful application history is not appended when the physical target proof
+  fails.
+
+### Documentation
+
+- Added `docs/applied-guidance-proof.md` describing the physical-proof contract,
+  the distinction between semantic target identity and repository source
+  evidence, and why canonical-source activation/retirement remain separate.
+
 ## [0.8.12] - 2026-08-03
 
 ### Changed
