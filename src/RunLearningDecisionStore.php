@@ -16,7 +16,7 @@ final class RunLearningDecisionStore
     }
 
     /**
-     * @param list<non-empty-string> $findingIds
+     * @param list<string> $findingIds
      */
     public function record(
         string $runId,
@@ -123,10 +123,10 @@ final class RunLearningDecisionStore
         }
         $findingIds = [];
         foreach ($findingIdsValue as $findingId) {
-            if (!is_string($findingId) || trim($findingId) === '') {
+            if (!is_string($findingId)) {
                 throw new RuntimeException('Run learning decision contains an invalid finding id in ' . $path . '.');
             }
-            $findingIds[] = trim($findingId);
+            $findingIds[] = $findingId;
         }
         $findingIds = $this->normalizeFindingIds($findingIds);
         $followUpRefValue = $data['follow_up_ref'] ?? null;
@@ -168,20 +168,23 @@ final class RunLearningDecisionStore
     }
 
     /**
-     * @param list<non-empty-string> $findingIds
+     * @param list<string> $findingIds
      * @return list<non-empty-string>
      */
     private function normalizeFindingIds(array $findingIds): array
     {
+        /** @var array<non-empty-string, non-empty-string> $normalized */
         $normalized = [];
         foreach ($findingIds as $findingId) {
-            $findingId = $this->nonEmpty($findingId, 'finding_id');
-            $normalized[$findingId] = true;
+            $findingId = trim($findingId);
+            if ($findingId === '') {
+                throw new RuntimeException('finding_id must be non-empty.');
+            }
+            $normalized[$findingId] = $findingId;
         }
-        $ids = array_keys($normalized);
-        sort($ids, SORT_STRING);
+        ksort($normalized, SORT_STRING);
 
-        return $ids;
+        return array_values($normalized);
     }
 
     /** @param array<string, mixed> $data */
