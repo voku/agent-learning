@@ -63,7 +63,6 @@ final class ProposalTransitionManager
             throw new ValidationException($proposalPath, null, $proposalId, 'proposal with action ' . $proposal->action->value . ' cannot be approved');
         }
 
-        // Validate source findings
         $findingsById = $this->loadValidatedFindings($root);
         foreach ($proposal->sourceFindings as $findingId) {
             $finding = $findingsById[$findingId] ?? null;
@@ -75,7 +74,6 @@ final class ProposalTransitionManager
             }
         }
 
-        // Check if a newer approved proposal for the same target exists
         if ($proposal->target !== null) {
             $allProposals = (new ProposalRepository())->loadAll($root, $findingsById);
             foreach ($allProposals as $p) {
@@ -88,12 +86,10 @@ final class ProposalTransitionManager
         $now = new DateTimeImmutable('now');
         $nowStr = $now->format(DateTimeInterface::ATOM);
 
-        // Backup current state
         $originalProposalContent = file_get_contents($proposalPath);
         $decisionsPath = $root . '/history/decisions.jsonl';
         $originalDecisionsContent = is_file($decisionsPath) ? file_get_contents($decisionsPath) : null;
 
-        // Prepare updated proposal JSON
         $data = $proposal->raw;
         $data['status'] = ProposalStatus::APPROVED->value;
         $data['approved_by'] = $actor;
@@ -132,10 +128,8 @@ final class ProposalTransitionManager
             }
             file_put_contents($decisionsPath, $decisionLine, FILE_APPEND);
 
-            // Re-validate entire repo
             $this->validateRepository($root);
         } catch (\Throwable $e) {
-            // Rollback
             if (is_file($targetPath) && $targetPath !== $proposalPath) {
                 rename($targetPath, $proposalPath);
             }
@@ -177,13 +171,10 @@ final class ProposalTransitionManager
         }
 
         $now = new DateTimeImmutable('now');
-
-        // Backup current state
         $originalProposalContent = file_get_contents($proposalPath);
         $rejectedPath = $root . '/history/rejected-proposals.jsonl';
         $originalRejectedContent = is_file($rejectedPath) ? file_get_contents($rejectedPath) : null;
 
-        // Prepare updated proposal JSON
         $data = $proposal->raw;
         $data['status'] = ProposalStatus::REJECTED->value;
         $data['reason'] = $reason;
@@ -219,10 +210,8 @@ final class ProposalTransitionManager
             }
             file_put_contents($rejectedPath, $rejectionLine, FILE_APPEND);
 
-            // Re-validate entire repo
             $this->validateRepository($root);
         } catch (\Throwable $e) {
-            // Rollback
             if (is_file($targetPath) && $targetPath !== $proposalPath) {
                 rename($targetPath, $proposalPath);
             }
@@ -275,12 +264,10 @@ final class ProposalTransitionManager
         $now = new DateTimeImmutable('now');
         $nowStr = $now->format(DateTimeInterface::ATOM);
 
-        // Backup current state
         $originalProposalContent = file_get_contents($proposalPath);
         $acknowledgedPath = $root . '/history/acknowledged-proposals.jsonl';
         $originalAcknowledgedContent = is_file($acknowledgedPath) ? file_get_contents($acknowledgedPath) : null;
 
-        // Prepare updated proposal JSON
         $data = $proposal->raw;
         $data['status'] = ProposalStatus::ACKNOWLEDGED->value;
         $data['acknowledged_by'] = $actor;
@@ -320,10 +307,8 @@ final class ProposalTransitionManager
             }
             file_put_contents($acknowledgedPath, $acknowledgementLine, FILE_APPEND);
 
-            // Re-validate entire repo
             $this->validateRepository($root);
         } catch (\Throwable $e) {
-            // Rollback
             if (is_file($targetPath) && $targetPath !== $proposalPath) {
                 rename($targetPath, $proposalPath);
             }
@@ -398,12 +383,10 @@ final class ProposalTransitionManager
         $now = new DateTimeImmutable('now');
         $nowStr = $now->format(DateTimeInterface::ATOM);
 
-        // Backup current state
         $originalProposalContent = file_get_contents($proposalPath);
         $retiredPath = $root . '/history/retired-proposals.jsonl';
         $originalRetiredContent = is_file($retiredPath) ? file_get_contents($retiredPath) : null;
 
-        // Prepare updated proposal JSON
         $data = $proposal->raw;
         $data['status'] = ProposalStatus::RETIRED->value;
         $data['reason'] = $reason;
@@ -443,10 +426,8 @@ final class ProposalTransitionManager
             }
             file_put_contents($retiredPath, $retirementLine, FILE_APPEND);
 
-            // Re-validate entire repo
             $this->validateRepository($root);
         } catch (\Throwable $e) {
-            // Rollback
             if (is_file($targetPath) && $targetPath !== $proposalPath) {
                 rename($targetPath, $proposalPath);
             }
@@ -589,21 +570,6 @@ final class ProposalTransitionManager
         $now = new DateTimeImmutable('now');
         $nowStr = $now->format(DateTimeInterface::ATOM);
 
-        $contentHash = null;
-        if ($proposal->target !== null) {
-            $targetPathCandidate1 = $root . '/' . $proposal->target;
-            $targetPathCandidate2 = dirname($root) . '/' . $proposal->target;
-            $targetFile = null;
-            if (is_file($targetPathCandidate1)) {
-                $targetFile = $targetPathCandidate1;
-            } elseif (is_file($targetPathCandidate2)) {
-                $targetFile = $targetPathCandidate2;
-            }
-            if ($targetFile !== null) {
-                $contentHash = hash_file('sha256', $targetFile);
-            }
-        }
-
         $originalProposalContent = file_get_contents($proposalPath);
         $decisionsPath = $root . '/history/decisions.jsonl';
         $originalDecisionsContent = is_file($decisionsPath) ? file_get_contents($decisionsPath) : null;
@@ -614,9 +580,6 @@ final class ProposalTransitionManager
         $data['applied_at'] = $nowStr;
         $data['commit'] = $commit;
         $data['applied_validation'] = $validationData;
-        if ($contentHash !== null) {
-            $data['target_content_hash'] = $contentHash;
-        }
 
         $updatedContent = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
@@ -638,9 +601,6 @@ final class ProposalTransitionManager
             'commit' => $commit,
             'validation' => $validationData,
         ];
-        if ($contentHash !== null) {
-            $decisionRecord['target_content_hash'] = $contentHash;
-        }
         $decisionLine = json_encode($decisionRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
         try {
