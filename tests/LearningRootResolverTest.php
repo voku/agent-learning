@@ -13,10 +13,10 @@ use voku\AgentLearning\ValidationException;
 
 final class LearningRootResolverTest extends TestCase
 {
-    public function testDiscoversAllLegacyProjectRootLayouts(): void
+    public function testDiscoversSupportedProjectRootLayouts(): void
     {
-        foreach (['infra/doc/agent-learning', '.agent-learning', 'docs/agent-learning', 'agent-learning'] as $layout) {
-            $project = $this->tempDir('legacy-root');
+        foreach (['.agent-loop/learning', 'infra/doc/agent-learning', '.agent-learning', 'docs/agent-learning', 'agent-learning'] as $layout) {
+            $project = $this->tempDir('supported-root');
             $root = $project . '/' . $layout;
             mkdir($root . '/history', 0777, true);
 
@@ -26,6 +26,18 @@ final class LearningRootResolverTest extends TestCase
             self::assertSame($project, $config->projectRoot);
             self::assertSame($root, (new PathResolver())->resolve($project));
         }
+    }
+
+    public function testCompactRootWinsWhenHistoricalRootAlsoExists(): void
+    {
+        $project = $this->tempDir('compact-precedence');
+        mkdir($project . '/.agent-loop/learning/history', 0777, true);
+        mkdir($project . '/infra/doc/agent-learning/history', 0777, true);
+
+        $config = (new LearningRootResolver())->resolve($project);
+
+        self::assertSame($project . '/.agent-loop/learning', $config->root);
+        self::assertSame($project, $config->projectRoot);
     }
 
     public function testConfigJsonLoadsPathDefaultsAndCliOverridesWin(): void
