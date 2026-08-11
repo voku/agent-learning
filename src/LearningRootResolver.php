@@ -10,6 +10,7 @@ final class LearningRootResolver
 {
     /** @var list<string> */
     private const array LEARNING_ROOT_CANDIDATES = [
+        '.agent-loop/learning',
         'infra/doc/agent-learning',
         '.agent-learning',
         'docs/agent-learning',
