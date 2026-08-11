@@ -230,9 +230,9 @@ final class ConstraintProposalValidationTest extends TestCase
             self::assertFileExists($output . '/validation-plan.json');
             self::assertFileExists($output . '/generation-prompt.md');
 
-            $spec = json_decode((string)file_get_contents($output . '/specification.json'), true);
+            $spec = json_decode((string) file_get_contents($output . '/specification.json'), true);
             self::assertSame('project.translation.parameters', $spec['constraint']['rule_id']);
-            $examples = json_decode((string)file_get_contents($output . '/examples.json'), true);
+            $examples = json_decode((string) file_get_contents($output . '/examples.json'), true);
             self::assertStringContainsString('ItPortalTranslationParametersRule', $examples['examples'][0]['content']);
         } finally {
             $this->removeDirectory($root);
@@ -242,7 +242,7 @@ final class ConstraintProposalValidationTest extends TestCase
     public function testActivatesConstraintManifestFromApprovedProposal(): void
     {
         $project = sys_get_temp_dir() . '/constraint_manifest_activate_' . bin2hex(random_bytes(8));
-        $root = $project . '/infra/doc/agent-learning';
+        $root = $project . '/.agent-loop/learning';
         mkdir($root . '/proposals/approved', 0777, true);
         mkdir($project . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
         file_put_contents($project . '/infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
@@ -260,7 +260,7 @@ final class ConstraintProposalValidationTest extends TestCase
 
             self::assertSame($root . '/constraints/active/constraint.project.translation.parameters.json', $manifestPath);
             self::assertFileExists($manifestPath);
-            $manifest = json_decode((string)file_get_contents($manifestPath), true);
+            $manifest = json_decode((string) file_get_contents($manifestPath), true);
             self::assertSame('constraint.project.translation.parameters', $manifest['id']);
             self::assertSame('phpstan', $manifest['engine']);
             self::assertSame('project.translation.parameters', $manifest['rule_identifier']);
@@ -283,7 +283,7 @@ final class ConstraintProposalValidationTest extends TestCase
         // A bare proposal ID -- the natural, documented CLI input shape -- failed with
         // "proposal file does not exist" unless the caller passed the full file path instead.
         $project = sys_get_temp_dir() . '/constraint_manifest_activate_bare_id_' . bin2hex(random_bytes(8));
-        $root = $project . '/infra/doc/agent-learning';
+        $root = $project . '/.agent-loop/learning';
         mkdir($root . '/proposals/approved', 0777, true);
         mkdir($root . '/findings/validated', 0777, true);
         mkdir($project . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
@@ -330,7 +330,7 @@ final class ConstraintProposalValidationTest extends TestCase
     public function testRejectsConstraintManifestActivationBeforeApproval(): void
     {
         $project = sys_get_temp_dir() . '/constraint_manifest_candidate_' . bin2hex(random_bytes(8));
-        $root = $project . '/infra/doc/agent-learning';
+        $root = $project . '/.agent-loop/learning';
         mkdir($root . '/proposals/candidate', 0777, true);
         mkdir($project . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
         file_put_contents($project . '/infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
@@ -355,7 +355,7 @@ final class ConstraintProposalValidationTest extends TestCase
     public function testConstraintLoopApprovesAppliesAndActivatesCandidate(): void
     {
         $project = sys_get_temp_dir() . '/constraint_loop_' . bin2hex(random_bytes(8));
-        $root = $project . '/infra/doc/agent-learning';
+        $root = $project . '/.agent-loop/learning';
         mkdir($root . '/findings/validated', 0777, true);
         mkdir($root . '/proposals/candidate', 0777, true);
         mkdir($root . '/history', 0777, true);
@@ -458,7 +458,7 @@ final class ConstraintProposalValidationTest extends TestCase
             self::assertSame($root . '/active-manifests/constraint.project.translation.parameters.json', $result->manifestPath);
             self::assertFileExists($result->generationPackageDir . '/examples.json');
             self::assertFileExists($result->manifestPath);
-            $examples = json_decode((string)file_get_contents($result->generationPackageDir . '/examples.json'), true);
+            $examples = json_decode((string) file_get_contents($result->generationPackageDir . '/examples.json'), true);
             self::assertStringContainsString('ItPortalTranslationParametersRule', $examples['examples'][0]['content']);
         } finally {
             $this->removeDirectory($workspace);
