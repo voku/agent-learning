@@ -8,14 +8,7 @@ use JsonException;
 
 final class LearningRootResolver
 {
-    /** @var list<string> */
-    private const array LEARNING_ROOT_CANDIDATES = [
-        '.agent-loop/learning',
-        'infra/doc/agent-learning',
-        '.agent-learning',
-        'docs/agent-learning',
-        'agent-learning',
-    ];
+    private const string DEFAULT_LEARNING_ROOT = '.agent-loop/learning';
 
     public function resolve(?string $root = null, ?string $startDirectory = null): LearningRootConfig
     {
@@ -45,14 +38,9 @@ final class LearningRootResolver
         }
         $directory = $this->normalizeExistingDirectory($start);
         while (true) {
-            if ($this->isLearningRoot($directory)) {
-                return $directory;
-            }
-            foreach (self::LEARNING_ROOT_CANDIDATES as $candidate) {
-                $candidatePath = $directory . '/' . $candidate;
-                if (is_dir($candidatePath) && $this->isLearningRoot($candidatePath)) {
-                    return $this->normalizeExistingDirectory($candidatePath);
-                }
+            $candidatePath = $directory . '/' . self::DEFAULT_LEARNING_ROOT;
+            if (is_dir($candidatePath) && $this->isLearningRoot($candidatePath)) {
+                return $this->normalizeExistingDirectory($candidatePath);
             }
             $parent = dirname($directory);
             if ($parent === $directory) {
@@ -60,7 +48,7 @@ final class LearningRootResolver
             }
             $directory = $parent;
         }
-        throw new ValidationException($start, null, null, 'cannot find agent-learning root; pass --root');
+        throw new ValidationException($start, null, null, 'cannot find .agent-loop/learning root; pass --root for an explicit learning root');
     }
 
     private function resolveExplicit(string $root): string
@@ -69,12 +57,12 @@ final class LearningRootResolver
         if ($this->isLearningRoot($directory)) {
             return $directory;
         }
-        foreach (self::LEARNING_ROOT_CANDIDATES as $candidate) {
-            $candidatePath = $directory . '/' . $candidate;
-            if (is_dir($candidatePath) && $this->isLearningRoot($candidatePath)) {
-                return $this->normalizeExistingDirectory($candidatePath);
-            }
+
+        $candidatePath = $directory . '/' . self::DEFAULT_LEARNING_ROOT;
+        if (is_dir($candidatePath) && $this->isLearningRoot($candidatePath)) {
+            return $this->normalizeExistingDirectory($candidatePath);
         }
+
         throw new ValidationException($root, null, null, 'directory is not an agent-learning root');
     }
 
@@ -90,10 +78,8 @@ final class LearningRootResolver
             }
             return rtrim(str_replace('\\', '/', $realPath), '/');
         }
-        foreach (self::LEARNING_ROOT_CANDIDATES as $suffix) {
-            if (str_ends_with($root, '/' . $suffix)) {
-                return substr($root, 0, -strlen('/' . $suffix));
-            }
+        if (str_ends_with($root, '/' . self::DEFAULT_LEARNING_ROOT)) {
+            return substr($root, 0, -strlen('/' . self::DEFAULT_LEARNING_ROOT));
         }
         return $root;
     }
