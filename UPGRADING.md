@@ -19,10 +19,10 @@ docs/agent-learning/
 agent-learning/
 ```
 
-Historical roots remain valid when selected explicitly, but discovery prefers
-`.agent-loop/learning/` when both the new and an old root exist. This prevents
-an upgraded repository from silently continuing to write durable learning into
-a historical directory after the migration.
+Those historical locations are no longer auto-discovered. If a repository still
+needs one temporarily, select it explicitly with `--root`; otherwise migrate the
+state once. There is deliberately no compatibility fallback or second source of
+truth.
 
 For the common agent-loop layout, migrate once:
 
