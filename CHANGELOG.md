@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.10.0] - 2026-08-12
+
+### Added
+
+- `RunLearningDecision`, `RunLearningDecisionStatus` and
+  `RunLearningDecisionStore`: agent-learning now owns the durable Learning
+  close-out for a governed Run, keyed by `run_id`. Previously this lived in
+  `agent-session`, where pruning working memory destroyed the record that
+  explained why a Run had been allowed to close. A decision recorded here
+  outlives the Session it was reached in.
+
+### Changed
+
+- **Breaking:** the canonical learning root is `.agent-loop/learning`, and
+  historical discovery of older locations is removed. A repository that kept
+  learning state elsewhere must migrate it or configure the root explicitly;
+  nothing is copied, symlinked or dual-read. See `UPGRADING.md`.
+
 ## [0.9.0] - 2026-08-09
 
 ### Changed
