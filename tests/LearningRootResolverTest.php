@@ -13,19 +13,40 @@ use voku\AgentLearning\ValidationException;
 
 final class LearningRootResolverTest extends TestCase
 {
-    public function testDiscoversAllLegacyProjectRootLayouts(): void
+    public function testDiscoversCompactProjectRootLayout(): void
     {
-        foreach (['infra/doc/agent-learning', '.agent-learning', 'docs/agent-learning', 'agent-learning'] as $layout) {
-            $project = $this->tempDir('legacy-root');
-            $root = $project . '/' . $layout;
-            mkdir($root . '/history', 0777, true);
+        $project = $this->tempDir('compact-root');
+        $root = $project . '/.agent-loop/learning';
+        mkdir($root . '/history', 0777, true);
 
-            $config = (new LearningRootResolver())->resolve($project);
+        $config = (new LearningRootResolver())->resolve(startDirectory: $project);
 
-            self::assertSame($root, $config->root);
-            self::assertSame($project, $config->projectRoot);
-            self::assertSame($root, (new PathResolver())->resolve($project));
-        }
+        self::assertSame($root, $config->root);
+        self::assertSame($project, $config->projectRoot);
+        self::assertSame($root, (new PathResolver())->resolve($project));
+    }
+
+    public function testHistoricalRootIsNotAutoDiscovered(): void
+    {
+        $project = $this->tempDir('historical-root');
+        mkdir($project . '/infra/doc/agent-learning/history', 0777, true);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('cannot find .agent-loop/learning root');
+
+        (new LearningRootResolver())->resolve(startDirectory: $project);
+    }
+
+    public function testExplicitHistoricalRootRemainsAValidExplicitPath(): void
+    {
+        $project = $this->tempDir('explicit-root');
+        $root = $project . '/infra/doc/agent-learning';
+        mkdir($root . '/history', 0777, true);
+
+        $config = (new LearningRootResolver())->resolve(root: $root);
+
+        self::assertSame($root, $config->root);
+        self::assertSame($root, $config->projectRoot);
     }
 
     public function testConfigJsonLoadsPathDefaultsAndCliOverridesWin(): void

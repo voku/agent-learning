@@ -16,7 +16,7 @@ final class AgentLearningProjectTest extends TestCase
     public function testResolverAcceptsProjectRootWithItPortalLayout(): void
     {
         $root = $this->createLearningRoot();
-        $projectRoot = dirname($root, 3);
+        $projectRoot = dirname($root, 2);
 
         self::assertSame($root, (new PathResolver())->resolve($projectRoot));
     }
@@ -49,7 +49,7 @@ final class AgentLearningProjectTest extends TestCase
     {
         $root = $this->createLearningRoot();
         $file = $root . '/proposals/approved/proposal.2026-06-08.003.json';
-        $proposal = json_decode((string)file_get_contents(__DIR__ . '/fixtures/proposals/proposal.2026-06-08.001.json'), true, 512, JSON_THROW_ON_ERROR);
+        $proposal = json_decode((string) file_get_contents(__DIR__ . '/fixtures/proposals/proposal.2026-06-08.001.json'), true, 512, JSON_THROW_ON_ERROR);
         $proposal['id'] = 'proposal.2026-06-08.003';
         $proposal['status'] = 'candidate';
         $proposal['approved_by'] = null;
@@ -101,7 +101,7 @@ final class AgentLearningProjectTest extends TestCase
         self::assertStringContainsString('finding.2026-06-08.001 (PROJECT-1234)', implode("\n", $output));
         self::assertStringContainsString('finding.2026-06-08.002 (TODO@agent-learning)', implode("\n", $output));
 
-        $prompt = (string)file_get_contents($outputFile);
+        $prompt = (string) file_get_contents($outputFile);
         self::assertStringContainsString('"label": "task=PROJECT-1234, task=TODO@agent-learning"', $prompt);
         self::assertStringContainsString('"id": "finding.2026-06-08.001"', $prompt);
         self::assertStringContainsString('"id": "finding.2026-06-08.002"', $prompt);
@@ -154,7 +154,7 @@ final class AgentLearningProjectTest extends TestCase
 
     private function createLearningRoot(): string
     {
-        $root = sys_get_temp_dir() . '/agent-learning-test-' . bin2hex(random_bytes(8)) . '/infra/doc/agent-learning';
+        $root = sys_get_temp_dir() . '/agent-learning-test-' . bin2hex(random_bytes(8)) . '/.agent-loop/learning';
         mkdir($root . '/findings/validated', 0777, true);
         mkdir($root . '/proposals/approved', 0777, true);
         mkdir($root . '/proposals/rejected', 0777, true);
