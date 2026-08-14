@@ -71,6 +71,65 @@ final class DreamCliTest extends TestCase
         self::assertArrayHasKey('metrics', $reportData);
     }
 
+    public function testDefaultReportStatesHowMuchSelectedGuidanceWasActuallyJudged(): void
+    {
+        // Two compilations selected guidance; only one produced a judgement. The
+        // rate was already computed and only reachable through --format json, so
+        // the default output could not distinguish a repository holding real
+        // usefulness evidence from one holding only compiler placeholders.
+        $this->writeSelection('recall-selection.2026-06-02.001', 'compilation.TASK-1.001', 'proposal.2026-06-01.001');
+        $this->writeSelection('recall-selection.2026-06-02.002', 'compilation.TASK-1.002', 'proposal.2026-06-01.002');
+        $this->writeOutcome('guidance-outcome.2026-06-02.001', 'compilation.TASK-1.001', 'proposal.2026-06-01.001');
+
+        // Run out of process: the report is written to STDOUT, which is exactly
+        // the surface under test and the one an output buffer cannot observe.
+        $command = escapeshellarg(PHP_BINARY)
+            . ' ' . escapeshellarg(__DIR__ . '/../bin/agent-learning')
+            . ' dream --root ' . escapeshellarg($this->root)
+            . ' --project-root ' . escapeshellarg($this->root)
+            . ' --dry-run 2>&1';
+        exec($command, $output, $exitCode);
+        $report = implode("\n", $output);
+
+        self::assertSame(0, $exitCode, $report);
+        self::assertStringContainsString('Outcome completeness: 1/2 selected guidance judged (50%)', $report);
+    }
+
+    private function writeSelection(string $id, string $compilationId, string $guidanceId): void
+    {
+        file_put_contents($this->root . '/history/recall-selections.jsonl', json_encode([
+            'schema_version' => '1.0',
+            'id' => $id,
+            'compilation_id' => $compilationId,
+            'task_id' => 'TASK-1',
+            'guidance_id' => $guidanceId,
+            'guidance_type' => 'memory',
+            'eligible' => true,
+            'selected' => true,
+            'selection_reason' => 'scope_overlap',
+            'exclusion_reason' => null,
+            'task_files' => ['src/Example.php'],
+            'recorded_at' => '2026-06-02T00:00:00+00:00',
+        ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n", FILE_APPEND);
+    }
+
+    private function writeOutcome(string $id, string $compilationId, string $guidanceId): void
+    {
+        file_put_contents($this->root . '/history/outcomes.jsonl', json_encode([
+            'schema_version' => '1.0',
+            'id' => $id,
+            'compilation_id' => $compilationId,
+            'task_id' => 'TASK-1',
+            'guidance_id' => $guidanceId,
+            'outcome' => 'helpful',
+            'applied' => true,
+            'comment' => 'Named the boundary this change had to respect.',
+            'commit' => 'abc1234',
+            'recorded_by' => 'tester',
+            'recorded_at' => '2026-06-02T01:00:00+00:00',
+        ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n", FILE_APPEND);
+    }
+
     public function testHistoryProjectionDetectsStalenessAndRecoversAfterRebuild(): void
     {
         self::assertSame(0, (new Cli())->run([

@@ -1230,6 +1230,14 @@ final class Cli
             'Warnings: ' . count($result->warnings),
             'Review decisions: ' . count($result->decisions),
             'Suppressed unchanged decisions: ' . count($result->suppressedDecisions),
+            // Printed because guidance selected but never judged is the state
+            // every promotion and staleness gate silently waits on. It was
+            // already computed and only reachable through --format json, so a
+            // reader of the default output could not tell a repository with real
+            // usefulness evidence from one with none.
+            'Outcome completeness: ' . $result->metrics->explicitOutcomeCount . '/' . $result->metrics->selectedGuidanceCount
+                . ' selected guidance judged'
+                . ($result->metrics->selectedGuidanceCount === 0 ? '' : ' (' . round(($result->metrics->outcomeCompletenessRate ?? 0.0) * 100) . '%)'),
             'History projection: active=' . $projection->activeGuidanceRecordCount . ' archived=' . $projection->archivedRecordCount . ' files=' . count($projection->sourceFiles) . ' bytes=' . $projection->sourceBytes,
         ];
         foreach ($result->warnings as $warning) {
