@@ -10,7 +10,7 @@ use DateTimeInterface;
 final class GuidanceCandidateProposalWriter
 {
     public function __construct(
-        private readonly ProposalIdGenerator $idGenerator = new ProposalIdGenerator(),
+        private readonly RecordIdGenerator $idGenerator = new RecordIdGenerator(),
         private readonly ProposalValidator $proposalValidator = new ProposalValidator(),
         private readonly RedactionGuard $redactionGuard = new RedactionGuard(),
     ) {
@@ -34,7 +34,7 @@ final class GuidanceCandidateProposalWriter
                 continue;
             }
 
-            $proposalId = $this->idGenerator->generate($root);
+            $proposalId = $this->idGenerator->generate('proposal');
             $record = $this->proposalRecord($proposalId, $decision);
             $this->redactionGuard->assertSafeValue($record, $root . '/proposals/candidate/' . $proposalId . '.json', null, $proposalId);
             $proposal = (new ProposalParser())->parseRecord($record, $proposalId . '.json');

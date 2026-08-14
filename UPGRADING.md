@@ -1,5 +1,30 @@
 # Upgrading
 
+## Record IDs are allocated, not guessed
+
+`ProposalIdGenerator` is replaced by `RecordIdGenerator`. If you constructed it
+directly, swap the class and pass the record kind:
+
+```php
+- (new ProposalIdGenerator())->generate($root);
++ (new RecordIdGenerator())->generate('proposal');
+```
+
+Allocated IDs now end in a random suffix instead of a per-day sequence. Nothing
+needs migrating: validation still accepts every existing `NNN` ID, and the date
+prefix is unchanged.
+
+For findings, stop hand-picking the next number and ask for one:
+
+```bash
+vendor/bin/agent-learning finding-id
+# finding.2026-08-14.a3f2c1
+```
+
+This matters when more than one agent or branch writes findings: the old scheme
+could only see the local directory, so two branches reliably allocated the same
+ID and the duplicate surfaced at the merge.
+
 ## Default learning root moves below `.agent-loop/`
 
 This is a breaking default-path change.
