@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-08-14
+
 ### Added
 
 - `RecordIdGenerator` and `agent-learning finding-id`: record IDs are now
@@ -23,6 +25,23 @@
   and the new random one. **Existing IDs are not migrated**: they are published
   in changelogs, memory rows and proposal citations, and rewriting them would
   break every reference to buy nothing.
+
+### Fixed
+
+- `GuidanceCandidateProposalWriter` now refuses to write over an existing
+  candidate. The free filename used to be guaranteed by the sequential
+  allocator's construction; an allocated suffix does not provide it, so the
+  guarantee is asserted rather than assumed.
+
+### Validation
+
+- 239 tests and PHPStan level 8, plus the change applied against agent-loop's
+  live store: 27 findings and 14 proposals carrying legacy sequential IDs all
+  still validate, and `learn backlog` stays clear.
+- The collision test injects its entropy source instead of sampling real
+  randomness. Drawing a thousand suffixes and demanding no repeat carries a
+  2.94% failure probability per run - roughly one CI run in thirty-four - and
+  measures `random_bytes` rather than this package.
 
 ## [0.10.0] - 2026-08-12
 
