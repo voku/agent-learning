@@ -10,7 +10,7 @@ use DateTimeInterface;
 final class GuidanceCandidateProposalWriter
 {
     public function __construct(
-        private readonly ProposalIdGenerator $idGenerator = new ProposalIdGenerator(),
+        private readonly RecordIdGenerator $idGenerator = new RecordIdGenerator(),
         private readonly ProposalValidator $proposalValidator = new ProposalValidator(),
         private readonly RedactionGuard $redactionGuard = new RedactionGuard(),
     ) {
@@ -34,7 +34,7 @@ final class GuidanceCandidateProposalWriter
                 continue;
             }
 
-            $proposalId = $this->idGenerator->generate($root);
+            $proposalId = $this->idGenerator->generate('proposal');
             $record = $this->proposalRecord($proposalId, $decision);
             $this->redactionGuard->assertSafeValue($record, $root . '/proposals/candidate/' . $proposalId . '.json', null, $proposalId);
             $proposal = (new ProposalParser())->parseRecord($record, $proposalId . '.json');
@@ -45,6 +45,13 @@ final class GuidanceCandidateProposalWriter
                 throw new ValidationException($candidateDir, null, null, 'cannot create proposals/candidate directory');
             }
             $path = $candidateDir . '/' . $proposalId . '.json';
+            // The sequential allocator used to guarantee a free filename by
+            // construction. An allocated suffix does not, so the guarantee is
+            // asserted instead of assumed - the alternative is a silent
+            // overwrite of somebody else's candidate.
+            if (is_file($path)) {
+                throw new ValidationException($path, null, $proposalId, 'duplicate proposal ID');
+            }
             $encoded = json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
             if (file_put_contents($path, $encoded . "\n") === false) {
                 throw new ValidationException($path, null, $proposalId, 'cannot write candidate proposal');

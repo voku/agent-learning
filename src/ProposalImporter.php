@@ -13,7 +13,7 @@ final class ProposalImporter
         private readonly ConsolidationResultParser $parser = new ConsolidationResultParser(),
         private readonly ConsolidationResultValidator $validator = new ConsolidationResultValidator(),
         private readonly ProposalFromConsolidationResult $mapper = new ProposalFromConsolidationResult(),
-        private readonly ProposalIdGenerator $idGenerator = new ProposalIdGenerator(),
+        private readonly RecordIdGenerator $idGenerator = new RecordIdGenerator(),
         private readonly ProposalValidator $proposalValidator = new ProposalValidator(),
         private readonly FindingLifecycle $findingLifecycle = new FindingLifecycle(),
         private readonly PathResolver $pathResolver = new PathResolver(),
@@ -56,7 +56,7 @@ final class ProposalImporter
         $result = $this->validator->validate($data, $findingsById);
 
         // 3. Generate proposal ID
-        $proposalId = $this->idGenerator->generate($root);
+        $proposalId = $this->idGenerator->generate('proposal');
 
         // 4. Map to proposal
         $proposal = $this->mapper->map($result, $proposalId);

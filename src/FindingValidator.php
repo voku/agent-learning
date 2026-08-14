@@ -38,8 +38,8 @@ final class FindingValidator
     public function validate(Finding $finding, string $file, ?int $line = null): void
     {
         $this->redactionGuard->assertSafeValue($finding->raw, $file, $line, $finding->id);
-        if (preg_match('/^finding\.\d{4}-\d{2}-\d{2}\.\d{3}$/', $finding->id) !== 1) {
-            throw new ValidationException($file, $line, $finding->id, 'finding id must match finding.YYYY-MM-DD.NNN');
+        if (preg_match(RecordIdGenerator::pattern('finding'), $finding->id) !== 1) {
+            throw new ValidationException($file, $line, $finding->id, 'finding id must match finding.YYYY-MM-DD.<suffix>');
         }
         if (DateTimeImmutable::createFromFormat(DateTimeInterface::ATOM, $finding->createdAt) === false) {
             throw new ValidationException($file, $line, $finding->id, 'malformed timestamp field: created_at');

@@ -33,8 +33,8 @@ final class ProposalValidator
     public function validate(Proposal $proposal, string $file, ?int $line = null, array $findingsById = []): void
     {
         $this->redactionGuard->assertSafeValue($proposal->raw, $file, $line, $proposal->id);
-        if (preg_match('/^proposal\.\d{4}-\d{2}-\d{2}\.\d{3}$/', $proposal->id) !== 1) {
-            throw new ValidationException($file, $line, $proposal->id, 'proposal id must match proposal.YYYY-MM-DD.NNN');
+        if (preg_match(RecordIdGenerator::pattern('proposal'), $proposal->id) !== 1) {
+            throw new ValidationException($file, $line, $proposal->id, 'proposal id must match proposal.YYYY-MM-DD.<suffix>');
         }
 
         if (DateTimeImmutable::createFromFormat(DateTimeInterface::ATOM, $proposal->createdAt) === false) {

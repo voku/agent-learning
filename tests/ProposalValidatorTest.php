@@ -80,7 +80,7 @@ final class ProposalValidatorTest extends TestCase
     {
         $proposal = $this->createProposal(Action::ADD, ProposalStatus::CANDIDATE, id: 'proposal.invalid');
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('proposal id must match proposal.YYYY-MM-DD.NNN');
+        $this->expectExceptionMessage('proposal id must match proposal.YYYY-MM-DD.<suffix>');
         (new ProposalValidator())->validate($proposal, 'proposal.json');
     }
 

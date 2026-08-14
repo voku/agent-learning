@@ -133,7 +133,7 @@ final class FindingValidatorTest extends TestCase
         $finding = $this->createFinding(taskId: 'PROJECT-123', id: 'finding.invalid');
 
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('finding id must match finding.YYYY-MM-DD.NNN');
+        $this->expectExceptionMessage('finding id must match finding.YYYY-MM-DD.<suffix>');
         $validator->validate($finding, 'finding.json');
     }
 

@@ -6,6 +6,7 @@ namespace voku\AgentLearning;
 
 use DateTimeImmutable;
 use DateTimeInterface;
+use InvalidArgumentException;
 use Throwable;
 
 final class Cli
@@ -39,6 +40,7 @@ final class Cli
                 'history-rebuild' => $this->historyRebuildCommand($tokens),
                 'history-status' => $this->historyStatusCommand($tokens),
                 'backlog' => $this->backlogCommand($tokens),
+                'finding-id' => $this->findingIdCommand($tokens),
                 'finding-transition' => $this->findingTransitionCommand($tokens),
                 'proposal-approve' => $this->proposalApproveCommand($tokens),
                 'proposal-reject' => $this->proposalRejectCommand($tokens),
@@ -543,6 +545,31 @@ final class Cli
     }
 
     /**
+     * Allocate a fresh finding ID.
+     *
+     * Findings never had an allocator: every writer read the directory it could
+     * see and picked the next number, which is unique only for a writer who can
+     * see every other writer. Printing an ID is the smallest primitive that
+     * removes the guess, so nothing has to hand-pick a suffix again.
+     *
+     * @param list<string> $tokens
+     */
+    private function findingIdCommand(array $tokens): int
+    {
+        // Deliberately no root lookup: allocating an ID needs no learning
+        // repository, and requiring one would make the command unusable in the
+        // moment it is most useful - before the first finding exists.
+        $parsed = $this->parseOptions($tokens);
+        if ($parsed['arguments'] !== []) {
+            throw new InvalidArgumentException('finding-id takes no arguments');
+        }
+
+        $this->write((new RecordIdGenerator())->generate('finding') . "\n");
+
+        return 0;
+    }
+
+    /**
      * @param list<string> $tokens
      */
     private function findingTransitionCommand(array $tokens): int
@@ -726,6 +753,7 @@ final class Cli
             . "  history-rebuild      Explicitly write compact active-guidance and chronicle projections.\n"
             . "  history-status       Fail when compact history projections are missing, corrupt, or stale.\n"
             . "  backlog              List validated findings not yet consolidated; exits non-zero while any remain.\n"
+            . "  finding-id           Allocate a collision-resistant finding ID.\n"
             . "  finding-transition   Transition a finding to a new state.\n"
             . "  proposal-approve     Approve a candidate proposal.\n"
             . "  proposal-reject      Reject a candidate proposal.\n"
