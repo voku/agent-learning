@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-08-14
+
+### Changed
+
+- `dream` text output now prints selected-versus-judged guidance outcome
+  completeness and warns with the exact selections still missing a judgement.
+  Placeholder `unknown` rows therefore cannot make a human-facing report look
+  complete merely because every selected item has a draft row.
+
+### Validation
+
+- PHP 8.3/8.4/8.5 CI is green on the merged change, including the deterministic
+  Dream report regression for one judged selection out of two selected items.
+
+
 ## [0.11.0] - 2026-08-14
 
 ### Added
