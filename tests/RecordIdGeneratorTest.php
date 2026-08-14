@@ -29,21 +29,44 @@ final class RecordIdGeneratorTest extends TestCase
         self::assertMatchesRegularExpression(RecordIdGenerator::pattern('finding'), $id);
     }
 
-    public function testTwoIndependentAllocatorsDoNotCollide(): void
+    public function testTheSuffixIsTakenFromTheEntropySourceAndNotFromNeighbouringFiles(): void
+    {
+        // The point of the change: the suffix comes from entropy, so an
+        // allocator cannot be influenced by - or agree with - what another
+        // branch happens to have written. Asserted against a stub rather than
+        // by drawing real randomness, because sampling `random_bytes` a
+        // thousand times and demanding no repeat fails about once in
+        // thirty-four runs and would measure the platform, not this class.
+        $generator = new RecordIdGenerator(static fn (int $bytes): string => str_repeat("\x0a", $bytes));
+
+        self::assertSame(
+            'finding.2026-08-14.0a0a0a',
+            $generator->generate('finding', new DateTimeImmutable('2026-08-14 10:00:00')),
+        );
+    }
+
+    public function testTwoIndependentAllocatorsDoNotAgree(): void
     {
         // Two generators standing in for two branches: neither can see the
         // other's output, which is exactly the condition the old scheme failed.
-        $branchA = new RecordIdGenerator();
-        $branchB = new RecordIdGenerator();
+        // One pair, so the assertion is not a sampling experiment.
         $date = new DateTimeImmutable('2026-08-14 10:00:00');
 
-        $ids = [];
-        for ($i = 0; $i < 500; ++$i) {
-            $ids[] = $branchA->generate('finding', $date);
-            $ids[] = $branchB->generate('finding', $date);
-        }
+        self::assertNotSame(
+            (new RecordIdGenerator())->generate('finding', $date),
+            (new RecordIdGenerator())->generate('finding', $date),
+        );
+    }
 
-        self::assertCount(1000, array_unique($ids), 'Allocated IDs collided within a single day.');
+    public function testTheSuffixCarriesTheDeclaredEntropy(): void
+    {
+        $id = (new RecordIdGenerator())->generate('finding', new DateTimeImmutable('2026-08-14 10:00:00'));
+        $suffix = substr($id, strrpos($id, '.') + 1);
+
+        // Six hex characters: 16.7 million values per day. Shrinking this
+        // silently would reintroduce the collision the class exists to remove.
+        self::assertSame(6, strlen($suffix));
+        self::assertMatchesRegularExpression('/^[0-9a-f]{6}$/', $suffix);
     }
 
     public function testLegacySequentialIdsRemainValid(): void

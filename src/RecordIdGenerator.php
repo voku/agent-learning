@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning;
 
+use Closure;
 use DateTimeImmutable;
+use InvalidArgumentException;
 
 /**
  * Allocates `<kind>.YYYY-MM-DD.<suffix>` record IDs that survive parallel branches.
@@ -31,16 +33,32 @@ final readonly class RecordIdGenerator
     /** Bytes of entropy in the suffix; two hex characters each. */
     private const int SUFFIX_BYTES = 3;
 
+    private Closure $entropy;
+
+    /**
+     * @param null|Closure(int): string $entropy random source.
+     *
+     * Injectable so a test can assert what this class does with entropy
+     * instead of sampling it. Drawing a thousand real suffixes and asserting
+     * they are all distinct fails roughly once every thirty-four runs, which
+     * measures `random_bytes` rather than this code and calls the result a
+     * regression.
+     */
+    public function __construct(?Closure $entropy = null)
+    {
+        $this->entropy = $entropy ?? random_bytes(...);
+    }
+
     public function generate(string $kind, ?DateTimeImmutable $date = null): string
     {
         $kind = trim($kind);
         if ($kind === '') {
-            throw new \InvalidArgumentException('Record kind must not be empty.');
+            throw new InvalidArgumentException('Record kind must not be empty.');
         }
 
         return $kind
             . '.' . ($date ?? new DateTimeImmutable('now'))->format('Y-m-d')
-            . '.' . bin2hex(random_bytes(self::SUFFIX_BYTES));
+            . '.' . bin2hex(($this->entropy)(self::SUFFIX_BYTES));
     }
 
     /**
