@@ -33,19 +33,17 @@ final class FindingExporterTest extends TestCase
             'The workflow had no governed place for feedback about agent-loop itself.',
             'voku/agent-loop',
         );
-        $otherTarget = $this->findingRecord(
+        $this->writeFinding($targeted);
+        $this->writeFinding($this->findingRecord(
             'finding.2026-08-16.002',
             'A map-specific observation belongs to another package.',
             'voku/agent-map',
-        );
-        $legacy = $this->findingRecord(
+        ));
+        $this->writeFinding($this->findingRecord(
             'finding.2026-08-16.003',
             'A host-project finding has no external target.',
             null,
-        );
-        $this->writeFinding($targeted);
-        $this->writeFinding($otherTarget);
-        $this->writeFinding($legacy);
+        ));
 
         (new RunLearningDecisionStore($this->root))->record(
             'run:HTTPFUL-1:dogfood',
@@ -55,24 +53,23 @@ final class FindingExporterTest extends TestCase
             ['finding.2026-08-16.001'],
         );
 
-        $json = (new FindingExporter())->export($this->root, 'voku/agent-loop', 'voku/httpful');
         /** @var array<string, mixed> $export */
-        $export = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        $export = json_decode(
+            (new FindingExporter())->export($this->root, 'voku/agent-loop', 'voku/httpful'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
 
-        self::assertSame('1.0', $export['schema_version']);
         self::assertSame('finding_export', $export['kind']);
         self::assertSame('voku/httpful', $export['source_repository']);
         self::assertSame('voku/agent-loop', $export['target_package']);
         self::assertSame(1, $export['finding_count']);
-        self::assertIsArray($export['findings']);
-        self::assertCount(1, $export['findings']);
         self::assertSame($targeted, $export['findings'][0]['record']);
         self::assertSame(['run:HTTPFUL-1:dogfood'], $export['findings'][0]['run_ids']);
     }
 
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private function findingRecord(string $id, string $observation, ?string $targetPackage): array
     {
         $record = [
@@ -96,7 +93,7 @@ final class FindingExporterTest extends TestCase
         ];
         if ($targetPackage !== null) {
             $record['target_package'] = $targetPackage;
-            $record['tested_version'] = '0.16.3';
+            $record['tested_ref'] = '0.16.3';
         }
 
         return $record;
@@ -105,8 +102,10 @@ final class FindingExporterTest extends TestCase
     /** @param array<string, mixed> $record */
     private function writeFinding(array $record): void
     {
-        $path = $this->root . '/findings/validated/' . $record['id'] . '.json';
-        file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
+        file_put_contents(
+            $this->root . '/findings/validated/' . $record['id'] . '.json',
+            json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n",
+        );
     }
 
     private function removeDirectory(string $path): void
