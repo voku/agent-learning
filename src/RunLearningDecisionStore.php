@@ -113,6 +113,57 @@ final class RunLearningDecisionStore
         return $this->decode($contents, $path, $runId);
     }
 
+    /**
+     * Resolve existing Run lineage without copying run_id into Finding records.
+     * Current and archived decisions are both evidence of a truthful historical
+     * relation; duplicate Run IDs are collapsed deterministically.
+     *
+     * @param list<string> $findingIds
+     * @return array<string, list<string>>
+     */
+    public function runIdsByFindingIds(array $findingIds): array
+    {
+        $findingIds = $this->normalizeFindingIds($findingIds);
+        if ($findingIds === []) {
+            return [];
+        }
+
+        /** @var array<string, array<string, true>> $runIdsByFindingId */
+        $runIdsByFindingId = [];
+        foreach ($findingIds as $findingId) {
+            $runIdsByFindingId[$findingId] = [];
+        }
+
+        $directory = rtrim($this->rootPath, '/') . '/history/run-learning';
+        $paths = array_merge(
+            glob($directory . '/*.json') ?: [],
+            glob($directory . '/archive/*/*.json') ?: [],
+        );
+        sort($paths, SORT_STRING);
+
+        foreach ($paths as $path) {
+            $contents = file_get_contents($path);
+            if (!is_string($contents)) {
+                throw new RuntimeException('Unable to read run learning decision: ' . $path);
+            }
+            $decision = $this->decode($contents, $path, null);
+            foreach ($decision->findingIds as $findingId) {
+                if (isset($runIdsByFindingId[$findingId])) {
+                    $runIdsByFindingId[$findingId][$decision->runId] = true;
+                }
+            }
+        }
+
+        $result = [];
+        foreach ($runIdsByFindingId as $findingId => $runIds) {
+            $ids = array_keys($runIds);
+            sort($ids, SORT_STRING);
+            $result[$findingId] = $ids;
+        }
+
+        return $result;
+    }
+
     public function path(string $runId): string
     {
         $runId = $this->nonEmpty($runId, 'run_id');
@@ -152,7 +203,7 @@ final class RunLearningDecisionStore
         }
     }
 
-    private function decode(string $json, string $path, string $expectedRunId): RunLearningDecision
+    private function decode(string $json, string $path, ?string $expectedRunId): RunLearningDecision
     {
         try {
             $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
@@ -164,7 +215,7 @@ final class RunLearningDecisionStore
         }
 
         $runId = $this->requiredString($data, 'run_id', $path);
-        if ($runId !== $expectedRunId) {
+        if ($expectedRunId !== null && $runId !== $expectedRunId) {
             throw new RuntimeException('Run learning decision belongs to another run: ' . $path);
         }
         $decisionValue = $this->requiredString($data, 'decision', $path);
