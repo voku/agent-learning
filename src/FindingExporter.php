@@ -21,7 +21,7 @@ final readonly class FindingExporter
             throw new ValidationException($root, null, null, 'source repository must be non-empty');
         }
 
-        $findings = (new FindingRepository())->loadValidated($root);
+        $findings = $this->findingRepository->loadValidated($root);
         ksort($findings, SORT_STRING);
         $selected = array_filter(
             $findings,
