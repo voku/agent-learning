@@ -19,12 +19,19 @@ final class FindingValidator
      */
     private const array VALIDATION_STATUS = ['unverified', 'validated', 'invalidated'];
 
+    private const string TARGET_PACKAGE_PATTERN = '/^[a-z0-9](?:[a-z0-9_.-]*[a-z0-9])?\/[a-z0-9](?:[a-z0-9_.-]*[a-z0-9])?$/';
+
     public function __construct(
         private readonly FindingParser $parser = new FindingParser(),
         private readonly EvidenceValidator $evidenceValidator = new EvidenceValidator(),
         private readonly RedactionGuard $redactionGuard = new RedactionGuard(),
         private readonly string $taskIdPattern = '/^(?:[A-Z][A-Z0-9_-]*-\d+|TODO@[\w:\/.-]+)$/',
     ) {
+    }
+
+    public static function isValidTargetPackage(string $package): bool
+    {
+        return preg_match(self::TARGET_PACKAGE_PATTERN, $package) === 1;
     }
 
     public function validateFile(string $path): Finding
@@ -70,9 +77,27 @@ final class FindingValidator
             throw new ValidationException($file, $line, $finding->id, 'hypothesis presented as validated fact');
         }
 
+        $this->assertExternalTarget($finding, $file, $line);
         $this->assertLearningTriage($finding, $file, $line);
         $this->assertLineageReferences($finding->id, $finding->raw, $file, $line);
         $this->evidenceValidator->validate($finding->evidence, $file, $line, $finding->id);
+    }
+
+    private function assertExternalTarget(Finding $finding, string $file, ?int $line): void
+    {
+        if ($finding->targetPackage === null) {
+            if ($finding->testedRef !== null) {
+                throw new ValidationException($file, $line, $finding->id, 'tested_ref requires target_package');
+            }
+
+            return;
+        }
+        if (!self::isValidTargetPackage($finding->targetPackage)) {
+            throw new ValidationException($file, $line, $finding->id, 'target_package must be a lowercase vendor/package identity');
+        }
+        if ($finding->testedRef !== null && trim($finding->testedRef) === '') {
+            throw new ValidationException($file, $line, $finding->id, 'tested_ref must be non-empty when present');
+        }
     }
 
     private function assertLearningTriage(Finding $finding, string $file, ?int $line): void

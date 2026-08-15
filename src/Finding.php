@@ -30,6 +30,8 @@ final readonly class Finding
         public ?LearningClassification $classification = null,
         public ?string $patternKey = null,
         public ?ValidationCase $validationCase = null,
+        public ?string $targetPackage = null,
+        public ?string $testedRef = null,
     ) {
     }
 }
