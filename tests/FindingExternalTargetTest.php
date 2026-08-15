@@ -16,8 +16,7 @@ final class FindingExternalTargetTest extends TestCase
         $finding = (new FindingParser())->parseRecord($this->record(), 'finding.json');
 
         self::assertNull($finding->targetPackage);
-        self::assertNull($finding->testedVersion);
-        self::assertNull($finding->testedCommit);
+        self::assertNull($finding->testedRef);
         (new FindingValidator())->validate($finding, 'finding.json');
     }
 
@@ -25,24 +24,22 @@ final class FindingExternalTargetTest extends TestCase
     {
         $record = $this->record();
         $record['target_package'] = 'voku/agent-loop';
-        $record['tested_version'] = '0.16.3';
-        $record['tested_commit'] = '629fd126a0cb6e1933c2bd6cf2825423a568caa0';
+        $record['tested_ref'] = '0.16.3';
         $finding = (new FindingParser())->parseRecord($record, 'finding.json');
 
         self::assertSame('voku/agent-loop', $finding->targetPackage);
-        self::assertSame('0.16.3', $finding->testedVersion);
-        self::assertSame('629fd126a0cb6e1933c2bd6cf2825423a568caa0', $finding->testedCommit);
+        self::assertSame('0.16.3', $finding->testedRef);
         (new FindingValidator())->validate($finding, 'finding.json');
     }
 
-    public function testTestedIdentityCannotExistWithoutTargetPackage(): void
+    public function testTestedRefCannotExistWithoutTargetPackage(): void
     {
         $record = $this->record();
-        $record['tested_version'] = '0.16.3';
+        $record['tested_ref'] = '0.16.3';
         $finding = (new FindingParser())->parseRecord($record, 'finding.json');
 
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('require target_package');
+        $this->expectExceptionMessage('tested_ref requires target_package');
         (new FindingValidator())->validate($finding, 'finding.json');
     }
 
@@ -54,18 +51,6 @@ final class FindingExternalTargetTest extends TestCase
 
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('lowercase vendor/package');
-        (new FindingValidator())->validate($finding, 'finding.json');
-    }
-
-    public function testMalformedTestedCommitFailsValidation(): void
-    {
-        $record = $this->record();
-        $record['target_package'] = 'voku/agent-loop';
-        $record['tested_commit'] = 'not-a-commit';
-        $finding = (new FindingParser())->parseRecord($record, 'finding.json');
-
-        $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('Git commit hash');
         (new FindingValidator())->validate($finding, 'finding.json');
     }
 
