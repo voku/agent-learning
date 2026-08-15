@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning;
 
-final readonly class FindingExporter
+final class FindingExporter
 {
-    public function __construct(private FindingRepository $findingRepository = new FindingRepository())
-    {
-    }
-
     public function export(string $root, string $targetPackage, string $sourceRepository): string
     {
         $targetPackage = trim($targetPackage);
@@ -21,13 +17,26 @@ final readonly class FindingExporter
             throw new ValidationException($root, null, null, 'source repository must be non-empty');
         }
 
-        $findings = $this->findingRepository->loadValidated($root);
+        $findings = (new FindingRepository())->loadValidated($root);
         ksort($findings, SORT_STRING);
         $selected = array_filter(
             $findings,
             static fn (Finding $finding): bool => $finding->targetPackage === $targetPackage,
         );
-        $runIdsByFindingId = (new RunLearningDecisionStore($root))->runIdsByFindingIds(array_keys($selected));
+
+        /** @var array<string, list<string>> $runIdsByFindingId */
+        $runIdsByFindingId = array_fill_keys(array_keys($selected), []);
+        foreach ((new RunLearningDecisionStore($root))->all() as $decision) {
+            foreach ($decision->findingIds as $findingId) {
+                if (array_key_exists($findingId, $runIdsByFindingId)) {
+                    $runIdsByFindingId[$findingId][] = $decision->runId;
+                }
+            }
+        }
+        foreach ($runIdsByFindingId as &$runIds) {
+            sort($runIds, SORT_STRING);
+        }
+        unset($runIds);
 
         $records = [];
         foreach ($selected as $finding) {
