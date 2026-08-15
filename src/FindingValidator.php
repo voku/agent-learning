@@ -86,8 +86,8 @@ final class FindingValidator
     private function assertExternalTarget(Finding $finding, string $file, ?int $line): void
     {
         if ($finding->targetPackage === null) {
-            if ($finding->testedVersion !== null || $finding->testedCommit !== null) {
-                throw new ValidationException($file, $line, $finding->id, 'tested_version/tested_commit require target_package');
+            if ($finding->testedRef !== null) {
+                throw new ValidationException($file, $line, $finding->id, 'tested_ref requires target_package');
             }
 
             return;
@@ -95,11 +95,8 @@ final class FindingValidator
         if (!self::isValidTargetPackage($finding->targetPackage)) {
             throw new ValidationException($file, $line, $finding->id, 'target_package must be a lowercase vendor/package identity');
         }
-        if ($finding->testedVersion !== null && trim($finding->testedVersion) === '') {
-            throw new ValidationException($file, $line, $finding->id, 'tested_version must be non-empty when present');
-        }
-        if ($finding->testedCommit !== null && preg_match('/^[a-f0-9]{7,40}$/', $finding->testedCommit) !== 1) {
-            throw new ValidationException($file, $line, $finding->id, 'tested_commit must be a 7-40 character lowercase Git commit hash');
+        if ($finding->testedRef !== null && trim($finding->testedRef) === '') {
+            throw new ValidationException($file, $line, $finding->id, 'tested_ref must be non-empty when present');
         }
     }
 
