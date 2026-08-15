@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-15
+
+### Changed
+
+- **Breaking:** a governed Run Learning decision may bind to the exact Contract
+  revision, implementation snapshot, validation evidence digest, and review
+  evidence digest it describes. A later complete evidence boundary for the
+  same Run can replace the stale close-out instead of leaving old Learning
+  authoritative forever.
+- The four evidence-binding fields are all-or-none and remain opaque to
+  `agent-learning`; repository snapshot semantics stay owned by the workflow
+  orchestrator.
+
 ## [0.11.1] - 2026-08-14
 
 ### Changed
@@ -190,14 +203,13 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
   already declined. `GuidanceCandidateProposalWriter::findExistingCandidate()`
   only scanned `proposals/candidate/`, so once a candidate was rejected (and
   therefore moved to `proposals/rejected/`) the next run no longer saw it and
-  wrote an identical decision under a fresh proposal ID. Reproduced downstream
-  in a downstream repository: rejecting five auto-generated candidates and re-running the
-  command immediately recreated all five. The lookup now also scans
-  `proposals/rejected/` and `proposals/acknowledged/`, so a terminal human
-  decision suppresses regeneration of the same
-  guidance_id + decision_type + source_tier + target_tier combination.
-  `approved`/`applied` are deliberately not included: those describe a change
-  that landed, not a decision to stop proposing.
+  wrote an identical decision under a fresh proposal ID. Rejecting five
+  auto-generated candidates and re-running the command immediately recreated
+  all five. The lookup now also scans `proposals/rejected/` and
+  `proposals/acknowledged/`, so a terminal human decision suppresses
+  regeneration of the same guidance_id + decision_type + source_tier +
+  target_tier combination. `approved`/`applied` are deliberately not included:
+  those describe a change that landed, not a decision to stop proposing.
 
 ## [0.8.6] - 2026-07-28
 
@@ -208,9 +220,9 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
   offered only `phpstan`, `php_cs_fixer`, `test`, and `ci`, and `php_cs_fixer`
   is a different tool (php-cs-fixer) with a different rule location and command,
   so reusing it would have mislabeled the constraint. Discovered downstream in
-  a downstream repository, where a `*_UnitCest.php` constraint had to be a phpcs sniff because
-  `phpstan.neon` excludes `*Cest.php` from analysis entirely, making an
-  equivalent PHPStan rule unable to ever fire. `ConstraintPromotionValidator`
+  a downstream repository, where a `*_UnitCest.php` constraint had to be a phpcs
+  sniff because `phpstan.neon` excludes `*Cest.php` from analysis entirely,
+  making an equivalent PHPStan rule unable to ever fire. `ConstraintPromotionValidator`
   now applies the matching symmetry checks for the new engine: a `phpcs`
   constraint requires a phpcs/codesniffer validation command and a
   `target_rule_path` pointing at a `/Sniffs/` location.
@@ -372,7 +384,6 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 - Add `ValidationCase` support so findings, consolidation results, and proposals can carry concrete `given` / `when` / `then` behavior checks.
 - Add optional `classification`, `pattern_key`, and `validation_case` fields to findings.
 - Add optional `learning_decision`, `pattern_key`, `validation_case`, and `overlap_check` fields to consolidation results and proposals.
-- Add validation coverage for learning-note defaults, CREATE_SKILL overlap gates, pattern-key format, and validation-case requirements.
 
 ### Changed
 
@@ -449,4 +460,3 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 - Initial CLI for validating findings, proposals, and decision history.
 - Initial consolidation prompt generation for one task selector.
 - Finding, proposal, evidence, JSONL, redaction, and path validation primitives.
-- Composer binary entrypoint `agent-learning`.
