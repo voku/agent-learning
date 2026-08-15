@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-16
+
+### Added
+
+- Findings can optionally identify an external Composer package with
+  `target_package` and the tested package identity with `tested_ref`, allowing
+  host repositories to keep dogfood friction in the normal validated Finding
+  lifecycle instead of a parallel feedback document.
+- `FindingExporter` emits deterministic, read-only JSON for one exact target
+  package. It preserves the raw Finding record and projects current source Run
+  IDs through the existing `RunLearningDecision.finding_ids` relation rather
+  than copying `run_id` onto Findings.
+
+### Validation
+
+- Existing Findings without an external target remain valid unchanged.
+- PHP 8.3 and 8.4 CI is green, including PHPUnit and PHPStan level 8 over
+  `src` and `tests`.
+
 ## [0.12.0] - 2026-08-15
 
 ### Changed
