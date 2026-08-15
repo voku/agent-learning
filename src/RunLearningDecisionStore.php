@@ -58,12 +58,25 @@ final class RunLearningDecisionStore
             if ($sameBinding && $sameDecision) {
                 return $existing;
             }
+            if (
+                $existing->contractRevision !== null
+                && $contractRevision !== null
+                && $existing->contractRevision !== $contractRevision
+            ) {
+                throw new RuntimeException(
+                    'Run ' . $runId . ' cannot move its durable learning decision from Contract revision '
+                    . $existing->contractRevision . ' to revision ' . $contractRevision . '.',
+                );
+            }
             if ($sameBinding || $contractRevision === null) {
                 throw new RuntimeException('Run ' . $runId . ' already has a different durable learning decision.');
             }
-            // A changed complete evidence boundary makes the previous close-out stale.
-            // Replace the current Run conclusion rather than inventing a second
-            // lifecycle or leaving the Run permanently unable to recover.
+
+            // A changed complete evidence boundary makes the previous conclusion
+            // stale. Preserve it as immutable run lineage before replacing the
+            // current conclusion; changing implementation must not erase what was
+            // truthfully decided for the prior snapshot.
+            $this->archive($existing);
         }
 
         $record = new RunLearningDecision(
@@ -118,6 +131,24 @@ final class RunLearningDecisionStore
         if (file_put_contents($tmp, $json) === false || !rename($tmp, $record->path)) {
             @unlink($tmp);
             throw new RuntimeException('Unable to persist run learning decision: ' . $record->path);
+        }
+    }
+
+    private function archive(RunLearningDecision $record): void
+    {
+        $json = json_encode($record->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
+        $directory = dirname($record->path) . '/archive/' . hash('sha256', $record->runId);
+        if (!is_dir($directory) && !mkdir($directory, 0o775, true) && !is_dir($directory)) {
+            throw new RuntimeException('Unable to create run learning archive directory: ' . $directory);
+        }
+        $path = $directory . '/' . hash('sha256', $json) . '.json';
+        if (is_file($path)) {
+            return;
+        }
+        $tmp = $path . '.tmp.' . bin2hex(random_bytes(6));
+        if (file_put_contents($tmp, $json) === false || !rename($tmp, $path)) {
+            @unlink($tmp);
+            throw new RuntimeException('Unable to archive stale run learning decision: ' . $path);
         }
     }
 
