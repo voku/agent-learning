@@ -58,8 +58,7 @@ final class FindingParser
             $this->recordAccess->optionalString($record, 'pattern_key', $file, $line, $recordId),
             ValidationCase::fromOptionalRecord($record, 'validation_case', $file, $line, $recordId),
             $this->recordAccess->optionalString($record, 'target_package', $file, $line, $recordId),
-            $this->recordAccess->optionalString($record, 'tested_version', $file, $line, $recordId),
-            $this->recordAccess->optionalString($record, 'tested_commit', $file, $line, $recordId),
+            $this->recordAccess->optionalString($record, 'tested_ref', $file, $line, $recordId),
         );
     }
 }
