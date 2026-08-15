@@ -4,52 +4,8 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning;
 
-use Throwable;
-
 final class FindingExporter
 {
-    /** @param list<string> $tokens */
-    public function run(array $tokens): int
-    {
-        try {
-            $options = [];
-            for ($index = 0, $count = count($tokens); $index < $count; ++$index) {
-                $token = $tokens[$index];
-                if (!str_starts_with($token, '--')) {
-                    throw new ValidationException('', null, null, 'finding-export accepts options only');
-                }
-                $option = substr($token, 2);
-                $equals = strpos($option, '=');
-                if ($equals !== false) {
-                    $name = substr($option, 0, $equals);
-                    $value = substr($option, $equals + 1);
-                } else {
-                    $name = $option;
-                    $value = $tokens[++$index] ?? '';
-                }
-                if (!in_array($name, ['root', 'target-package', 'source-repository'], true) || $value === '' || str_starts_with($value, '--')) {
-                    throw new ValidationException('', null, null, 'invalid finding-export option: --' . $name);
-                }
-                $options[$name] = $value;
-            }
-
-            $root = (new PathResolver())->resolve($options['root'] ?? null);
-            $targetPackage = $options['target-package'] ?? null;
-            $sourceRepository = $options['source-repository'] ?? null;
-            if (!is_string($targetPackage) || !is_string($sourceRepository)) {
-                throw new ValidationException($root, null, null, 'finding-export requires --target-package and --source-repository');
-            }
-
-            echo $this->export($root, $targetPackage, $sourceRepository);
-
-            return 0;
-        } catch (Throwable $throwable) {
-            fwrite(STDERR, $throwable->getMessage() . "\n");
-
-            return 1;
-        }
-    }
-
     public function export(string $root, string $targetPackage, string $sourceRepository): string
     {
         $targetPackage = trim($targetPackage);
