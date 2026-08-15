@@ -113,55 +113,22 @@ final class RunLearningDecisionStore
         return $this->decode($contents, $path, $runId);
     }
 
-    /**
-     * Resolve existing Run lineage without copying run_id into Finding records.
-     * Current and archived decisions are both evidence of a truthful historical
-     * relation; duplicate Run IDs are collapsed deterministically.
-     *
-     * @param list<string> $findingIds
-     * @return array<string, list<string>>
-     */
-    public function runIdsByFindingIds(array $findingIds): array
+    /** @return list<RunLearningDecision> */
+    public function all(): array
     {
-        $findingIds = $this->normalizeFindingIds($findingIds);
-        if ($findingIds === []) {
-            return [];
-        }
-
-        /** @var array<string, array<string, true>> $runIdsByFindingId */
-        $runIdsByFindingId = [];
-        foreach ($findingIds as $findingId) {
-            $runIdsByFindingId[$findingId] = [];
-        }
-
-        $directory = rtrim($this->rootPath, '/') . '/history/run-learning';
-        $paths = array_merge(
-            glob($directory . '/*.json') ?: [],
-            glob($directory . '/archive/*/*.json') ?: [],
-        );
+        $paths = glob(rtrim($this->rootPath, '/') . '/history/run-learning/*.json') ?: [];
         sort($paths, SORT_STRING);
 
+        $records = [];
         foreach ($paths as $path) {
             $contents = file_get_contents($path);
             if (!is_string($contents)) {
                 throw new RuntimeException('Unable to read run learning decision: ' . $path);
             }
-            $decision = $this->decode($contents, $path, null);
-            foreach ($decision->findingIds as $findingId) {
-                if (isset($runIdsByFindingId[$findingId])) {
-                    $runIdsByFindingId[$findingId][$decision->runId] = true;
-                }
-            }
+            $records[] = $this->decode($contents, $path, null);
         }
 
-        $result = [];
-        foreach ($runIdsByFindingId as $findingId => $runIds) {
-            $ids = array_keys($runIds);
-            sort($ids, SORT_STRING);
-            $result[$findingId] = $ids;
-        }
-
-        return $result;
+        return $records;
     }
 
     public function path(string $runId): string
