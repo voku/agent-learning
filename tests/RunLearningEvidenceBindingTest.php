@@ -7,6 +7,7 @@ namespace voku\AgentLearning\Tests;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use RuntimeException;
 use voku\AgentLearning\RunLearningDecisionStatus;
 use voku\AgentLearning\RunLearningDecisionStore;
 
@@ -58,14 +59,15 @@ final class RunLearningEvidenceBindingTest extends TestCase
         self::assertSame($review, $decision->reviewEvidenceSha256);
     }
 
-    public function testLaterImplementationSnapshotCanReplaceAStaleLearningConclusionForTheSameRun(): void
+    public function testLaterImplementationSnapshotCanReplaceCurrentConclusionWithoutErasingPriorLineage(): void
     {
         $store = new RunLearningDecisionStore($this->root);
+        $runId = 'run:LOOP-132:deadbeef';
         $validation = 'sha256:' . str_repeat('b', 64);
         $review = 'sha256:' . str_repeat('c', 64);
 
-        $store->record(
-            'run:LOOP-132:deadbeef',
+        $previous = $store->record(
+            $runId,
             RunLearningDecisionStatus::NO_DURABLE_LEARNING,
             'dogfood',
             'Decision for implementation A.',
@@ -75,7 +77,7 @@ final class RunLearningEvidenceBindingTest extends TestCase
             reviewEvidenceSha256: $review,
         );
         $current = $store->record(
-            'run:LOOP-132:deadbeef',
+            $runId,
             RunLearningDecisionStatus::NO_DURABLE_LEARNING,
             'dogfood',
             'Decision for implementation B.',
@@ -87,6 +89,45 @@ final class RunLearningEvidenceBindingTest extends TestCase
 
         self::assertSame('sha256:' . str_repeat('d', 64), $current->implementationSnapshot);
         self::assertSame('Decision for implementation B.', $current->reason);
-        self::assertSame($current->toArray(), $store->find('run:LOOP-132:deadbeef')?->toArray());
+        self::assertSame($current->toArray(), $store->find($runId)?->toArray());
+
+        $archive = glob(
+            $this->root . '/history/run-learning/archive/' . hash('sha256', $runId) . '/*.json',
+        ) ?: [];
+        self::assertCount(1, $archive);
+        $archived = json_decode((string) file_get_contents($archive[0]), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame($previous->toArray(), $archived);
+    }
+
+    public function testRunCannotMoveItsLearningConclusionToAnotherContractRevision(): void
+    {
+        $store = new RunLearningDecisionStore($this->root);
+        $runId = 'run:LOOP-132:deadbeef';
+        $validation = 'sha256:' . str_repeat('b', 64);
+        $review = 'sha256:' . str_repeat('c', 64);
+
+        $store->record(
+            $runId,
+            RunLearningDecisionStatus::NO_DURABLE_LEARNING,
+            'dogfood',
+            'Decision for Contract revision 3.',
+            contractRevision: 3,
+            implementationSnapshot: 'sha256:' . str_repeat('a', 64),
+            validationEvidenceSha256: $validation,
+            reviewEvidenceSha256: $review,
+        );
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('cannot move its durable learning decision from Contract revision 3 to revision 4');
+        $store->record(
+            $runId,
+            RunLearningDecisionStatus::NO_DURABLE_LEARNING,
+            'dogfood',
+            'Wrongly rebound decision.',
+            contractRevision: 4,
+            implementationSnapshot: 'sha256:' . str_repeat('d', 64),
+            validationEvidenceSha256: $validation,
+            reviewEvidenceSha256: $review,
+        );
     }
 }
