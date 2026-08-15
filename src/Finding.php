@@ -31,8 +31,7 @@ final readonly class Finding
         public ?string $patternKey = null,
         public ?ValidationCase $validationCase = null,
         public ?string $targetPackage = null,
-        public ?string $testedVersion = null,
-        public ?string $testedCommit = null,
+        public ?string $testedRef = null,
     ) {
     }
 }
