@@ -53,7 +53,15 @@ final class FindingExporterTest extends TestCase
             ['finding.2026-08-16.001'],
         );
 
-        /** @var array<string, mixed> $export */
+        /**
+         * @var array{
+         *   kind: string,
+         *   source_repository: string,
+         *   target_package: string,
+         *   finding_count: int,
+         *   findings: non-empty-list<array{record: array<string, mixed>, run_ids: list<string>}>
+         * } $export
+         */
         $export = json_decode(
             (new FindingExporter())->export($this->root, 'voku/agent-loop', 'voku/httpful'),
             true,
@@ -102,8 +110,10 @@ final class FindingExporterTest extends TestCase
     /** @param array<string, mixed> $record */
     private function writeFinding(array $record): void
     {
+        $id = $record['id'] ?? null;
+        self::assertIsString($id);
         file_put_contents(
-            $this->root . '/findings/validated/' . $record['id'] . '.json',
+            $this->root . '/findings/validated/' . $id . '.json',
             json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n",
         );
     }
