@@ -18,6 +18,10 @@ final readonly class RunLearningDecision
         public array $findingIds,
         public ?string $followUpRef,
         public string $path,
+        public ?int $contractRevision = null,
+        public ?string $implementationSnapshot = null,
+        public ?string $validationEvidenceSha256 = null,
+        public ?string $reviewEvidenceSha256 = null,
     ) {
     }
 
@@ -34,6 +38,10 @@ final readonly class RunLearningDecision
             'reason' => $this->reason,
             'finding_ids' => $this->findingIds,
             'follow_up_ref' => $this->followUpRef,
+            'contract_revision' => $this->contractRevision,
+            'implementation_snapshot' => $this->implementationSnapshot,
+            'validation_evidence_sha256' => $this->validationEvidenceSha256,
+            'review_evidence_sha256' => $this->reviewEvidenceSha256,
         ];
     }
 }
