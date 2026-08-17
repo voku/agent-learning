@@ -127,7 +127,7 @@ final readonly class FindingCreator
             throw $exception;
         }
 
-        if (file_exists($path) || is_link($path)) {
+        if (lstat($path) !== false) {
             $exception = new ValidationException($path, null, $id, 'finding file already exists');
             $this->removeTemporaryFile($temporaryPath, $id, $exception);
 
@@ -135,7 +135,7 @@ final readonly class FindingCreator
         }
 
         if (!link($temporaryPath, $path)) {
-            $reason = file_exists($path) || is_link($path)
+            $reason = lstat($path) !== false
                 ? 'finding file already exists'
                 : 'cannot atomically publish finding file';
             $exception = new ValidationException($path, null, $id, $reason);
