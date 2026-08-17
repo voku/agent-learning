@@ -74,39 +74,7 @@ final readonly class FindingCreator
             $finding->raw,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         ) . "\n";
-        $handle = fopen($path, 'xb');
-        if ($handle === false) {
-            throw new ValidationException($path, null, $finding->id, 'finding file already exists or cannot be created');
-        }
-
-        try {
-            $offset = 0;
-            $length = strlen($encoded);
-            while ($offset < $length) {
-                $written = fwrite($handle, substr($encoded, $offset));
-                if ($written === false || $written === 0) {
-                    throw new ValidationException($path, null, $finding->id, 'cannot write finding file');
-                }
-                $offset += $written;
-            }
-            if (!fflush($handle)) {
-                throw new ValidationException($path, null, $finding->id, 'cannot flush finding file');
-            }
-        } catch (Throwable $throwable) {
-            fclose($handle);
-            if (is_file($path)) {
-                unlink($path);
-            }
-
-            throw $throwable;
-        }
-
-        if (!fclose($handle)) {
-            if (is_file($path)) {
-                unlink($path);
-            }
-            throw new ValidationException($path, null, $finding->id, 'cannot close finding file after write');
-        }
+        $this->publishAtomically($directory, $path, $encoded, $finding->id);
 
         return new FindingCreationResult($finding, $path);
     }
@@ -119,5 +87,80 @@ final readonly class FindingCreator
                 throw new ValidationException($path, null, $id, 'duplicate finding ID');
             }
         }
+    }
+
+    private function publishAtomically(string $directory, string $path, string $content, string $id): void
+    {
+        $temporaryPath = $directory . '/.' . basename($path) . '.tmp.' . bin2hex(random_bytes(8));
+        $handle = fopen($temporaryPath, 'xb');
+        if ($handle === false) {
+            throw new ValidationException($temporaryPath, null, $id, 'cannot create temporary finding file');
+        }
+
+        try {
+            $offset = 0;
+            $length = strlen($content);
+            while ($offset < $length) {
+                $written = fwrite($handle, substr($content, $offset));
+                if ($written === false || $written === 0) {
+                    throw new ValidationException($temporaryPath, null, $id, 'cannot write temporary finding file');
+                }
+                $offset += $written;
+            }
+            if (!fflush($handle)) {
+                throw new ValidationException($temporaryPath, null, $id, 'cannot flush temporary finding file');
+            }
+            if (!fsync($handle)) {
+                throw new ValidationException($temporaryPath, null, $id, 'cannot sync temporary finding file');
+            }
+        } catch (Throwable $throwable) {
+            fclose($handle);
+            $this->removeTemporaryFile($temporaryPath, $id, $throwable);
+
+            throw $throwable;
+        }
+
+        if (!fclose($handle)) {
+            $exception = new ValidationException($temporaryPath, null, $id, 'cannot close temporary finding file after write');
+            $this->removeTemporaryFile($temporaryPath, $id, $exception);
+
+            throw $exception;
+        }
+
+        if (file_exists($path) || is_link($path)) {
+            $exception = new ValidationException($path, null, $id, 'finding file already exists');
+            $this->removeTemporaryFile($temporaryPath, $id, $exception);
+
+            throw $exception;
+        }
+
+        if (!link($temporaryPath, $path)) {
+            $reason = file_exists($path) || is_link($path)
+                ? 'finding file already exists'
+                : 'cannot atomically publish finding file';
+            $exception = new ValidationException($path, null, $id, $reason);
+            $this->removeTemporaryFile($temporaryPath, $id, $exception);
+
+            throw $exception;
+        }
+
+        $this->removeTemporaryFile($temporaryPath, $id);
+    }
+
+    private function removeTemporaryFile(string $path, string $id, ?Throwable $cause = null): void
+    {
+        if (!is_file($path)) {
+            return;
+        }
+        if (unlink($path)) {
+            return;
+        }
+
+        $reason = 'cannot remove temporary finding file';
+        if ($cause !== null) {
+            $reason .= ' after failure: ' . $cause->getMessage();
+        }
+
+        throw new ValidationException($path, null, $id, $reason);
     }
 }
