@@ -40,6 +40,7 @@ final class Cli
                 'history-rebuild' => $this->historyRebuildCommand($tokens),
                 'history-status' => $this->historyStatusCommand($tokens),
                 'backlog' => $this->backlogCommand($tokens),
+                'finding-create' => $this->findingCreateCommand($tokens),
                 'finding-id' => $this->findingIdCommand($tokens),
                 'finding-transition' => $this->findingTransitionCommand($tokens),
                 'proposal-approve' => $this->proposalApproveCommand($tokens),
@@ -545,6 +546,76 @@ final class Cli
     }
 
     /**
+     * Create one schema-valid validated Finding through the package owner.
+     *
+     * @param list<string> $tokens
+     */
+    private function findingCreateCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        if ($parsed['arguments'] !== []) {
+            throw new ValidationException($root, null, null, 'finding-create takes no positional arguments');
+        }
+
+        $taskId = $this->stringOption($parsed['options'], 'task');
+        if ($taskId === null) {
+            throw new ValidationException($root, null, null, 'finding-create requires --task option');
+        }
+        $session = $this->stringOption($parsed['options'], 'session');
+        if ($session === null) {
+            throw new ValidationException($root, null, null, 'finding-create requires --session option');
+        }
+        $actor = $this->stringOption($parsed['options'], 'by');
+        if ($actor === null) {
+            throw new ValidationException($root, null, null, 'finding-create requires --by actor option');
+        }
+        $observation = $this->stringOption($parsed['options'], 'observation');
+        if ($observation === null) {
+            throw new ValidationException($root, null, null, 'finding-create requires --observation option');
+        }
+        $hypothesis = $this->stringOption($parsed['options'], 'hypothesis');
+        if ($hypothesis === null) {
+            throw new ValidationException($root, null, null, 'finding-create requires --hypothesis option');
+        }
+        $conclusion = $this->stringOption($parsed['options'], 'conclusion');
+        if ($conclusion === null) {
+            throw new ValidationException($root, null, null, 'finding-create requires --conclusion option');
+        }
+        $confidence = $this->stringOption($parsed['options'], 'confidence');
+        if ($confidence === null) {
+            throw new ValidationException($root, null, null, 'finding-create requires --confidence option');
+        }
+        $sensitivity = $this->stringOption($parsed['options'], 'sensitivity');
+        if ($sensitivity === null) {
+            throw new ValidationException($root, null, null, 'finding-create requires --sensitivity option');
+        }
+
+        $result = (new FindingCreator())->createValidated(
+            root: $root,
+            taskId: $taskId,
+            session: $session,
+            createdBy: $actor,
+            scope: $this->uniqueStrings($this->stringOptions($parsed['options'], 'scope')),
+            observation: $observation,
+            evidence: $this->findingEvidence($parsed['options'], $root),
+            hypothesis: $hypothesis,
+            validatedConclusion: $conclusion,
+            confidence: $confidence,
+            sensitivity: $sensitivity,
+            id: $this->stringOption($parsed['options'], 'id'),
+            taskIdPattern: $this->stringOption($parsed['options'], 'task-id-pattern'),
+        );
+
+        $this->write(json_encode(
+            ['id' => $result->finding->id, 'path' => $result->path],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+        ) . "\n");
+
+        return 0;
+    }
+
+    /**
      * Allocate a fresh finding ID.
      *
      * Findings never had an allocator: every writer read the directory it could
@@ -753,6 +824,7 @@ final class Cli
             . "  history-rebuild      Explicitly write compact active-guidance and chronicle projections.\n"
             . "  history-status       Fail when compact history projections are missing, corrupt, or stale.\n"
             . "  backlog              List validated findings not yet consolidated; exits non-zero while any remain.\n"
+            . "  finding-create       Create one validated Finding through the owner schema.\n"
             . "  finding-id           Allocate a collision-resistant finding ID.\n"
             . "  finding-transition   Transition a finding to a new state.\n"
             . "  proposal-approve     Approve a candidate proposal.\n"
@@ -764,9 +836,17 @@ final class Cli
             . "  --root PATH              Learning root or project root. Defaults to auto-discovery.\n"
             . "  --task-id-pattern REGEX  Override finding task id validation.\n"
             . "  --finding ID             Finding id selector for prepare. Repeatable.\n"
-            . "  --task ID                Task id selector for prepare. Repeatable.\n"
-            . "  --ticket ID              Alias for --task.\n"
-            . "  --scope PATH             Scope selector for prepare. Repeatable.\n"
+            . "  --id ID                  Optional explicit ID for finding-create.\n"
+            . "  --task ID                Task id for finding-create or selector for prepare. Repeatable.\n"
+            . "  --ticket ID              Alias for --task when selecting findings.\n"
+            . "  --session ID             Source session for finding-create.\n"
+            . "  --scope PATH             Finding scope or prepare selector. Repeatable.\n"
+            . "  --observation TEXT       Observed fact for finding-create.\n"
+            . "  --hypothesis TEXT        Inferred explanation for finding-create.\n"
+            . "  --conclusion TEXT        Validated conclusion for finding-create.\n"
+            . "  --confidence LEVEL       low, medium, or high for finding-create.\n"
+            . "  --sensitivity VALUE      Explicit sensitivity for finding-create.\n"
+            . "  --evidence-json JSON     Evidence object for finding-create. Repeatable.\n"
             . "  --guidance PATH          Path to an active guidance file. Repeatable.\n"
             . "  --since YYYY-MM-DD       Include findings created on or after this date.\n"
             . "  --until YYYY-MM-DD       Include findings created on or before this date.\n"
@@ -945,6 +1025,51 @@ final class Cli
         }
 
         return $values;
+    }
+
+    /**
+     * @param array<string, bool|string|list<string>> $options
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function findingEvidence(array $options, string $root): array
+    {
+        $evidence = [];
+        foreach ($this->stringOptions($options, 'evidence-json') as $index => $encoded) {
+            try {
+                $decoded = json_decode($encoded, true, 512, JSON_THROW_ON_ERROR);
+            } catch (\JsonException $exception) {
+                throw new ValidationException(
+                    $root,
+                    null,
+                    null,
+                    'finding-create --evidence-json #' . ($index + 1) . ' is malformed JSON: ' . $exception->getMessage(),
+                );
+            }
+            if (!is_array($decoded) || array_is_list($decoded)) {
+                throw new ValidationException(
+                    $root,
+                    null,
+                    null,
+                    'finding-create --evidence-json #' . ($index + 1) . ' must be a JSON object',
+                );
+            }
+            foreach (array_keys($decoded) as $key) {
+                if (!is_string($key)) {
+                    throw new ValidationException(
+                        $root,
+                        null,
+                        null,
+                        'finding-create --evidence-json #' . ($index + 1) . ' must use string object keys',
+                    );
+                }
+            }
+
+            /** @var array<string, mixed> $decoded */
+            $evidence[] = $decoded;
+        }
+
+        return $evidence;
     }
 
     /**
