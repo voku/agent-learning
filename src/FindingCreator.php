@@ -147,6 +147,9 @@ final readonly class FindingCreator
         $this->removeTemporaryFile($temporaryPath, $id);
     }
 
+    /**
+     * @phpstan-impure
+     */
     private function filesystemEntryExists(string $path): bool
     {
         clearstatcache(true, $path);
