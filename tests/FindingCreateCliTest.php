@@ -44,6 +44,7 @@ final class FindingCreateCliTest extends TestCase
         self::assertSame('The package owner must create validated Finding records.', $finding->validatedConclusion);
         self::assertSame(['src/', 'tests/'], $finding->scope);
         self::assertArrayHasKey($finding->id, (new FindingRepository())->loadValidated($root));
+        $this->assertNoTemporaryFindingFiles($root);
     }
 
     public function testInvalidFindingLeavesNoPartialTargetDirectory(): void
@@ -93,18 +94,7 @@ final class FindingCreateCliTest extends TestCase
     {
         $root = $this->createFreshLearningRoot();
         $id = 'finding.2026-08-17.abc123';
-        $arguments = [
-            '--id', $id,
-            '--task', 'PROJECT-27',
-            '--session', 'session_PROJECT-27',
-            '--by', 'agent',
-            '--observation', 'The first record must remain unchanged.',
-            '--hypothesis', 'Explicit IDs must never permit overwriting evidence.',
-            '--conclusion', 'Duplicate Finding IDs are rejected before publication.',
-            '--confidence', 'high',
-            '--sensitivity', 'public',
-            '--evidence-json', $this->evidenceJson(),
-        ];
+        $arguments = $this->validArguments($id);
 
         [$firstExitCode, $firstOutput] = $this->runFindingCreate($root, $arguments);
         self::assertSame(0, $firstExitCode, $firstOutput);
@@ -117,6 +107,24 @@ final class FindingCreateCliTest extends TestCase
         self::assertSame(1, $secondExitCode, $secondOutput);
         self::assertStringContainsString('duplicate finding ID', $secondOutput);
         self::assertSame($before, file_get_contents($firstResult['path']));
+        $this->assertNoTemporaryFindingFiles($root);
+    }
+
+    public function testPublicationDoesNotReplaceUnexpectedExistingTarget(): void
+    {
+        $root = $this->createFreshLearningRoot();
+        $directory = $root . '/findings/validated';
+        self::assertTrue(mkdir($directory, 0777, true));
+        $id = 'finding.2026-08-17.def456';
+        $path = $directory . '/' . $id . '.json';
+        self::assertSame(0, file_put_contents($path, ''));
+
+        [$exitCode, $output] = $this->runFindingCreate($root, $this->validArguments($id));
+
+        self::assertSame(1, $exitCode, $output);
+        self::assertStringContainsString('finding file already exists', $output);
+        self::assertSame('', file_get_contents($path));
+        $this->assertNoTemporaryFindingFiles($root);
     }
 
     private function createFreshLearningRoot(): string
@@ -135,6 +143,32 @@ final class FindingCreateCliTest extends TestCase
             ['type' => 'manual_verification', 'summary' => 'Reproduced in consumer dogfood.'],
             JSON_THROW_ON_ERROR,
         );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function validArguments(string $id): array
+    {
+        return [
+            '--id', $id,
+            '--task', 'PROJECT-27',
+            '--session', 'session_PROJECT-27',
+            '--by', 'agent',
+            '--observation', 'The first record must remain unchanged.',
+            '--hypothesis', 'Explicit IDs must never permit overwriting evidence.',
+            '--conclusion', 'Duplicate Finding IDs are rejected before publication.',
+            '--confidence', 'high',
+            '--sensitivity', 'public',
+            '--evidence-json', $this->evidenceJson(),
+        ];
+    }
+
+    private function assertNoTemporaryFindingFiles(string $root): void
+    {
+        $files = glob($root . '/findings/validated/.finding.*.tmp.*');
+        self::assertIsArray($files);
+        self::assertSame([], $files);
     }
 
     /**
