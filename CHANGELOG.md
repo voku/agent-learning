@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-08-18
+
+### Added
+
+- Add `FindingCreator::createValidated()` as the typed owner-level operation for creating one schema-valid validated Finding, including optional ID allocation, target-directory creation, duplicate protection, validation-before-publication, and atomic publication.
+- Add standalone `finding-create` support over the same owner behavior for human and script callers.
+
+### Documentation
+
+- Document `FindingCreator` as the PHP lifecycle-host boundary so orchestrators do not need `finding-id` plus hand-written JSON or knowledge of the `findings/validated` storage layout.
+- Keep the judgment boundary explicit: callers provide evidence-backed content and decide whether a Finding is warranted; Learning owns record validity, not the conclusion itself.
+
+### Validation
+
+- PR #28 passed CI on its exact head before merge for the owner-level Finding creation path.
+- PR #29 passed CI run #240 for the PHP embedding and consumer-skill documentation.
 ## [0.13.0] - 2026-08-16
 
 ### Added
