@@ -1,6 +1,6 @@
 ---
 name: agent-learning-consumer
-description: Set up and operate voku/agent-learning in a consuming repository, including learning-root config.json, findings, proposals, consolidation prompts, validation, and lifecycle commands. Use for end-user learning-loop workflows, not package source development.
+description: Set up and operate voku/agent-learning in a consuming repository, including learning-root config.json, typed Finding creation, findings, proposals, consolidation prompts, validation, and lifecycle commands. Use for end-user learning-loop workflows, not package source development.
 ---
 
 # Agent Learning Consumer
@@ -21,7 +21,7 @@ Use this skill when a project wants to run `voku/agent-learning` locally. The go
 }
 ```
 
-3. Capture raw experience as findings first. Create validated Findings through `finding-create` instead of hand-writing the package storage schema.
+3. Capture raw experience as findings first. Create validated Findings through the typed `FindingCreator` owner API from PHP hosts, or `finding-create` from the standalone CLI, instead of hand-writing the package storage schema.
 4. Classify reusable learning explicitly:
    - `ADD_LEARNING_NOTE` is the default for useful raw observations.
    - `UPDATE_SKILL` is preferred when an existing skill owns the behavior.
@@ -58,6 +58,41 @@ vendor/bin/agent-learning guidance-evaluate --root infra/doc/agent-learning --se
 `finding-create` writes one `status=validated` record, allocates its ID when `--id` is omitted, and creates `findings/validated/` when needed. Repeat `--scope` and `--evidence-json` for multiple values. `finding-id` remains available when an ID must be allocated before the record can be created.
 
 Use `--task-id-pattern` when the consuming project does not use the default ticket format.
+
+## PHP Finding creation
+
+When another PHP package owns lifecycle orchestration, use `FindingCreator` directly rather than invoking the CLI, allocating an ID separately, or writing Learning's JSON storage format:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+use voku\AgentLearning\FindingCreator;
+
+$result = (new FindingCreator())->createValidated(
+    root: $learningRoot,
+    taskId: $taskId,
+    session: $sessionId,
+    createdBy: $actor,
+    scope: ['src/'],
+    observation: 'Observed behavior.',
+    evidence: [[
+        'type' => 'manual_verification',
+        'summary' => 'Reproduced locally.',
+    ]],
+    hypothesis: 'Possible reusable explanation.',
+    validatedConclusion: 'Validated conclusion distinct from the hypothesis.',
+    confidence: 'high',
+    sensitivity: 'public',
+);
+```
+
+`FindingCreator` is the owner-level mutation boundary for a validated Finding. It allocates an ID when none is supplied, validates the complete record before publication, creates the validated-Finding directory when required, rejects duplicate IDs, and publishes atomically. A lifecycle host therefore does not need to know the `findings/validated/*.json` schema or perform `finding-id` plus hand-written JSON choreography.
+
+The caller still owns the evidence-backed content and the decision that a validated Finding should exist. `FindingCreator` does not infer a conclusion, turn every task into durable learning, approve a proposal, or decide that an observation deserves long-term guidance.
+
+Invalid input is an explicit failure. Do not catch validation errors merely to manufacture an empty or partially written Finding.
 
 ## Output Expectations
 
