@@ -21,7 +21,7 @@ Use this skill when a project wants to run `voku/agent-learning` locally. The go
 }
 ```
 
-3. Capture raw experience as findings first. Do not skip straight to a durable rule unless evidence is already validated.
+3. Capture raw experience as findings first. Create validated Findings through `finding-create` instead of hand-writing the package storage schema.
 4. Classify reusable learning explicitly:
    - `ADD_LEARNING_NOTE` is the default for useful raw observations.
    - `UPDATE_SKILL` is preferred when an existing skill owns the behavior.
@@ -37,11 +37,25 @@ Use this skill when a project wants to run `voku/agent-learning` locally. The go
 ## Commands
 
 ```bash
+vendor/bin/agent-learning finding-create \
+  --root infra/doc/agent-learning \
+  --task PROJECT-123 \
+  --session session_PROJECT-123 \
+  --by agent \
+  --scope src/ \
+  --observation "Observed behavior." \
+  --hypothesis "Possible reusable explanation." \
+  --conclusion "Validated conclusion distinct from the hypothesis." \
+  --confidence high \
+  --sensitivity public \
+  --evidence-json '{"type":"manual_verification","summary":"Reproduced locally."}'
 vendor/bin/agent-learning validate --root infra/doc/agent-learning
 vendor/bin/agent-learning prepare --root infra/doc/agent-learning --task PROJECT-123
 vendor/bin/agent-learning proposal-validate --root infra/doc/agent-learning --proposal proposal.2026-06-15.001.json
 vendor/bin/agent-learning guidance-evaluate --root infra/doc/agent-learning --selection-history history/recall-selections.jsonl --outcome-history history/outcomes.jsonl
 ```
+
+`finding-create` writes one `status=validated` record, allocates its ID when `--id` is omitted, and creates `findings/validated/` when needed. Repeat `--scope` and `--evidence-json` for multiple values. `finding-id` remains available when an ID must be allocated before the record can be created.
 
 Use `--task-id-pattern` when the consuming project does not use the default ticket format.
 
