@@ -1,0 +1,82 @@
+name: Prepare 0.13.3 release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/prepare-0.13.3.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Prepare exact release metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          target='b3580d2fc545a5d0b966cda83c9fe39ef7e3edcb'
+          git merge-base --is-ancestor "${target}" HEAD
+
+          php <<'PHP'
+          <?php
+          declare(strict_types=1);
+
+          $path = 'CHANGELOG.md';
+          $text = file_get_contents($path);
+          if ($text === false) {
+              throw new RuntimeException('Cannot read CHANGELOG.md');
+          }
+
+          $anchor = "## [0.13.2] - 2026-08-20\n";
+          if (substr_count($text, $anchor) !== 1) {
+              throw new RuntimeException('0.13.2 changelog anchor is not unique');
+          }
+          if (str_contains($text, '## [0.13.3] - 2026-08-20')) {
+              throw new RuntimeException('0.13.3 section already exists');
+          }
+
+          $section = <<<'CHANGELOG'
+          ## [0.13.3] - 2026-08-20
+
+          ### Fixed
+
+          - Make Constraint generation-package export adoption-aware. When the configured target rule and every registration file already exist, export now records `mode: adopt_existing`, keeps the validation commands and lineage evidence, omits synthetic PHP fixture expectations, and emits an adoption prompt instead of instructing the caller to generate duplicate enforcement.
+          - Keep incomplete enforcement in `mode: generate`: a missing target rule or any missing registration file preserves the existing generation package and four fixture expectations.
+          - Align the packaged hard-constraint author skill with the same generate-versus-adopt boundary while preserving explicit human activation authority.
+
+          ### Validation
+
+          - PR #36 passed `composer ci` on PHP 8.3 and 8.4 on the exact final head. Focused regressions cover existing enforcement adoption, missing-target fallback, and missing-registration fallback; CodeRabbit's only review finding requested the missing-registration regression and was addressed before merge.
+
+          CHANGELOG;
+
+          $updated = str_replace($anchor, $section . $anchor, $text, $count);
+          if ($count !== 1 || file_put_contents($path, $updated) === false) {
+              throw new RuntimeException('Failed to write 0.13.3 changelog');
+          }
+          PHP
+
+          mkdir -p .release
+          cat > .release/0.13.3.json <<'JSON'
+          {
+            "target_sha": "b3580d2fc545a5d0b966cda83c9fe39ef7e3edcb",
+            "version": "0.13.3"
+          }
+          JSON
+
+          rm .github/workflows/prepare-0.13.3.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add CHANGELOG.md .release/0.13.3.json .github/workflows/prepare-0.13.3.yml
+          git diff --cached --check
+          git commit -m 'release: prepare 0.13.3'
+          git push --atomic origin HEAD:main
