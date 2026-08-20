@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use voku\AgentLearning\Cli;
 use voku\AgentLearning\ConstraintGenerationPackageExporter;
@@ -71,6 +72,62 @@ final class ConstraintProposalValidationTest extends TestCase
 
         self::assertNotNull($proposal->constraint);
         self::assertSame(ConstraintEngine::PHPCS, $proposal->constraint->engine);
+    }
+
+    /**
+     * The PHPStan rule location is a path segment, not a substring.
+     *
+     * The check compared a filesystem path against a namespace-shaped
+     * '/PHPStan/', so a consumer whose rules live in a lowercase directory had
+     * every one of them rejected by the validator meant to admit them.
+     *
+     * @return array<string, array{0: string, 1: bool}>
+     */
+    public static function phpStanRuleLocations(): array
+    {
+        return [
+            'lowercase consumer directory' => ['phpstan/Rules/FooRule.php', true],
+            'namespace-shaped directory' => ['PHPStan/Rules/FooRule.php', true],
+            'mixed case inside a nested path' => ['src/StaticAnalysis/PhpStan/FooRule.php', true],
+            'segment merely ending in phpstan' => ['rules/myphpstan/FooRule.php', false],
+            'segment merely starting with phpstan' => ['rules/phpstanish/FooRule.php', false],
+        ];
+    }
+
+    #[DataProvider('phpStanRuleLocations')]
+    public function testPhpStanRuleLocationIsMatchedPerPathSegment(string $targetRulePath, bool $accepted): void
+    {
+        $record = $this->proposalRecord([
+            'constraint' => [
+                'rule_id' => 'project.translation.parameters',
+                'engine' => 'phpstan',
+                'rule_class_name' => 'FooRule',
+                'target_rule_path' => $targetRulePath,
+                'registration_files' => ['phpstan.neon.dist'],
+                'scope' => ['src/'],
+                'violation' => 'A forbidden state.',
+                'allowed_boundaries' => [],
+                'detectability' => 'static',
+                'false_positive_risk' => 'low',
+                'validation_commands' => ['vendor/bin/phpstan analyse'],
+                'example_rule_paths' => ['phpstan/Rules/ExistingRule.php'],
+            ],
+        ]);
+
+        if (!$accepted) {
+            $this->expectException(ValidationException::class);
+            $this->expectExceptionMessage('phpstan constraint target rule path must point to a PHPStan rule location');
+        }
+
+        $proposal = (new ProposalValidator())->validateFile(
+            $this->writeProposal($record),
+            [
+                'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
+                'finding.2026-06-13.002' => $this->finding('finding.2026-06-13.002'),
+            ],
+        );
+
+        self::assertSame($targetRulePath, $proposal->constraint?->targetRulePath);
     }
 
     public function testRejectsPhpcsConstraintProposalWithNonSniffTargetPath(): void
