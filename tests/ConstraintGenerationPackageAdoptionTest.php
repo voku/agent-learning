@@ -72,6 +72,26 @@ final class ConstraintGenerationPackageAdoptionTest extends TestCase
             $this->findings(),
         );
 
+        $this->assertGenerationPackage($output);
+    }
+
+    public function testMissingRegistrationKeepsGenerationPackageBehavior(): void
+    {
+        file_put_contents($this->project . '/tools/release-set-dogfood.php', "<?php\n");
+
+        $output = $this->root . '/constraint-generation/proposal.2026-08-20.c2a001';
+        (new ConstraintGenerationPackageExporter())->export(
+            $this->root,
+            $this->writeProposal(),
+            $output,
+            $this->findings(),
+        );
+
+        $this->assertGenerationPackage($output);
+    }
+
+    private function assertGenerationPackage(string $output): void
+    {
         $specification = $this->readJson($output . '/specification.json');
         self::assertSame('generate', $specification['mode'] ?? null);
 
