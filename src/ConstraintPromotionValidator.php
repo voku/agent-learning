@@ -95,6 +95,17 @@ final class ConstraintPromotionValidator
     /**
      * @param list<non-empty-string> $commands
      */
+    private function hasCommandContaining(array $commands, string $needle): bool
+    {
+        foreach ($commands as $command) {
+            if (str_contains($command, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * A rule location is identified by a path segment, not by a substring.
      *
@@ -108,17 +119,6 @@ final class ConstraintPromotionValidator
     {
         foreach (explode('/', str_replace('\\', '/', $path)) as $candidate) {
             if (strcasecmp($candidate, $segment) === 0) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function hasCommandContaining(array $commands, string $needle): bool
-    {
-        foreach ($commands as $command) {
-            if (str_contains($command, $needle)) {
                 return true;
             }
         }

@@ -81,7 +81,7 @@ final class ConstraintProposalValidationTest extends TestCase
      * '/PHPStan/', so a consumer whose rules live in a lowercase directory had
      * every one of them rejected by the validator meant to admit them.
      *
-     * @return list<array{0: string, 1: bool}>
+     * @return array<string, array{0: string, 1: bool}>
      */
     public static function phpStanRuleLocations(): array
     {
