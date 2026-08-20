@@ -22,6 +22,9 @@ final class ConstraintGenerationPackageExporter
             throw new ValidationException($outputDir, null, $proposal->id, 'cannot create generation package directory');
         }
 
+        $resolvedProjectRoot = (new LearningProjectPaths())->projectRootForLearningRoot($root, $projectRoot);
+        $adoptExisting = $this->canAdoptExistingConstraint($resolvedProjectRoot, $proposal->constraint);
+
         $sourceFindings = [];
         foreach ($proposal->sourceFindings as $findingId) {
             $finding = $findingsById[$findingId] ?? null;
@@ -33,6 +36,7 @@ final class ConstraintGenerationPackageExporter
 
         $this->writeJson($outputDir . '/specification.json', [
             'schema_version' => '1.0',
+            'mode' => $adoptExisting ? 'adopt_existing' : 'generate',
             'proposal_id' => $proposal->id,
             'constraint' => $proposal->constraint->toArray(),
         ]);
@@ -50,10 +54,29 @@ final class ConstraintGenerationPackageExporter
         ]);
         $this->writeJson($outputDir . '/validation-plan.json', [
             'schema_version' => '1.0',
+            'mode' => $adoptExisting ? 'adopt_existing' : 'generate',
             'commands' => $proposal->constraint->validationCommands,
-            'expected_fixtures' => ['valid.php', 'invalid.php', 'boundary.php', 'false-positive.php'],
+            'expected_fixtures' => $adoptExisting ? [] : ['valid.php', 'invalid.php', 'boundary.php', 'false-positive.php'],
         ]);
-        $this->writeText($outputDir . '/generation-prompt.md', $this->buildGenerationPrompt($proposal));
+        $this->writeText(
+            $outputDir . '/generation-prompt.md',
+            $adoptExisting ? $this->buildAdoptionPrompt($proposal) : $this->buildGenerationPrompt($proposal),
+        );
+    }
+
+    private function canAdoptExistingConstraint(string $projectRoot, ConstraintSpecification $constraint): bool
+    {
+        if (!is_file($projectRoot . '/' . ltrim($constraint->targetRulePath, '/'))) {
+            return false;
+        }
+
+        foreach ($constraint->registrationFiles as $registrationFile) {
+            if (!is_file($projectRoot . '/' . ltrim($registrationFile, '/'))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -75,6 +98,26 @@ final class ConstraintGenerationPackageExporter
         }
 
         return $examples;
+    }
+
+    private function buildAdoptionPrompt(Proposal $proposal): string
+    {
+        $constraint = $proposal->constraint;
+        \assert($constraint instanceof ConstraintSpecification);
+
+        return sprintf(
+            "# Constraint Adoption Prompt\n\n"
+            . "The repository already contains the configured %s enforcement for `%s`.\n\n"
+            . "Existing target path: `%s`\n\n"
+            . "Existing registration files:\n%s\n\n"
+            . "Do not generate a duplicate rule or synthetic PHP fixtures. Validate the existing enforcement against the approved constraint semantics and historical bad/good states using:\n%s\n\n"
+            . "If that validation passes, use the existing constraint activation path to record the reviewed lineage manifest. Do not activate the constraint without human approval.\n",
+            $constraint->engine->value,
+            $constraint->ruleId,
+            $constraint->targetRulePath,
+            $this->bulletList($constraint->registrationFiles),
+            $this->bulletList($constraint->validationCommands),
+        );
     }
 
     private function buildGenerationPrompt(Proposal $proposal): string
