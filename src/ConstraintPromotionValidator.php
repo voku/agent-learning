@@ -40,7 +40,7 @@ final class ConstraintPromotionValidator
             throw new ValidationException($file, $line, $proposal->id, 'phpstan constraint requires a phpstan validation command');
         }
 
-        if ($constraint->engine === ConstraintEngine::PHPSTAN && !str_contains($constraint->targetRulePath, '/PHPStan/')) {
+        if ($constraint->engine === ConstraintEngine::PHPSTAN && !$this->hasPathSegment($constraint->targetRulePath, 'phpstan')) {
             throw new ValidationException($file, $line, $proposal->id, 'phpstan constraint target rule path must point to a PHPStan rule location');
         }
 
@@ -95,6 +95,26 @@ final class ConstraintPromotionValidator
     /**
      * @param list<non-empty-string> $commands
      */
+    /**
+     * A rule location is identified by a path segment, not by a substring.
+     *
+     * This compared a filesystem path against the namespace-shaped '/PHPStan/',
+     * which rejected two legitimate layouts: a consumer whose directory is
+     * lowercase, and any path whose first segment is the rule directory, since
+     * that has no leading slash. Matching the segment itself accepts both while
+     * still rejecting names that merely contain the word.
+     */
+    private function hasPathSegment(string $path, string $segment): bool
+    {
+        foreach (explode('/', str_replace('\\', '/', $path)) as $candidate) {
+            if (strcasecmp($candidate, $segment) === 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function hasCommandContaining(array $commands, string $needle): bool
     {
         foreach ($commands as $command) {

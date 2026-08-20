@@ -28,6 +28,31 @@ final class ConsolidationPromptBuilderTest extends TestCase
         self::assertStringContainsString('```', $prompt);
     }
 
+    /**
+     * The promotion ladder's top rung has to be reachable from the step that
+     * decides promotion.
+     *
+     * The downstream schema, promotion validator, generation exporter and
+     * activator all supported constraints while this prompt - the only
+     * instruction a consolidating model receives - never mentioned them, so a
+     * constraint could only be authored by someone who already knew the schema.
+     */
+    public function testPromptExposesConstraintAsADurableTarget(): void
+    {
+        $prompt = (new ConsolidationPromptBuilder())->build(
+            new ConsolidationInput(new FindingSelection([], [], [], null, null), [], [], []),
+        );
+
+        self::assertStringContainsString('constraint', $prompt);
+        self::assertStringContainsString('deterministically rejected', $prompt);
+        self::assertStringContainsString('cheapest reliable owner', $prompt);
+        // Promotion stays earned and reviewed: the prompt must not imply that
+        // recording a finding, or proposing a constraint, activates anything.
+        self::assertStringContainsString('Do not propose a constraint merely because a finding exists', $prompt);
+        self::assertStringContainsString('approval are still required', $prompt);
+        self::assertStringContainsString('nothing here activates a rule', $prompt);
+    }
+
     public function testFailsOnPromptInjectionWithSecrets(): void
     {
         $selection = new FindingSelection([], [], [], null, null);
