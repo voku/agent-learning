@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-08-20
+
+### Fixed
+
+- Make Constraint generation-package export adoption-aware. When the configured target rule and every registration file already exist, export now records `mode: adopt_existing`, keeps the validation commands and lineage evidence, omits synthetic PHP fixture expectations, and emits an adoption prompt instead of instructing the caller to generate duplicate enforcement.
+- Keep incomplete enforcement in `mode: generate`: a missing target rule or any missing registration file preserves the existing generation package and four fixture expectations.
+- Align the packaged hard-constraint author skill with the same generate-versus-adopt boundary while preserving explicit human activation authority.
+
+### Validation
+
+- PR #36 passed `composer ci` on PHP 8.3 and 8.4 on the exact final head. Focused regressions cover existing enforcement adoption, missing-target fallback, and missing-registration fallback; CodeRabbit's only review finding requested the missing-registration regression and was addressed before merge.
 ## [0.13.2] - 2026-08-20
 
 ### Fixed
