@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-08-20
+
+### Fixed
+
+- Match a PHPStan constraint's `target_rule_path` per path segment, case-insensitively and with backslashes normalised, instead of requiring the literal substring `/PHPStan/`. The previous check compared a filesystem path against a namespace-shaped fragment and rejected two legitimate layouts: a lowercase rule directory such as `phpstan/Rules/`, and any path whose first segment is the rule directory, which has no leading slash. Paths that merely contain the word, such as `rules/phpstanish/`, are still rejected.
+- Name `constraint` as a durable target in the consolidation prompt, which previously offered only skill and learning-note outcomes while the result schema, promotion validator, generation exporter, activator and `constraint-*` commands all supported constraints. The prompt now requires deterministic enforceability, asks for the cheapest reliable owner, and states that proposing a constraint neither approves nor activates anything.
+
+### Validation
+
+- PR #32 passed CI on its exact head before merge, covering both regressions plus the package's own static analysis at level 8.
+
 ## [0.13.1] - 2026-08-18
 
 ### Added
