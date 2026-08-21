@@ -86,9 +86,7 @@ final class ProposalTransitionManager
         $now = new DateTimeImmutable('now');
         $nowStr = $now->format(DateTimeInterface::ATOM);
 
-        $originalProposalContent = file_get_contents($proposalPath);
         $decisionsPath = $root . '/history/decisions.jsonl';
-        $originalDecisionsContent = is_file($decisionsPath) ? file_get_contents($decisionsPath) : null;
 
         $data = $proposal->raw;
         $data['status'] = ProposalStatus::APPROVED->value;
@@ -113,36 +111,7 @@ final class ProposalTransitionManager
         ];
         $decisionLine = json_encode($decisionRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
-        try {
-            file_put_contents($proposalPath, $updatedContent);
-            if ($proposalPath !== $targetPath) {
-                if (is_file($targetPath)) {
-                    throw new ValidationException($targetPath, null, $proposalId, 'target file already exists');
-                }
-                if (!rename($proposalPath, $targetPath)) {
-                    throw new ValidationException($proposalPath, null, $proposalId, 'failed to move proposal file');
-                }
-            }
-            if (!is_dir(dirname($decisionsPath))) {
-                mkdir(dirname($decisionsPath), 0777, true);
-            }
-            file_put_contents($decisionsPath, $decisionLine, FILE_APPEND);
-
-            $this->validateRepository($root);
-        } catch (\Throwable $e) {
-            if (is_file($targetPath) && $targetPath !== $proposalPath) {
-                rename($targetPath, $proposalPath);
-            }
-            file_put_contents($proposalPath, $originalProposalContent);
-            if ($originalDecisionsContent === null) {
-                if (is_file($decisionsPath)) {
-                    unlink($decisionsPath);
-                }
-            } else {
-                file_put_contents($decisionsPath, $originalDecisionsContent);
-            }
-            throw new ValidationException($proposalPath, null, $proposalId, 'proposal approval failed and was rolled back: ' . $e->getMessage());
-        }
+        $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $decisionsPath, $decisionLine, 'approval');
     }
 
     /**
@@ -171,9 +140,7 @@ final class ProposalTransitionManager
         }
 
         $now = new DateTimeImmutable('now');
-        $originalProposalContent = file_get_contents($proposalPath);
         $rejectedPath = $root . '/history/rejected-proposals.jsonl';
-        $originalRejectedContent = is_file($rejectedPath) ? file_get_contents($rejectedPath) : null;
 
         $data = $proposal->raw;
         $data['status'] = ProposalStatus::REJECTED->value;
@@ -195,36 +162,7 @@ final class ProposalTransitionManager
         ];
         $rejectionLine = json_encode($rejectionRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
-        try {
-            file_put_contents($proposalPath, $updatedContent);
-            if ($proposalPath !== $targetPath) {
-                if (is_file($targetPath)) {
-                    throw new ValidationException($targetPath, null, $proposalId, 'target file already exists');
-                }
-                if (!rename($proposalPath, $targetPath)) {
-                    throw new ValidationException($proposalPath, null, $proposalId, 'failed to move proposal file');
-                }
-            }
-            if (!is_dir(dirname($rejectedPath))) {
-                mkdir(dirname($rejectedPath), 0777, true);
-            }
-            file_put_contents($rejectedPath, $rejectionLine, FILE_APPEND);
-
-            $this->validateRepository($root);
-        } catch (\Throwable $e) {
-            if (is_file($targetPath) && $targetPath !== $proposalPath) {
-                rename($targetPath, $proposalPath);
-            }
-            file_put_contents($proposalPath, $originalProposalContent);
-            if ($originalRejectedContent === null) {
-                if (is_file($rejectedPath)) {
-                    unlink($rejectedPath);
-                }
-            } else {
-                file_put_contents($rejectedPath, $originalRejectedContent);
-            }
-            throw new ValidationException($proposalPath, null, $proposalId, 'proposal rejection failed and was rolled back: ' . $e->getMessage());
-        }
+        $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $rejectedPath, $rejectionLine, 'rejection');
     }
 
     /**
@@ -264,9 +202,7 @@ final class ProposalTransitionManager
         $now = new DateTimeImmutable('now');
         $nowStr = $now->format(DateTimeInterface::ATOM);
 
-        $originalProposalContent = file_get_contents($proposalPath);
         $acknowledgedPath = $root . '/history/acknowledged-proposals.jsonl';
-        $originalAcknowledgedContent = is_file($acknowledgedPath) ? file_get_contents($acknowledgedPath) : null;
 
         $data = $proposal->raw;
         $data['status'] = ProposalStatus::ACKNOWLEDGED->value;
@@ -292,36 +228,7 @@ final class ProposalTransitionManager
         ];
         $acknowledgementLine = json_encode($acknowledgementRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
-        try {
-            file_put_contents($proposalPath, $updatedContent);
-            if ($proposalPath !== $targetPath) {
-                if (is_file($targetPath)) {
-                    throw new ValidationException($targetPath, null, $proposalId, 'target file already exists');
-                }
-                if (!rename($proposalPath, $targetPath)) {
-                    throw new ValidationException($proposalPath, null, $proposalId, 'failed to move proposal file');
-                }
-            }
-            if (!is_dir(dirname($acknowledgedPath))) {
-                mkdir(dirname($acknowledgedPath), 0777, true);
-            }
-            file_put_contents($acknowledgedPath, $acknowledgementLine, FILE_APPEND);
-
-            $this->validateRepository($root);
-        } catch (\Throwable $e) {
-            if (is_file($targetPath) && $targetPath !== $proposalPath) {
-                rename($targetPath, $proposalPath);
-            }
-            file_put_contents($proposalPath, $originalProposalContent);
-            if ($originalAcknowledgedContent === null) {
-                if (is_file($acknowledgedPath)) {
-                    unlink($acknowledgedPath);
-                }
-            } else {
-                file_put_contents($acknowledgedPath, $originalAcknowledgedContent);
-            }
-            throw new ValidationException($proposalPath, null, $proposalId, 'proposal acknowledgement failed and was rolled back: ' . $e->getMessage());
-        }
+        $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $acknowledgedPath, $acknowledgementLine, 'acknowledgement');
     }
 
     public function generateAcknowledgementId(string $root, ?DateTimeImmutable $date = null): string
@@ -383,9 +290,7 @@ final class ProposalTransitionManager
         $now = new DateTimeImmutable('now');
         $nowStr = $now->format(DateTimeInterface::ATOM);
 
-        $originalProposalContent = file_get_contents($proposalPath);
         $retiredPath = $root . '/history/retired-proposals.jsonl';
-        $originalRetiredContent = is_file($retiredPath) ? file_get_contents($retiredPath) : null;
 
         $data = $proposal->raw;
         $data['status'] = ProposalStatus::RETIRED->value;
@@ -411,36 +316,7 @@ final class ProposalTransitionManager
         ];
         $retirementLine = json_encode($retirementRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
-        try {
-            file_put_contents($proposalPath, $updatedContent);
-            if ($proposalPath !== $targetPath) {
-                if (is_file($targetPath)) {
-                    throw new ValidationException($targetPath, null, $proposalId, 'target file already exists');
-                }
-                if (!rename($proposalPath, $targetPath)) {
-                    throw new ValidationException($proposalPath, null, $proposalId, 'failed to move proposal file');
-                }
-            }
-            if (!is_dir(dirname($retiredPath))) {
-                mkdir(dirname($retiredPath), 0777, true);
-            }
-            file_put_contents($retiredPath, $retirementLine, FILE_APPEND);
-
-            $this->validateRepository($root);
-        } catch (\Throwable $e) {
-            if (is_file($targetPath) && $targetPath !== $proposalPath) {
-                rename($targetPath, $proposalPath);
-            }
-            file_put_contents($proposalPath, $originalProposalContent);
-            if ($originalRetiredContent === null) {
-                if (is_file($retiredPath)) {
-                    unlink($retiredPath);
-                }
-            } else {
-                file_put_contents($retiredPath, $originalRetiredContent);
-            }
-            throw new ValidationException($proposalPath, null, $proposalId, 'proposal retirement failed and was rolled back: ' . $e->getMessage());
-        }
+        $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $retiredPath, $retirementLine, 'retirement');
     }
 
     public function generateRetirementId(string $root, ?DateTimeImmutable $date = null): string
@@ -570,9 +446,7 @@ final class ProposalTransitionManager
         $now = new DateTimeImmutable('now');
         $nowStr = $now->format(DateTimeInterface::ATOM);
 
-        $originalProposalContent = file_get_contents($proposalPath);
         $decisionsPath = $root . '/history/decisions.jsonl';
-        $originalDecisionsContent = is_file($decisionsPath) ? file_get_contents($decisionsPath) : null;
 
         $data = $proposal->raw;
         $data['status'] = ProposalStatus::APPLIED->value;
@@ -603,35 +477,72 @@ final class ProposalTransitionManager
         ];
         $decisionLine = json_encode($decisionRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
+        $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $decisionsPath, $decisionLine, 'apply');
+    }
+
+    private function persistTransition(
+        string $root,
+        string $proposalId,
+        string $proposalPath,
+        string $targetPath,
+        string $updatedContent,
+        ?string $historyPath,
+        ?string $historyLine,
+        string $transition,
+    ): void {
+        $originalProposalContent = file_get_contents($proposalPath);
+        if ($originalProposalContent === false) {
+            throw new ValidationException($proposalPath, null, $proposalId, 'cannot read proposal file');
+        }
+
+        $originalHistoryContent = null;
+        if ($historyPath !== null && is_file($historyPath)) {
+            $originalHistoryContent = file_get_contents($historyPath);
+            if ($originalHistoryContent === false) {
+                throw new ValidationException($historyPath, null, $proposalId, 'cannot read proposal history file');
+            }
+        }
+
+        $moved = false;
         try {
-            file_put_contents($proposalPath, $updatedContent);
+            if ($proposalPath !== $targetPath && is_file($targetPath)) {
+                throw new ValidationException($targetPath, null, $proposalId, 'target file already exists');
+            }
+            if (file_put_contents($proposalPath, $updatedContent) === false) {
+                throw new ValidationException($proposalPath, null, $proposalId, 'failed to write proposal file');
+            }
             if ($proposalPath !== $targetPath) {
-                if (is_file($targetPath)) {
-                    throw new ValidationException($targetPath, null, $proposalId, 'target file already exists');
-                }
                 if (!rename($proposalPath, $targetPath)) {
                     throw new ValidationException($proposalPath, null, $proposalId, 'failed to move proposal file');
                 }
+                $moved = true;
             }
-            if (!is_dir(dirname($decisionsPath))) {
-                mkdir(dirname($decisionsPath), 0777, true);
+            if ($historyPath !== null && $historyLine !== null) {
+                $historyDir = dirname($historyPath);
+                if (!is_dir($historyDir) && !mkdir($historyDir, 0777, true) && !is_dir($historyDir)) {
+                    throw new ValidationException($historyPath, null, $proposalId, 'failed to create proposal history directory');
+                }
+                if (file_put_contents($historyPath, $historyLine, FILE_APPEND) === false) {
+                    throw new ValidationException($historyPath, null, $proposalId, 'failed to append proposal history');
+                }
             }
-            file_put_contents($decisionsPath, $decisionLine, FILE_APPEND);
 
             $this->validateRepository($root);
         } catch (\Throwable $e) {
-            if (is_file($targetPath) && $targetPath !== $proposalPath) {
+            if ($moved && is_file($targetPath)) {
                 rename($targetPath, $proposalPath);
             }
             file_put_contents($proposalPath, $originalProposalContent);
-            if ($originalDecisionsContent === null) {
-                if (is_file($decisionsPath)) {
-                    unlink($decisionsPath);
+            if ($historyPath !== null) {
+                if ($originalHistoryContent === null) {
+                    if (is_file($historyPath)) {
+                        unlink($historyPath);
+                    }
+                } else {
+                    file_put_contents($historyPath, $originalHistoryContent);
                 }
-            } else {
-                file_put_contents($decisionsPath, $originalDecisionsContent);
             }
-            throw new ValidationException($proposalPath, null, $proposalId, 'proposal apply failed and was rolled back: ' . $e->getMessage());
+            throw new ValidationException($proposalPath, null, $proposalId, 'proposal ' . $transition . ' failed and was rolled back: ' . $e->getMessage());
         }
     }
 
