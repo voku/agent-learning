@@ -16,8 +16,8 @@ Durable rules and boundaries for every coding session working on the `voku/agent
 * **Scope Invariants**:
   * Proposal scope cannot be broadened compared to the source finding evidence unless a justification of at least 15 characters is provided in the `reason` field.
   * Disjoint scope extensions (unrelated directory paths) must be treated as broadened scopes.
-* **Redaction Guard**: All file modifications and parsing operations must run through `RedactionGuard` to prevent accidental leak of sensitive content (e.g., passwords or secrets).
-* **Constraint adoption is evidence, not existence**: `adopt_existing` is valid only when the configured target and every registration file already exist. Activation still requires validation against the approved semantics and historical bad/good behavior; do not generate duplicate enforcement merely to complete a promotion path.
+* **Redaction Guard**: Use `RedactionGuard` on the Learning boundaries that explicitly opt into secret scanning; do not assume every parser or lifecycle file mutation is guarded when executable code does not route it through that owner.
+* **Constraint adoption proves reuse, not validation execution**: `adopt_existing` is valid only when the configured target and every registration file already exist. Constraint activation remains an explicit authority-bearing transition and validates the configured files/approval state that the activator actually checks; do not claim that activation itself executed or proved arbitrary validation commands unless executable behavior provides that evidence.
 
 ## 3. Transitions
 * **Atomic Rollbacks**: Proposal/Finding status transitions that modify existing lifecycle records (approve, reject, acknowledge, retire, apply, and Finding status moves) must restore touched record/history files when repository validation fails; do not leave Learning state partially transitioned.
