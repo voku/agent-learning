@@ -20,7 +20,7 @@ Durable rules and boundaries for every coding session working on the `voku/agent
 * **Constraint adoption is evidence, not existence**: `adopt_existing` is valid only when the configured target and every registration file already exist. Activation still requires validation against the approved semantics and historical bad/good behavior; do not generate duplicate enforcement merely to complete a promotion path.
 
 ## 3. Transitions
-* **Atomic Rollbacks**: Any file system modification during status transitions (approve, reject, acknowledge, retire, apply, activate) must use file backup and rollback logic so repository validation never leaves Learning state partially transitioned.
+* **Atomic Rollbacks**: Proposal/Finding status transitions that modify existing lifecycle records (approve, reject, acknowledge, retire, apply, and Finding status moves) must restore touched record/history files when repository validation fails; do not leave Learning state partially transitioned.
 * **Judgment is not automation**: proposal approval, rejection, acknowledgement, and Constraint activation remain explicit authority-bearing transitions. A candidate must not become approved or active merely because generation/export/validation succeeded.
 * **`NO_DURABLE_LEARNING` is a valid conclusion**: acknowledge it when the analysis is accepted; do not misuse rejection to make a correct conservative result look like maintainer disagreement.
 
