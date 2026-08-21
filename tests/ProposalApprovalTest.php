@@ -123,6 +123,27 @@ final class ProposalApprovalTest extends TestCase
         self::assertFileExists($this->root . '/proposals/approved/proposal.2026-06-08.001.json');
     }
 
+    public function testRepositoryValidationFailureRestoresProposalAndExistingHistory(): void
+    {
+        $candidatePath = $this->root . '/proposals/candidate/proposal.2026-06-08.001.json';
+        $targetPath = $this->root . '/proposals/approved/proposal.2026-06-08.001.json';
+        $decisionsPath = $this->root . '/history/decisions.jsonl';
+        $originalCandidate = (string)file_get_contents($candidatePath);
+        file_put_contents($decisionsPath, '');
+        file_put_contents($this->root . '/history/outcomes.jsonl', "not-json\n");
+
+        try {
+            (new ProposalTransitionManager())->approve($this->root, 'proposal.2026-06-08.001', 'lars');
+            self::fail('Expected repository validation to reject the transition');
+        } catch (ValidationException $e) {
+            self::assertStringContainsString('proposal approval failed and was rolled back', $e->getMessage());
+        }
+
+        self::assertSame($originalCandidate, file_get_contents($candidatePath));
+        self::assertFileDoesNotExist($targetPath);
+        self::assertSame('', file_get_contents($decisionsPath));
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {

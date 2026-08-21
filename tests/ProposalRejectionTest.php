@@ -52,6 +52,25 @@ final class ProposalRejectionTest extends TestCase
         self::assertStringContainsString('proposal.2026-06-08.001', $rejections);
     }
 
+    public function testTargetCollisionPreservesCandidateAndExistingTarget(): void
+    {
+        $candidatePath = $this->root . '/proposals/candidate/proposal.2026-06-08.001.json';
+        $targetPath = $this->root . '/proposals/rejected/proposal.2026-06-08.001.json';
+        $originalCandidate = (string)file_get_contents($candidatePath);
+        file_put_contents($targetPath, 'existing target');
+
+        try {
+            (new ProposalTransitionManager())->reject($this->root, 'proposal.2026-06-08.001', 'lars', 'Scope too broad');
+            self::fail('Expected target collision to reject the transition');
+        } catch (ValidationException $e) {
+            self::assertStringContainsString('target file already exists', $e->getMessage());
+        }
+
+        self::assertSame($originalCandidate, file_get_contents($candidatePath));
+        self::assertSame('existing target', file_get_contents($targetPath));
+        self::assertFileDoesNotExist($this->root . '/history/rejected-proposals.jsonl');
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {
