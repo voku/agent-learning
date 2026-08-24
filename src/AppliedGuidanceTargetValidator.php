@@ -8,6 +8,8 @@ use RuntimeException;
 
 final readonly class AppliedGuidanceTargetValidator
 {
+    private const PHYSICAL_TARGET_PROOF_REQUIRED_FROM = '2026-08-09T00:00:00+00:00';
+
     public function __construct(private LearningRootResolver $rootResolver = new LearningRootResolver())
     {
     }
@@ -18,6 +20,23 @@ final readonly class AppliedGuidanceTargetValidator
             $proposal->status !== ProposalStatus::APPLIED
             || $proposal->targetType === GuidanceType::CONSTRAINT->value
         ) {
+            return;
+        }
+
+        // `file` was the generic target type before canonical guidance homes and
+        // physical target proofs existed. These records are immutable historical
+        // evidence: allow them to remain readable, but do not treat them as a
+        // modern applied guidance shape. ProposalTransitionManager rejects new
+        // applications with this legacy target type.
+        if ($proposal->targetType === 'file') {
+            return;
+        }
+
+        // The physical-target proof policy started on 2026-08-09. Applied
+        // memory/skill records from before that date remain immutable history,
+        // not malformed modern records. New transitions receive their current
+        // timestamp and therefore still fail closed when their proof is absent.
+        if ($this->isPreProofPolicyRecord($proposal)) {
             return;
         }
 
@@ -102,6 +121,20 @@ final readonly class AppliedGuidanceTargetValidator
         }
 
         throw new ValidationException($proposalFile, null, $proposal->id, 'unsupported applied guidance action: ' . $proposal->action->value);
+    }
+
+    private function isPreProofPolicyRecord(Proposal $proposal): bool
+    {
+        $appliedAt = $proposal->raw['applied_at'] ?? null;
+        if (!is_string($appliedAt) || trim($appliedAt) === '') {
+            return false;
+        }
+
+        try {
+            return new \DateTimeImmutable($appliedAt) < new \DateTimeImmutable(self::PHYSICAL_TARGET_PROOF_REQUIRED_FROM);
+        } catch (\Exception) {
+            return false;
+        }
     }
 
     private function assertContains(

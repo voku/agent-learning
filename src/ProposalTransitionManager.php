@@ -439,6 +439,19 @@ final class ProposalTransitionManager
             throw new ValidationException($proposalPath, null, $proposalId, 'proposal is not approved');
         }
 
+        if (!in_array($proposal->targetType, [
+            GuidanceType::MEMORY->value,
+            GuidanceType::SKILL->value,
+            GuidanceType::CONSTRAINT->value,
+        ], true)) {
+            throw new ValidationException(
+                $proposalPath,
+                null,
+                $proposalId,
+                'new applied guidance requires target_type=memory, skill, or constraint',
+            );
+        }
+
         if ($proposal->targetType === GuidanceType::CONSTRAINT->value) {
             $this->validateConstraintAppliedMetadata($validationData, $validationFilePath, $proposalId);
         }

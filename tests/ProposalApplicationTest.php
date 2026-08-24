@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace voku\AgentLearning\Tests;
 
 use PHPUnit\Framework\TestCase;
+use voku\AgentLearning\ProposalRepository;
 use voku\AgentLearning\ProposalTransitionManager;
 use voku\AgentLearning\ValidationException;
 
@@ -122,6 +123,61 @@ final class ProposalApplicationTest extends TestCase
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('replacement guidance wording is not present');
         $manager->apply($this->root, 'proposal.2026-06-08.001', 'lars', 'commit123', $validationFile);
+    }
+
+    public function testRejectsNewApplicationUsingLegacyFileTargetType(): void
+    {
+        $proposalPath = $this->root . '/proposals/approved/proposal.2026-06-08.001.json';
+        $proposal = json_decode((string) file_get_contents($proposalPath), true, 512, JSON_THROW_ON_ERROR);
+        $proposal['target_type'] = 'file';
+        file_put_contents($proposalPath, json_encode($proposal, JSON_THROW_ON_ERROR));
+
+        $manager = new ProposalTransitionManager();
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('target_type=memory, skill, or constraint');
+        $manager->apply($this->root, 'proposal.2026-06-08.001', 'lars', 'commit123', $this->validationFile([]));
+    }
+
+    public function testLegacyAppliedFileProposalRemainsLoadable(): void
+    {
+        $approvedPath = $this->root . '/proposals/approved/proposal.2026-06-08.001.json';
+        $proposal = json_decode((string) file_get_contents($approvedPath), true, 512, JSON_THROW_ON_ERROR);
+        unlink($approvedPath);
+        $proposal['status'] = 'applied';
+        $proposal['target_type'] = 'file';
+        $proposal['approved_by'] = 'maintainer';
+        $proposal['approved_at'] = '2026-06-08T13:00:00+00:00';
+        $proposal['applied_by'] = 'maintainer';
+        $proposal['applied_at'] = '2026-06-08T13:01:00+00:00';
+        file_put_contents(
+            $this->root . '/proposals/applied/proposal.2026-06-08.001.json',
+            json_encode($proposal, JSON_THROW_ON_ERROR),
+        );
+
+        $proposals = (new ProposalRepository())->loadAll($this->root, []);
+
+        self::assertSame('file', $proposals['proposal.2026-06-08.001']->targetType);
+    }
+
+    public function testLegacyAppliedMemoryProposalWithoutPhysicalProofRemainsLoadable(): void
+    {
+        $approvedPath = $this->root . '/proposals/approved/proposal.2026-06-08.001.json';
+        $proposal = json_decode((string) file_get_contents($approvedPath), true, 512, JSON_THROW_ON_ERROR);
+        unlink($approvedPath);
+        $proposal['status'] = 'applied';
+        $proposal['target_type'] = 'memory';
+        $proposal['approved_by'] = 'maintainer';
+        $proposal['approved_at'] = '2026-06-08T13:00:00+00:00';
+        $proposal['applied_by'] = 'maintainer';
+        $proposal['applied_at'] = '2026-08-08T23:59:59+00:00';
+        file_put_contents(
+            $this->root . '/proposals/applied/proposal.2026-06-08.001.json',
+            json_encode($proposal, JSON_THROW_ON_ERROR),
+        );
+
+        $proposals = (new ProposalRepository())->loadAll($this->root, []);
+
+        self::assertSame('memory', $proposals['proposal.2026-06-08.001']->targetType);
     }
 
     public function testCannotApplyCandidateProposal(): void

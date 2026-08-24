@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve applied guidance records created before the 2026-08-09 physical-target-proof policy as immutable legacy history. Historical generic `file` targets and proof-less pre-policy `memory`/`skill` records remain readable, while new applications continue to require a modern `memory`, `skill`, or `constraint` target and current physical proof.
+
 ## [0.13.3] - 2026-08-20
 
 ### Fixed
