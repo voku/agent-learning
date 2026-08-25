@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.13.6] - 2026-08-26
+
+### Fixed
+
+- Keep inactive and historical Learning records discoverable through the typed bounded overview by exposing deterministic recent finding and proposal IDs. Rejected, superseded, retired and other non-attention states remain browsable without downstream storage scans, while overview lists stay capped at 20 records.
+
 ## [0.13.5] - 2026-08-26
 
 ### Added
