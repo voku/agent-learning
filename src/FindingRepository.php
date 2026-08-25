@@ -16,21 +16,37 @@ final class FindingRepository
     }
 
     /**
+     * Load every owner-recognized finding lifecycle state.
+     *
+     * @return array<string, Finding>
+     */
+    public function loadAll(string $root): array
+    {
+        $findings = [];
+        foreach ($this->lifecycle->directories() as $statusDirectory) {
+            foreach ($this->jsonFiles($root . '/findings/' . $statusDirectory) as $file) {
+                $finding = $this->validator->validateFile($file);
+                $this->lifecycle->assertPathMatchesStatus($finding, $file, $root);
+                if (isset($findings[$finding->id])) {
+                    throw new ValidationException($file, null, $finding->id, 'duplicate finding ID');
+                }
+                $findings[$finding->id] = $finding;
+            }
+        }
+        ksort($findings, SORT_STRING);
+
+        return $findings;
+    }
+
+    /**
      * @return array<string, Finding>
      */
     public function loadValidated(string $root): array
     {
-        $findings = [];
-        foreach ($this->jsonFiles($root . '/findings/validated') as $file) {
-            $finding = $this->validator->validateFile($file);
-            $this->lifecycle->assertPathMatchesStatus($finding, $file, $root);
-            if (isset($findings[$finding->id])) {
-                throw new ValidationException($file, null, $finding->id, 'duplicate finding ID');
-            }
-            $findings[$finding->id] = $finding;
-        }
-
-        return $findings;
+        return array_filter(
+            $this->loadAll($root),
+            static fn (Finding $finding): bool => $finding->status === FindingStatus::VALIDATED,
+        );
     }
 
     /**
