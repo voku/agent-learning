@@ -39,14 +39,24 @@ final class FindingRepository
     }
 
     /**
+     * Load only validated findings without making unrelated lifecycle records a
+     * prerequisite for the existing backlog/read path.
+     *
      * @return array<string, Finding>
      */
     public function loadValidated(string $root): array
     {
-        return array_filter(
-            $this->loadAll($root),
-            static fn (Finding $finding): bool => $finding->status === FindingStatus::VALIDATED,
-        );
+        $findings = [];
+        foreach ($this->jsonFiles($root . '/findings/validated') as $file) {
+            $finding = $this->validator->validateFile($file);
+            $this->lifecycle->assertPathMatchesStatus($finding, $file, $root);
+            if (isset($findings[$finding->id])) {
+                throw new ValidationException($file, null, $finding->id, 'duplicate finding ID');
+            }
+            $findings[$finding->id] = $finding;
+        }
+
+        return $findings;
     }
 
     /**
