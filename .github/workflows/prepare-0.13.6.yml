@@ -1,0 +1,36 @@
+name: Prepare 0.13.6
+
+on:
+  push:
+    branches: [release/0.13.6]
+    paths: ['.github/workflows/prepare-0.13.6.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: release/0.13.6
+      - name: Prepare release metadata
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('CHANGELOG.md')
+          text = path.read_text()
+          needle = '## [Unreleased]\n'
+          section = '''## [Unreleased]\n\n## [0.13.6] - 2026-08-26\n\n### Fixed\n\n- Keep inactive and historical Learning records discoverable through the typed bounded overview by exposing deterministic recent finding and proposal IDs. Rejected, superseded, retired and other non-attention states remain browsable without downstream storage scans, while overview lists stay capped at 20 records.\n'''
+          if '## [0.13.6] - 2026-08-26' not in text:
+              text = text.replace(needle, section, 1)
+              path.write_text(text)
+          PY
+          rm .github/workflows/prepare-0.13.6.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add CHANGELOG.md .github/workflows/prepare-0.13.6.yml
+          git commit -m 'chore(release): prepare 0.13.6'
+          git push origin HEAD:release/0.13.6
