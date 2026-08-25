@@ -35,15 +35,19 @@ final readonly class LearningCatalog
         $findingAttention = [];
         $proposalAttention = [];
         $durable = [];
+        $recentFindings = [];
+        $recentProposals = [];
 
         foreach ($state->findingsById as $finding) {
             ++$findingCounts[$finding->status->value];
+            $recentFindings[] = [$finding->createdAt, $finding->id];
             if (in_array($finding->status, [FindingStatus::CANDIDATE, FindingStatus::VALIDATED], true)) {
                 $findingAttention[] = $finding->id;
             }
         }
         foreach ($state->proposalsById as $proposal) {
             ++$proposalCounts[$proposal->status->value];
+            $recentProposals[] = [$proposal->createdAt, $proposal->id];
             if ($proposal->status === ProposalStatus::CANDIDATE) {
                 $proposalAttention[] = $proposal->id;
             }
@@ -60,8 +64,9 @@ final readonly class LearningCatalog
 
         sort($findingAttention, SORT_STRING);
         sort($proposalAttention, SORT_STRING);
-        usort($durable, static fn (array $left, array $right): int => [$right[0], $right[1]] <=> [$left[0], $left[1]]);
-        $recentDurable = array_map(static fn (array $item): string => $item[1], array_slice($durable, 0, 20));
+        usort($durable, self::recentFirst(...));
+        usort($recentFindings, self::recentFirst(...));
+        usort($recentProposals, self::recentFirst(...));
 
         return new LearningOverview(
             $findingCounts,
@@ -69,7 +74,9 @@ final readonly class LearningCatalog
             $guidanceCounts,
             $findingAttention,
             $proposalAttention,
-            $recentDurable,
+            self::idsOf($durable),
+            self::idsOf($recentFindings),
+            self::idsOf($recentProposals),
         );
     }
 
@@ -158,6 +165,27 @@ final readonly class LearningCatalog
         sort($outcomeIds, SORT_STRING);
 
         return new TaskLearningProjection($taskId, $findings, $proposals, $guidance, $outcomeIds);
+    }
+
+    /**
+     * @param array{0: string, 1: string} $left
+     * @param array{0: string, 1: string} $right
+     */
+    private static function recentFirst(array $left, array $right): int
+    {
+        return [$right[0], $right[1]] <=> [$left[0], $left[1]];
+    }
+
+    /**
+     * @param list<array{0: string, 1: string}> $items
+     * @return list<string>
+     */
+    private static function idsOf(array $items): array
+    {
+        return array_map(
+            static fn (array $item): string => $item[1],
+            array_slice($items, 0, 20),
+        );
     }
 
     private function state(): LearningRepositoryValidationResult
