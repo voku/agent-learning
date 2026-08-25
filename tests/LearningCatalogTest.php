@@ -35,6 +35,12 @@ final class LearningCatalogTest extends TestCase
         );
         self::assertSame([], $overview->proposalAttentionIds);
         self::assertSame(['proposal.2026-06-08.001'], $overview->recentDurableGuidanceIds);
+        self::assertCount(2, $overview->recentFindingIds);
+        self::assertContains('finding.2026-06-08.001', $overview->recentFindingIds);
+        self::assertContains('finding.2026-06-08.002', $overview->recentFindingIds);
+        self::assertCount(2, $overview->recentProposalIds);
+        self::assertContains('proposal.2026-06-08.001', $overview->recentProposalIds);
+        self::assertContains('proposal.2026-06-08.002', $overview->recentProposalIds);
     }
 
     public function testDetailQueriesPreserveFindingProposalGuidanceLineage(): void
