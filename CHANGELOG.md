@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.13.5] - 2026-08-26
+
+### Added
+
+- Add the typed read-only `LearningCatalog` query boundary with bounded overview, finding, proposal, durable-guidance and task-scoped projections. The catalog preserves owner lifecycle states, finding/proposal/task lineage, guidance usage outcomes, rejected/history visibility and explicit attention candidates without exposing Learning's directory layout to consumers.
+
 ## [0.13.4] - 2026-08-25
 
 ### Fixed
