@@ -5,7 +5,6 @@ on:
     branches: [main]
     paths:
       - '.release/*.json'
-      - 'CHANGELOG.md'
 
 permissions:
   contents: write
@@ -28,28 +27,18 @@ jobs:
             echo 'No release markers found.' >&2
             exit 1
           fi
-
+          frozen_main="$(git rev-parse HEAD)"
           for marker in "${markers[@]}"; do
             version="$(jq -er '.version' "$marker")"
             target="$(jq -er '.target_sha' "$marker")"
-            if [[ "$version" != "$(basename "$marker" .json)" ]]; then
-              echo "Marker filename/version mismatch: $marker -> $version" >&2
-              exit 1
-            fi
-            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "Invalid release version: $version" >&2
-              exit 1
-            fi
-            if ! grep -Fq "## [$version] - " CHANGELOG.md && ! grep -Fq "## $version - " CHANGELOG.md; then
-              echo "CHANGELOG.md has no release section for $version" >&2
-              exit 1
-            fi
+            [[ "$version" == "$(basename "$marker" .json)" ]] || { echo "Marker filename/version mismatch: $marker -> $version" >&2; exit 1; }
+            [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid release version: $version" >&2; exit 1; }
+            [[ "$target" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || { echo "Invalid release target SHA: $target" >&2; exit 1; }
+            if ! grep -Fq "## [$version] - " CHANGELOG.md && ! grep -Fq "## $version - " CHANGELOG.md; then echo "CHANGELOG.md has no release section for $version" >&2; exit 1; fi
             git cat-file -e "${target}^{commit}"
-            if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
-              existing="$(git rev-list -n 1 "$version")"
-              [[ "$existing" == "$target" ]] || { echo "Tag $version exists at $existing, expected $target" >&2; exit 1; }
-              continue
-            fi
+            git merge-base --is-ancestor "$target" "$frozen_main" || { echo "Release target $target is not reachable from frozen main $frozen_main" >&2; exit 1; }
+            if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then existing="$(git rev-list -n 1 "$version")"; [[ "$existing" == "$target" ]] || { echo "Tag $version exists at $existing, expected $target" >&2; exit 1; }; continue; fi
+            if ! git show "${target}:CHANGELOG.md" | grep -Fq "## [$version] - " && ! git show "${target}:CHANGELOG.md" | grep -Fq "## $version - "; then echo "Release target $target does not contain the $version changelog section" >&2; exit 1; fi
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git tag -a "$version" "$target" -m "agent-learning $version"
