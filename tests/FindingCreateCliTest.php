@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace voku\AgentLearning\Tests;
 
 use PHPUnit\Framework\TestCase;
+use voku\AgentLearning\EvidenceValidator;
 use voku\AgentLearning\FindingRepository;
 use voku\AgentLearning\FindingStatus;
 use voku\AgentLearning\FindingValidator;
@@ -47,6 +48,23 @@ final class FindingCreateCliTest extends TestCase
         $this->assertNoTemporaryFindingFiles($root);
     }
 
+    public function testReportsAllMissingRequiredOptionsInOneFailure(): void
+    {
+        $root = $this->createFreshLearningRoot();
+
+        [$exitCode, $output] = $this->runFindingCreate($root, [
+            '--task', 'PROJECT-27',
+            '--session', 'session_PROJECT-27',
+        ]);
+
+        self::assertSame(1, $exitCode, $output);
+        self::assertStringContainsString(
+            'finding-create missing required options: --by, --observation, --hypothesis, --conclusion, --confidence, --sensitivity, --evidence-json',
+            $output,
+        );
+        self::assertDirectoryDoesNotExist($root . '/findings/validated');
+    }
+
     public function testInvalidFindingLeavesNoPartialTargetDirectory(): void
     {
         $root = $this->createFreshLearningRoot();
@@ -63,7 +81,35 @@ final class FindingCreateCliTest extends TestCase
         ]);
 
         self::assertSame(1, $exitCode, $output);
-        self::assertStringContainsString('finding requires evidence', $output);
+        self::assertStringContainsString('finding-create missing required options: --evidence-json', $output);
+        self::assertDirectoryDoesNotExist($root . '/findings/validated');
+    }
+
+    public function testUnsupportedEvidenceTypeListsAcceptedVocabulary(): void
+    {
+        $root = $this->createFreshLearningRoot();
+
+        [$exitCode, $output] = $this->runFindingCreate($root, [
+            '--task', 'PROJECT-27',
+            '--session', 'session_PROJECT-27',
+            '--by', 'agent',
+            '--observation', 'Evidence vocabulary should be discoverable from the failed request.',
+            '--hypothesis', 'The validator owns the accepted evidence type vocabulary.',
+            '--conclusion', 'Unsupported evidence types should report the accepted owner vocabulary.',
+            '--confidence', 'high',
+            '--sensitivity', 'public',
+            '--evidence-json', json_encode(
+                ['type' => 'unsupported_example', 'summary' => 'Invalid on purpose.'],
+                JSON_THROW_ON_ERROR,
+            ),
+        ]);
+
+        self::assertSame(1, $exitCode, $output);
+        self::assertStringContainsString('unsupported evidence type at index 0', $output);
+        self::assertStringContainsString(
+            'accepted types: ' . implode(', ', EvidenceValidator::supportedTypes()),
+            $output,
+        );
         self::assertDirectoryDoesNotExist($root . '/findings/validated');
     }
 

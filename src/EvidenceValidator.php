@@ -36,6 +36,14 @@ final class EvidenceValidator
     ];
 
     /**
+     * @return list<string>
+     */
+    public static function supportedTypes(): array
+    {
+        return self::TYPES;
+    }
+
+    /**
      * @param list<array<string, mixed>> $evidence
      */
     public function validate(array $evidence, string $file, ?int $line, string $recordId): void
@@ -47,7 +55,13 @@ final class EvidenceValidator
         foreach ($evidence as $index => $item) {
             $type = $item['type'] ?? null;
             if (!is_string($type) || !in_array($type, self::TYPES, true)) {
-                throw new ValidationException($file, $line, $recordId, 'unsupported evidence type at index ' . $index);
+                throw new ValidationException(
+                    $file,
+                    $line,
+                    $recordId,
+                    'unsupported evidence type at index ' . $index
+                    . '; accepted types: ' . implode(', ', self::supportedTypes()),
+                );
             }
 
             if ($type === 'file_reference') {
