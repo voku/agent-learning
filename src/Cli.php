@@ -558,6 +558,33 @@ final class Cli
             throw new ValidationException($root, null, null, 'finding-create takes no positional arguments');
         }
 
+        $missingOptions = [];
+        foreach ([
+            'task' => '--task',
+            'session' => '--session',
+            'by' => '--by',
+            'observation' => '--observation',
+            'hypothesis' => '--hypothesis',
+            'conclusion' => '--conclusion',
+            'confidence' => '--confidence',
+            'sensitivity' => '--sensitivity',
+        ] as $name => $label) {
+            if ($this->stringOption($parsed['options'], $name) === null) {
+                $missingOptions[] = $label;
+            }
+        }
+        if ($this->stringOptions($parsed['options'], 'evidence-json') === []) {
+            $missingOptions[] = '--evidence-json';
+        }
+        if ($missingOptions !== []) {
+            throw new ValidationException(
+                $root,
+                null,
+                null,
+                'finding-create missing required options: ' . implode(', ', $missingOptions),
+            );
+        }
+
         $taskId = $this->stringOption($parsed['options'], 'task');
         if ($taskId === null) {
             throw new ValidationException($root, null, null, 'finding-create requires --task option');
