@@ -51,6 +51,17 @@ final class RecallSelectionEventParser
             throw new ValidationException($file, $line, $id, 'selected recall selection must be eligible');
         }
 
+        $outcomeWithheldReason = $this->recordAccess->optionalString(
+            $record,
+            'outcome_withheld_reason',
+            $file,
+            $line,
+            $id,
+        );
+        if ($outcomeWithheldReason !== null && trim($outcomeWithheldReason) === '') {
+            throw new ValidationException($file, $line, $id, 'outcome_withheld_reason must be non-empty when present');
+        }
+
         return new RecallSelectionEvent(
             $id,
             $this->recordAccess->string($record, 'compilation_id', $file, $line, $id),
@@ -64,6 +75,7 @@ final class RecallSelectionEventParser
             $this->recordAccess->stringList($record, 'task_files', $file, $line, $id),
             $recordedAt,
             $record,
+            $outcomeWithheldReason,
         );
     }
 
