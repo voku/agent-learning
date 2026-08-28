@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace voku\AgentLearning\Tests;
 
 use PHPUnit\Framework\TestCase;
+use voku\AgentLearning\GuidanceOutcomeEventRepository;
 use voku\AgentLearning\OutcomeRepository;
 use voku\AgentLearning\ValidationException;
 
@@ -15,25 +16,7 @@ final class OutcomeRepositoryTest extends TestCase
     protected function setUp(): void
     {
         $this->root = sys_get_temp_dir() . '/outcome-repository-test-' . bin2hex(random_bytes(8));
-        mkdir($this->root . '/findings/validated', 0777, true);
-        mkdir($this->root . '/proposals/applied', 0777, true);
         mkdir($this->root . '/history', 0777, true);
-        mkdir($this->root . '/skills', 0777, true);
-
-        copy(__DIR__ . '/fixtures/findings/finding.2026-06-08.001.json', $this->root . '/findings/validated/finding.2026-06-08.001.json');
-
-        $target = $this->root . '/skills/agent-learning-cli.md';
-        file_put_contents($target, 'Call the packaged Composer bin entrypoint and keep consuming-project scripts as wrappers.');
-
-        $proposal = json_decode((string)file_get_contents(__DIR__ . '/fixtures/proposals/proposal.2026-06-08.001.json'), true);
-        $proposal['status'] = 'applied';
-        $proposal['approved_by'] = 'maintainer';
-        $proposal['approved_at'] = '2026-06-08T13:00:00+00:00';
-        $proposal['applied_validation'] = [
-            'target_source_ref' => 'skills/agent-learning-cli.md',
-            'target_content_hash' => hash_file('sha256', $target),
-        ];
-        file_put_contents($this->root . '/proposals/applied/proposal.2026-06-08.001.json', json_encode($proposal));
     }
 
     protected function tearDown(): void
@@ -41,62 +24,100 @@ final class OutcomeRepositoryTest extends TestCase
         $this->removeDirectory($this->root);
     }
 
-    public function testRecordsOutcomeSuccessfully(): void
+    public function testRecordsVersionedGuidanceOutcomeSuccessfully(): void
     {
         $repo = new OutcomeRepository();
-        $record = [
-            'id' => 'outcome.2026-06-20.001',
-            'task_id' => 'PROJECT-204',
-            'applied_proposals' => ['proposal.2026-06-08.001'],
-            'guidance_used' => ['skill.auth-context'],
-            'result' => 'successful',
-            'validation' => [
-                'tests_passed' => true,
-            ],
-            'recorded_by' => 'lars',
-            'recorded_at' => '2026-06-20T12:00:00+00:00',
-        ];
+        $record = $this->currentOutcome('guidance-outcome.2026-06-20.001');
 
         $repo->record($this->root, $record);
 
         $outcomes = $repo->loadAll($this->root);
         self::assertCount(1, $outcomes);
-        self::assertSame('outcome.2026-06-20.001', $outcomes[0]['id']);
+        self::assertSame($record, $outcomes[0]);
     }
 
-    public function testRecordsConstraintOutcomeSuccessfully(): void
+    public function testRejectsNewLegacyOutcomeSummaryWrites(): void
     {
         $repo = new OutcomeRepository();
-        $record = [
-            'id' => 'outcome.2026-06-20.002',
-            'task_id' => 'PROJECT-205',
-            'applied_proposals' => [],
-            'guidance_used' => ['constraint.project.inline-template.render-data'],
-            'result' => 'violation_detected',
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('legacy outcome.* records are read-only compatibility');
+        $repo->record($this->root, $this->legacyOutcome('outcome.2026-06-20.001'));
+    }
+
+    public function testKeepsHistoricalLegacyOutcomeReadable(): void
+    {
+        $legacy = $this->legacyOutcome('outcome.2026-06-20.001');
+        file_put_contents(
+            $this->root . '/history/outcomes.jsonl',
+            json_encode($legacy, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n",
+        );
+
+        $outcomes = (new OutcomeRepository())->loadAll($this->root);
+
+        self::assertSame([$legacy], $outcomes);
+        self::assertSame(1, (new GuidanceOutcomeEventRepository())->countLegacyRecords($this->root));
+    }
+
+    public function testMixedLegacyAndCurrentHistoryRemainsReadable(): void
+    {
+        $legacy = $this->legacyOutcome('outcome.2026-06-20.001');
+        file_put_contents(
+            $this->root . '/history/outcomes.jsonl',
+            json_encode($legacy, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n",
+        );
+
+        $current = $this->currentOutcome('guidance-outcome.2026-06-20.002');
+        (new OutcomeRepository())->record($this->root, $current);
+
+        $outcomes = (new OutcomeRepository())->loadAll($this->root);
+        self::assertSame(
+            ['outcome.2026-06-20.001', 'guidance-outcome.2026-06-20.002'],
+            array_column($outcomes, 'id'),
+        );
+        self::assertSame(1, (new GuidanceOutcomeEventRepository())->countLegacyRecords($this->root));
+    }
+
+    public function testRejectsUnsupportedCurrentSchemaVersion(): void
+    {
+        $record = $this->currentOutcome('guidance-outcome.2026-06-20.001');
+        $record['schema_version'] = '2.0';
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('unsupported guidance outcome schema version');
+        (new OutcomeRepository())->record($this->root, $record);
+    }
+
+    /** @return array<string, mixed> */
+    private function currentOutcome(string $id): array
+    {
+        return [
+            'schema_version' => '1.0',
+            'id' => $id,
+            'compilation_id' => 'compilation.PROJECT-204.001',
+            'task_id' => 'PROJECT-204',
+            'guidance_id' => 'skill.auth-context',
+            'outcome' => 'helpful',
+            'applied' => true,
+            'comment' => 'The bounded guidance matched the implementation.',
+            'commit' => 'abc123',
             'recorded_by' => 'lars',
             'recorded_at' => '2026-06-20T12:00:00+00:00',
         ];
-
-        $repo->record($this->root, $record);
-
-        $outcomes = $repo->loadAll($this->root);
-        self::assertSame('violation_detected', $outcomes[0]['result']);
     }
 
-    public function testThrowsOnUnknownProposalReference(): void
+    /** @return array<string, mixed> */
+    private function legacyOutcome(string $id): array
     {
-        $repo = new OutcomeRepository();
-        $record = [
-            'id' => 'outcome.2026-06-20.001',
+        return [
+            'id' => $id,
             'task_id' => 'PROJECT-204',
-            'applied_proposals' => ['unknown-proposal-id'],
-            'guidance_used' => [],
+            'applied_proposals' => [],
+            'guidance_used' => ['skill.auth-context'],
             'result' => 'successful',
+            'recorded_by' => 'lars',
+            'recorded_at' => '2026-06-20T12:00:00+00:00',
         ];
-
-        $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('outcome references unknown proposal');
-        $repo->record($this->root, $record);
     }
 
     private function removeDirectory(string $dir): void
