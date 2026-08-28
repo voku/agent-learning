@@ -9,6 +9,9 @@ use DateTimeInterface;
 
 /**
  * Repository for outcome records stored in history/outcomes.jsonl.
+ *
+ * The older `outcome.*` summary shape remains readable as legacy evidence, but
+ * new writes use only the versioned `guidance-outcome.*` event contract.
  */
 final class OutcomeRepository
 {
@@ -20,10 +23,10 @@ final class OutcomeRepository
     }
 
     /**
-     * Load all outcome records.
+     * Load all outcome records, including read-only legacy `outcome.*` history.
      *
      * @param string                  $root
-     * @param array<string, Proposal> $proposalsById Optional list of known proposals for reference checking.
+     * @param array<string, Proposal> $proposalsById Optional list of known proposals for legacy reference checking.
      * @return list<array<string, mixed>>
      * @throws ValidationException
      */
@@ -47,14 +50,18 @@ final class OutcomeRepository
                 continue;
             }
 
-            $this->validateOutcomeRecord($record, $path, $lineNumber, $id, $proposalsById);
+            $this->validateLegacyOutcomeRecord($record, $path, $lineNumber, $id, $proposalsById);
         }
 
         return $records;
     }
 
     /**
-     * Record a new outcome.
+     * Record one current, versioned guidance outcome event.
+     *
+     * Historical `outcome.*` summaries are deliberately read-only. Keeping the
+     * legacy writer here would let callers append durable evidence whose format
+     * has no schema discriminator while every current event already has one.
      *
      * @param string               $root
      * @param array<string, mixed> $record
@@ -63,27 +70,26 @@ final class OutcomeRepository
     public function record(string $root, array $record): void
     {
         $path = $root . '/history/outcomes.jsonl';
-
-        // Load proposals to validate referenced proposal IDs
-        $findingsById = [];
-        $findingLifecycle = new FindingLifecycle();
-        $findingValidator = new FindingValidator();
-        foreach ($findingLifecycle->findingFiles($root) as $file) {
-            $finding = $findingValidator->validateFile($file);
-            $findingsById[$finding->id] = $finding;
+        $recordId = is_string($record['id'] ?? null) ? $record['id'] : null;
+        if ($recordId !== null && str_starts_with($recordId, 'outcome.')) {
+            throw new ValidationException(
+                $path,
+                null,
+                $recordId,
+                'legacy outcome.* records are read-only compatibility; new writes require a versioned guidance-outcome.* record',
+            );
         }
-        $proposalsById = (new ProposalRepository())->loadAll($root, $findingsById);
 
-        $this->validateOutcomeRecord($record, $path, null, is_string($record['id'] ?? null) ? $record['id'] : null, $proposalsById);
+        $this->guidanceOutcomeEventParser->parse($record, $path);
 
-        $all = $this->loadAll($root, $proposalsById);
+        $all = $this->loadAll($root);
         foreach ($all as $existing) {
-            if ($existing['id'] === $record['id']) {
-                throw new ValidationException($path, null, $record['id'], 'duplicate outcome ID');
+            if (($existing['id'] ?? null) === $recordId) {
+                throw new ValidationException($path, null, $recordId, 'duplicate outcome ID');
             }
         }
 
-        $this->redactionGuard->assertSafeValue($record, $path, null, is_string($record['id'] ?? null) ? $record['id'] : null);
+        $this->redactionGuard->assertSafeValue($record, $path, null, $recordId);
 
         if (!is_dir(dirname($path))) {
             if (!mkdir($pathDir = dirname($path), 0777, true) && !is_dir($pathDir)) {
@@ -96,35 +102,10 @@ final class OutcomeRepository
     }
 
     /**
-     * Generate the next outcome ID.
+     * Validate the historical unversioned `outcome.*` summary shape.
      *
-     * @param string                 $root
-     * @param DateTimeImmutable|null $date
-     * @return string
-     */
-    public function generateOutcomeId(string $root, ?DateTimeImmutable $date = null): string
-    {
-        $dateObj = $date ?? new DateTimeImmutable('now');
-        $dateStr = $dateObj->format('Y-m-d');
-        $prefix = 'outcome.' . $dateStr . '.';
-
-        $all = $this->loadAll($root);
-        $maxNum = 0;
-        foreach ($all as $existing) {
-            $id = $existing['id'];
-            if (str_starts_with($id, $prefix)) {
-                $suffix = substr($id, strlen($prefix));
-                if (is_numeric($suffix)) {
-                    $maxNum = max($maxNum, (int)$suffix);
-                }
-            }
-        }
-
-        return $prefix . sprintf('%03d', $maxNum + 1);
-    }
-
-    /**
-     * Validate outcome fields and check referenced proposals.
+     * This is intentionally a read-compatibility path only. New records are
+     * written through the versioned guidance-outcome event contract above.
      *
      * @param array<string, mixed>    $record
      * @param string                  $file
@@ -132,14 +113,9 @@ final class OutcomeRepository
      * @param string|null             $recordId
      * @param array<string, Proposal> $proposalsById
      */
-    private function validateOutcomeRecord(array $record, string $file, ?int $line, ?string $recordId, array $proposalsById = []): void
+    private function validateLegacyOutcomeRecord(array $record, string $file, ?int $line, ?string $recordId, array $proposalsById = []): void
     {
         $id = $record['id'] ?? null;
-        if (is_string($id) && str_starts_with($id, 'guidance-outcome.')) {
-            $this->guidanceOutcomeEventParser->parse($record, $file, $line);
-
-            return;
-        }
         if (!is_string($id) || preg_match('/^outcome\.\d{4}-\d{2}-\d{2}\.\d{3}$/', $id) !== 1) {
             throw new ValidationException($file, $line, $recordId, 'outcome id must match outcome.YYYY-MM-DD.NNN');
         }
