@@ -23,6 +23,7 @@ final readonly class RecallSelectionEvent
         public array $taskFiles,
         public string $recordedAt,
         public array $raw,
+        public ?string $outcomeWithheldReason = null,
     ) {
     }
 }
