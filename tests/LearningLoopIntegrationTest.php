@@ -132,14 +132,15 @@ final class LearningLoopIntegrationTest extends TestCase
         self::assertFileExists($this->root . '/proposals/applied/' . $proposalId . '.json');
 
         $outcomeRecord = [
-            'id' => 'outcome.2026-06-20.001',
+            'schema_version' => '1.0',
+            'id' => 'guidance-outcome.2026-06-20.001',
+            'compilation_id' => 'compilation.PROJECT-204.001',
             'task_id' => 'PROJECT-204',
-            'applied_proposals' => [$proposalId],
-            'guidance_used' => ['skill.auth-context'],
-            'result' => 'successful',
-            'validation' => [
-                'tests_passed' => true,
-            ],
+            'guidance_id' => 'skill.auth-context',
+            'outcome' => 'helpful',
+            'applied' => true,
+            'comment' => 'The applied skill guidance supported the successful implementation.',
+            'commit' => 'commit_sha_xyz',
             'recorded_by' => 'lars',
             'recorded_at' => '2026-06-20T12:00:00+00:00',
         ];
@@ -148,6 +149,7 @@ final class LearningLoopIntegrationTest extends TestCase
 
         $outcomes = $outcomeRepo->loadAll($this->root);
         self::assertCount(1, $outcomes);
+        self::assertSame('guidance-outcome.2026-06-20.001', $outcomes[0]['id']);
     }
 
     private function removeDirectory(string $dir): void
