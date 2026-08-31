@@ -60,7 +60,7 @@ final class LearningNoteRepository
         return $match;
     }
 
-    public function publish(string $root, LearningNote $note): string
+    public function publish(string $root, LearningNote $note, bool $replaceExisting = false): string
     {
         $directory = $root . '/notes/' . $note->status->value;
         if (!is_dir($directory) && !mkdir($directory, 0777, true) && !is_dir($directory)) {
@@ -72,7 +72,7 @@ final class LearningNoteRepository
             $note->toArray(),
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         ) . "\n";
-        $this->writeAtomically($directory, $path, $encoded, $note->id);
+        $this->writeAtomically($directory, $path, $encoded, $note->id, $replaceExisting);
 
         return $path;
     }
@@ -248,19 +248,95 @@ final class LearningNoteRepository
         return $value;
     }
 
-    private function writeAtomically(string $directory, string $path, string $content, string $id): void
-    {
-        $temporary = $directory . '/.' . basename($path) . '.tmp.' . bin2hex(random_bytes(8));
-        if (file_put_contents($temporary, $content, LOCK_EX) === false) {
-            throw new ValidationException($temporary, null, $id, 'cannot write temporary LearningNote');
+    private function writeAtomically(
+        string $directory,
+        string $path,
+        string $content,
+        string $id,
+        bool $replaceExisting,
+    ): void {
+        if (is_link($path) || (file_exists($path) && !is_file($path))) {
+            throw new ValidationException($path, null, $id, 'LearningNote target path is unsafe');
         }
-        if (rename($temporary, $path)) {
+        if ($replaceExisting && !is_file($path)) {
+            throw new ValidationException($path, null, $id, 'LearningNote update target disappeared before publication');
+        }
+
+        $temporary = $directory . '/.' . basename($path) . '.tmp.' . bin2hex(random_bytes(8));
+        $handle = fopen($temporary, 'xb');
+        if ($handle === false) {
+            throw new ValidationException($temporary, null, $id, 'cannot create temporary LearningNote');
+        }
+        try {
+            $offset = 0;
+            $length = strlen($content);
+            while ($offset < $length) {
+                $written = fwrite($handle, substr($content, $offset));
+                if ($written === false || $written === 0) {
+                    throw new ValidationException($temporary, null, $id, 'cannot write temporary LearningNote');
+                }
+                $offset += $written;
+            }
+            if (!fflush($handle) || !fsync($handle)) {
+                throw new ValidationException($temporary, null, $id, 'cannot flush temporary LearningNote');
+            }
+        } catch (Throwable $throwable) {
+            fclose($handle);
+            $this->removeTemporaryFile($temporary, $id, $throwable);
+            throw $throwable;
+        }
+        if (!fclose($handle)) {
+            $exception = new ValidationException($temporary, null, $id, 'cannot close temporary LearningNote');
+            $this->removeTemporaryFile($temporary, $id, $exception);
+            throw $exception;
+        }
+
+        if ($replaceExisting) {
+            if (!rename($temporary, $path)) {
+                $exception = new ValidationException($path, null, $id, 'cannot atomically replace LearningNote');
+                $this->removeTemporaryFile($temporary, $id, $exception);
+                throw $exception;
+            }
+
             return;
         }
 
-        if (is_file($temporary) && !unlink($temporary)) {
-            throw new ValidationException($temporary, null, $id, 'cannot remove temporary LearningNote after failed publication');
+        if ($this->filesystemEntryExists($path)) {
+            $exception = new ValidationException($path, null, $id, 'LearningNote file already exists');
+            $this->removeTemporaryFile($temporary, $id, $exception);
+            throw $exception;
         }
-        throw new ValidationException($path, null, $id, 'cannot atomically publish LearningNote');
+        if (!link($temporary, $path)) {
+            $reason = $this->filesystemEntryExists($path)
+                ? 'LearningNote file already exists'
+                : 'cannot atomically publish LearningNote';
+            $exception = new ValidationException($path, null, $id, $reason);
+            $this->removeTemporaryFile($temporary, $id, $exception);
+            throw $exception;
+        }
+        $this->removeTemporaryFile($temporary, $id);
+    }
+
+    private function removeTemporaryFile(string $path, string $id, ?Throwable $cause = null): void
+    {
+        if (!is_file($path)) {
+            return;
+        }
+        if (unlink($path)) {
+            return;
+        }
+        $message = 'cannot remove temporary LearningNote';
+        if ($cause !== null) {
+            $message .= ' after failure: ' . $cause->getMessage();
+        }
+        throw new ValidationException($path, null, $id, $message);
+    }
+
+    /** @phpstan-impure */
+    private function filesystemEntryExists(string $path): bool
+    {
+        clearstatcache(true, $path);
+
+        return is_link($path) || file_exists($path);
     }
 }
