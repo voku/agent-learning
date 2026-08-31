@@ -11,6 +11,7 @@ final class LearningNotePreparer
         private readonly ProposalRepository $proposalRepository = new ProposalRepository(),
         private readonly LearningNoteRepository $noteRepository = new LearningNoteRepository(),
         private readonly LearningNoteCodec $codec = new LearningNoteCodec(),
+        private readonly LearningNoteStatusInspector $statusInspector = new LearningNoteStatusInspector(),
     ) {
     }
 
@@ -91,6 +92,7 @@ final class LearningNotePreparer
             id: $existing->id,
             patternKey: $existing->patternKey,
             status: $existing->status,
+            evidenceState: $this->statusInspector->inspect($root, $existing)->state,
             scope: $existing->scope,
             tags: $existing->tags,
             sourceFindings: $existing->sourceFindings,
