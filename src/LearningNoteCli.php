@@ -84,18 +84,18 @@ final class LearningNoteCli
         $inspector = new LearningNoteStatusInspector();
         $projectRoot = $this->value($options, 'project-root');
 
-        $notes = $id === null ? $repository->loadAll($root) : array_filter([
-            $id => $repository->find($root, $id),
-        ], static fn (?LearningNote $note): bool => $note instanceof LearningNote);
-        if ($id !== null && $notes === []) {
-            throw new ValidationException($root, null, $id, 'LearningNote not found');
+        if ($id === null) {
+            $notes = $repository->loadAll($root);
+        } else {
+            $note = $repository->find($root, $id);
+            if ($note === null) {
+                throw new ValidationException($root, null, $id, 'LearningNote not found');
+            }
+            $notes = [$id => $note];
         }
 
         $reports = [];
         foreach ($notes as $note) {
-            if (!$note instanceof LearningNote) {
-                continue;
-            }
             $reports[] = $inspector->inspect($root, $note, $projectRoot)->toArray();
         }
         $this->json(['notes' => $reports]);
@@ -187,11 +187,11 @@ TXT);
             $existing = $options[$name] ?? null;
             if ($existing === null) {
                 $options[$name] = $value;
-            } elseif (is_string($existing)) {
-                $options[$name] = [$existing, $value];
-            } else {
+            } elseif (is_array($existing)) {
                 $existing[] = $value;
                 $options[$name] = $existing;
+            } else {
+                $options[$name] = [$existing, $value];
             }
         }
 
