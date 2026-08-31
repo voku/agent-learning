@@ -32,7 +32,8 @@
     }
   },
   "bin": [
-    "bin/agent-learning"
+    "bin/agent-learning",
+    "bin/agent-learning-note"
   ],
   "scripts": {
     "test": "phpunit",
