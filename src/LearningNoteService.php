@@ -83,9 +83,13 @@ final readonly class LearningNoteService
 
         $projectRoot ??= (new LearningProjectPaths())->projectRootForLearningRoot($root);
         $existing = $this->noteRepository->findActiveByPatternKey($root, $patternKey);
+        if ($existing !== null) {
+            $this->assertStoredLineage($root, $existing);
+        }
         $existingProjection = $existing === null ? null : $this->project($existing, $projectRoot);
         $overlapCandidates = [];
         foreach ($this->noteRepository->loadActive($root) as $note) {
+            $this->assertStoredLineage($root, $note);
             if ($existing !== null && $note->id === $existing->id) {
                 continue;
             }
@@ -165,6 +169,7 @@ final readonly class LearningNoteService
             createdAt: $createdAt,
             updatedAt: $now,
         );
+        $this->assertStoredLineage($root, $note);
         $this->redactionGuard->assertSafeValue($note->toArray(), 'LearningNote ' . $id, null, $id);
         $this->noteRepository->publish($root, $note);
 
@@ -183,6 +188,7 @@ final readonly class LearningNoteService
         if ($existing === null || $existing->status !== LearningNoteStatus::ACTIVE) {
             throw new ValidationException($root, null, $id, 'active LearningNote not found');
         }
+        $this->assertStoredLineage($root, $existing);
         $retired = new LearningNote(
             id: $existing->id,
             patternKey: $existing->patternKey,
@@ -212,6 +218,7 @@ final readonly class LearningNoteService
         $projectRoot ??= (new LearningProjectPaths())->projectRootForLearningRoot($root);
         $result = [];
         foreach ($this->noteRepository->loadActive($root) as $note) {
+            $this->assertStoredLineage($root, $note);
             $result[] = $this->project($note, $projectRoot);
         }
         usort($result, static fn (LearningNoteProjection $left, LearningNoteProjection $right): int => $left->id <=> $right->id);
@@ -283,6 +290,22 @@ final readonly class LearningNoteService
         ksort($bySourceRef, SORT_STRING);
 
         return array_values($bySourceRef);
+    }
+
+    private function assertStoredLineage(string $root, LearningNote $note): void
+    {
+        $findingsById = $this->findingRepository->loadAll($root);
+        foreach ($note->sourceFindings as $findingId) {
+            if (!isset($findingsById[$findingId])) {
+                throw new ValidationException($root, null, $note->id, 'LearningNote source Finding is missing: ' . $findingId);
+            }
+        }
+        $proposalsById = $this->proposalRepository->loadAll($root, $findingsById);
+        foreach ($note->sourceProposals as $proposalId) {
+            if (!isset($proposalsById[$proposalId])) {
+                throw new ValidationException($root, null, $note->id, 'LearningNote source Proposal is missing: ' . $proposalId);
+            }
+        }
     }
 
     private function project(LearningNote $note, string $projectRoot): LearningNoteProjection
