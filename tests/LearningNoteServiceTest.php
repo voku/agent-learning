@@ -23,13 +23,15 @@ final class LearningNoteServiceTest extends TestCase
         $source = $projectRoot . '/src/Workflow/Foo.php';
         mkdir(dirname($source), 0777, true);
         file_put_contents($source, "<?php\n");
+        $sha = hash_file('sha256', $source);
+        self::assertIsString($sha);
 
         $service = new LearningNoteService();
         $first = $service->publish($root, new LearningNoteDraft(
             sourceFindings: ['finding.2026-08-31.001'],
             sourceProposals: [],
             tags: ['workflow', 'ownership'],
-            repositoryEvidence: [new LearningNoteRepositoryEvidence('src/Workflow/Foo.php', hash_file('sha256', $source))],
+            repositoryEvidence: [new LearningNoteRepositoryEvidence('src/Workflow/Foo.php', $sha)],
             content: $this->content('Use the project-layout owner.'),
         ), $projectRoot);
 
@@ -41,7 +43,7 @@ final class LearningNoteServiceTest extends TestCase
             sourceFindings: ['finding.2026-08-31.001'],
             sourceProposals: [],
             tags: ['workflow'],
-            repositoryEvidence: [new LearningNoteRepositoryEvidence('src/Workflow/Foo.php', hash_file('sha256', $source))],
+            repositoryEvidence: [new LearningNoteRepositoryEvidence('src/Workflow/Foo.php', $sha)],
             content: $this->content('Use the typed project-layout owner API.'),
         ), $projectRoot);
 
@@ -130,7 +132,7 @@ final class LearningNoteServiceTest extends TestCase
             content: $this->content('Use the owner API.'),
         ), $projectRoot);
 
-        $retired = $service->retire($root, $created->id, 'Superseded by narrower evidence.', $projectRoot);
+        $retired = $service->retire($root, $created->id, 'Superseded by narrower evidence.');
 
         self::assertSame(LearningNoteStatus::RETIRED, $retired->status);
         self::assertSame([], (new LearningNoteRepository())->loadActive($root));
@@ -148,6 +150,15 @@ final class LearningNoteServiceTest extends TestCase
         $projectRoot = $base . '/project';
         mkdir($root . '/findings/validated', 0777, true);
         mkdir($projectRoot, 0777, true);
+        file_put_contents(
+            $root . '/config.json',
+            json_encode([
+                'schema_version' => '1.0',
+                'project_root' => '../project',
+                'constraint_generation_dir' => 'constraint-generation',
+                'active_constraints_dir' => 'constraints/active',
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n",
+        );
 
         return [$root, $projectRoot];
     }
