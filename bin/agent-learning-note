@@ -1,0 +1,20 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use voku\AgentLearning\LearningNoteCli;
+
+$autoloadCandidates = [
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../../autoload.php',
+];
+foreach ($autoloadCandidates as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+        exit((new LearningNoteCli())->run($argv));
+    }
+}
+
+fwrite(STDERR, "Unable to locate Composer autoload.php\n");
+exit(1);
