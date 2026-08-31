@@ -70,10 +70,6 @@ final class LearningNotePreparer
             }
         }
 
-        if ($patternKey === null || !$validationCase instanceof ValidationCase) {
-            throw new ValidationException($root, null, null, 'LearningNote preparation did not resolve a reusable pattern');
-        }
-
         $relatedProposalIds = [];
         foreach ($this->proposalRepository->loadAll($root, $allFindings) as $proposal) {
             if ($proposal->patternKey === $patternKey || array_intersect($proposal->sourceFindings, $findingIds) !== []) {
