@@ -16,7 +16,7 @@ use voku\AgentLearning\ValidationException;
 
 final class LearningNoteServiceTest extends TestCase
 {
-    public function testPublishesAndUpdatesOneStablePatternOwner(): void
+    public function testPublishesAndAccumulatesOneStablePatternOwner(): void
     {
         [$root, $projectRoot] = $this->root();
         $this->writeFinding($root, 'finding.2026-08-31.001', 'workflow.project-layout', 'src/Workflow/');
@@ -39,17 +39,25 @@ final class LearningNoteServiceTest extends TestCase
         self::assertSame(LearningNoteEvidenceState::CURRENT, $first->evidenceState);
         self::assertCount(1, (new LearningNoteRepository())->loadActive($root));
 
+        $this->writeFinding($root, 'finding.2026-08-31.002', 'workflow.project-layout', 'tests/');
         $second = $service->publish($root, new LearningNoteDraft(
-            sourceFindings: ['finding.2026-08-31.001'],
+            sourceFindings: ['finding.2026-08-31.002'],
             sourceProposals: [],
             tags: ['workflow'],
-            repositoryEvidence: [new LearningNoteRepositoryEvidence('src/Workflow/Foo.php', $sha)],
+            repositoryEvidence: [],
             content: $this->content('Use the typed project-layout owner API.'),
         ), $projectRoot);
 
         self::assertSame($first->id, $second->id);
         self::assertCount(1, (new LearningNoteRepository())->loadActive($root));
-        self::assertSame('Use the typed project-layout owner API.', $second->guidance);
+        self::assertSame('Use the typed project-layout owner API.', $second->content->guidance);
+        self::assertSame(
+            ['finding.2026-08-31.001', 'finding.2026-08-31.002'],
+            $second->sourceFindings,
+        );
+        self::assertSame(['src/Workflow/', 'tests/'], $second->scope);
+        self::assertSame(['ownership', 'workflow'], $second->tags);
+        self::assertSame(LearningNoteEvidenceState::CURRENT, $second->evidenceState);
     }
 
     public function testPrepareRejectsDifferentPatternKeys(): void
@@ -103,6 +111,23 @@ final class LearningNoteServiceTest extends TestCase
         self::assertSame(LearningNoteStatus::ACTIVE, $projection->status);
     }
 
+    public function testMissingSourceIsDistinctFromChangedSource(): void
+    {
+        [$root, $projectRoot] = $this->root();
+        $this->writeFinding($root, 'finding.2026-08-31.001', 'workflow.project-layout', 'src/Workflow/');
+
+        $service = new LearningNoteService();
+        $projection = $service->publish($root, new LearningNoteDraft(
+            sourceFindings: ['finding.2026-08-31.001'],
+            sourceProposals: [],
+            tags: [],
+            repositoryEvidence: [new LearningNoteRepositoryEvidence('src/Workflow/Missing.php', str_repeat('a', 64))],
+            content: $this->content('Use the owner API.'),
+        ), $projectRoot);
+
+        self::assertSame(LearningNoteEvidenceState::SOURCE_MISSING, $projection->evidenceState);
+    }
+
     public function testRedactionRejectsPublication(): void
     {
         [$root, $projectRoot] = $this->root();
@@ -117,6 +142,14 @@ final class LearningNoteServiceTest extends TestCase
             repositoryEvidence: [],
             content: $this->content('token=super-secret'),
         ), $projectRoot);
+    }
+
+    public function testRepositoryEvidenceRejectsProjectEscape(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('must stay project-relative');
+
+        new LearningNoteRepositoryEvidence('../outside.php', str_repeat('a', 64));
     }
 
     public function testRetirementPreservesLineageAndRemovesActiveOwner(): void
@@ -140,6 +173,77 @@ final class LearningNoteServiceTest extends TestCase
         self::assertNotNull($stored);
         self::assertSame(['finding.2026-08-31.001'], $stored->sourceFindings);
         self::assertSame('Superseded by narrower evidence.', $stored->retiredReason);
+    }
+
+    public function testDuplicateActivePatternOwnershipFailsExplicitly(): void
+    {
+        [$root, $projectRoot] = $this->root();
+        $this->writeFinding($root, 'finding.2026-08-31.001', 'workflow.project-layout', 'src/Workflow/');
+        $service = new LearningNoteService();
+        $projection = $service->publish($root, new LearningNoteDraft(
+            sourceFindings: ['finding.2026-08-31.001'],
+            sourceProposals: [],
+            tags: [],
+            repositoryEvidence: [],
+            content: $this->content('Use the owner API.'),
+        ), $projectRoot);
+
+        $sourcePath = $root . '/notes/active/' . $projection->id . '.json';
+        $raw = json_decode((string) file_get_contents($sourcePath), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($raw);
+        $raw['id'] = 'learning-note.2026-08-31.abcdef';
+        file_put_contents(
+            $root . '/notes/active/learning-note.2026-08-31.abcdef.json',
+            json_encode($raw, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n",
+        );
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('duplicate active LearningNote pattern_key');
+        (new LearningNoteRepository())->findActiveByPatternKey($root, 'workflow.project-layout');
+    }
+
+    public function testUnsupportedSchemaFailsInsteadOfBeingReinterpreted(): void
+    {
+        [$root, $projectRoot] = $this->root();
+        $this->writeFinding($root, 'finding.2026-08-31.001', 'workflow.project-layout', 'src/Workflow/');
+        $projection = (new LearningNoteService())->publish($root, new LearningNoteDraft(
+            sourceFindings: ['finding.2026-08-31.001'],
+            sourceProposals: [],
+            tags: [],
+            repositoryEvidence: [],
+            content: $this->content('Use the owner API.'),
+        ), $projectRoot);
+        $path = $root . '/notes/active/' . $projection->id . '.json';
+        $raw = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($raw);
+        $raw['schema_version'] = '2.0';
+        file_put_contents($path, json_encode($raw, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n");
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('unsupported LearningNote schema_version');
+        (new LearningNoteRepository())->loadAll($root);
+    }
+
+    public function testSemanticDigestSurvivesIncidentalJsonKeyOrdering(): void
+    {
+        [$root, $projectRoot] = $this->root();
+        $this->writeFinding($root, 'finding.2026-08-31.001', 'workflow.project-layout', 'src/Workflow/');
+        $projection = (new LearningNoteService())->publish($root, new LearningNoteDraft(
+            sourceFindings: ['finding.2026-08-31.001'],
+            sourceProposals: [],
+            tags: ['workflow'],
+            repositoryEvidence: [],
+            content: $this->content('Use the owner API.'),
+        ), $projectRoot);
+        $path = $root . '/notes/active/' . $projection->id . '.json';
+        $record = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($record);
+        $record = array_reverse($record, true);
+        file_put_contents($path, json_encode($record, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n");
+
+        $reloaded = (new LearningNoteRepository())->find($root, $projection->id);
+        self::assertNotNull($reloaded);
+        self::assertSame($projection->digest, $reloaded->digest());
     }
 
     /** @return array{string, string} */
