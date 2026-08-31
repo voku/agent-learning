@@ -62,7 +62,7 @@ final class LearningNoteCodec
         /** @var array<string, mixed> $contentRecord */
         $content = LearningNoteContent::fromArray($contentRecord, $file, $noteId);
 
-        $repositoryEvidence = [];
+        $repositoryEvidenceByIdentity = [];
         $repositoryEvidenceRaw = $data['repository_evidence'] ?? [];
         if (!is_array($repositoryEvidenceRaw)) {
             throw new ValidationException($file, null, $noteId, 'LearningNote repository_evidence must be a list');
@@ -72,8 +72,11 @@ final class LearningNoteCodec
                 throw new ValidationException($file, null, $noteId, 'LearningNote repository_evidence entries must be objects');
             }
             /** @var array<string, mixed> $item */
-            $repositoryEvidence[] = LearningNoteRepositoryEvidence::fromArray($item, $file, $noteId);
+            $evidence = LearningNoteRepositoryEvidence::fromArray($item, $file, $noteId);
+            $repositoryEvidenceByIdentity[$evidence->sourceRef . ':' . $evidence->contentSha256] = $evidence;
         }
+        ksort($repositoryEvidenceByIdentity, SORT_STRING);
+        $repositoryEvidence = array_values($repositoryEvidenceByIdentity);
 
         $createdAt = $this->timestamp($data, 'created_at', $file, $noteId);
         $updatedAt = $this->timestamp($data, 'updated_at', $file, $noteId);
