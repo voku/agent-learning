@@ -7,7 +7,7 @@ namespace voku\AgentLearning;
 final readonly class LearningNoteDraft
 {
     /**
-     * @param non-empty-list<string> $sourceFindings
+     * @param list<string> $sourceFindings
      * @param list<string> $sourceProposals
      * @param list<string> $tags
      * @param list<LearningNoteRepositoryEvidence> $repositoryEvidence
