@@ -203,7 +203,8 @@ final readonly class LearningNotePublisher
         }
         try {
             $offset = 0;
-            while ($offset < strlen($content)) {
+            $length = strlen($content);
+            while ($offset < $length) {
                 $written = fwrite($handle, substr($content, $offset));
                 if ($written === false || $written === 0) {
                     throw new ValidationException($temporaryPath, null, $id, 'cannot write temporary LearningNote file');
@@ -215,17 +216,34 @@ final readonly class LearningNotePublisher
             }
         } catch (Throwable $throwable) {
             fclose($handle);
-            @unlink($temporaryPath);
+            $this->removeTemporaryFile($temporaryPath, $id, $throwable);
             throw $throwable;
         }
         if (!fclose($handle)) {
-            @unlink($temporaryPath);
-            throw new ValidationException($temporaryPath, null, $id, 'cannot close temporary LearningNote file');
+            $exception = new ValidationException($temporaryPath, null, $id, 'cannot close temporary LearningNote file');
+            $this->removeTemporaryFile($temporaryPath, $id, $exception);
+            throw $exception;
         }
         if (!rename($temporaryPath, $path)) {
-            @unlink($temporaryPath);
-            throw new ValidationException($path, null, $id, 'cannot atomically publish LearningNote');
+            $exception = new ValidationException($path, null, $id, 'cannot atomically publish LearningNote');
+            $this->removeTemporaryFile($temporaryPath, $id, $exception);
+            throw $exception;
         }
+    }
+
+    private function removeTemporaryFile(string $path, string $id, ?Throwable $cause = null): void
+    {
+        if (!is_file($path)) {
+            return;
+        }
+        if (unlink($path)) {
+            return;
+        }
+        $message = 'cannot remove temporary LearningNote file';
+        if ($cause !== null) {
+            $message .= ' after failure: ' . $cause->getMessage();
+        }
+        throw new ValidationException($path, null, $id, $message);
     }
 
     /** @phpstan-impure */
