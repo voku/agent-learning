@@ -11,7 +11,7 @@ final class LearningNoteCliTest extends TestCase
     public function testPrepareAndPublishUseOwnerBoundaries(): void
     {
         $root = $this->rootWithFinding();
-        [$prepareExit, $prepareOutput] = $this->run([
+        [$prepareExit, $prepareOutput] = $this->runCli([
             'prepare',
             '--root', $root,
             '--finding', 'finding.2026-08-31.c0ffee',
@@ -29,7 +29,7 @@ final class LearningNoteCliTest extends TestCase
             'when_to_apply' => 'The same deterministic pattern matches.',
             'when_not_to_apply' => 'Current stronger authority disagrees.',
         ], JSON_THROW_ON_ERROR);
-        [$publishExit, $publishOutput] = $this->run([
+        [$publishExit, $publishOutput] = $this->runCli([
             'publish',
             '--root', $root,
             '--finding', 'finding.2026-08-31.c0ffee',
@@ -86,7 +86,7 @@ final class LearningNoteCliTest extends TestCase
      * @param list<string> $arguments
      * @return array{0: int, 1: string}
      */
-    private function run(array $arguments): array
+    private function runCli(array $arguments): array
     {
         $command = [PHP_BINARY, __DIR__ . '/../bin/agent-learning-note', ...$arguments];
         $output = [];
