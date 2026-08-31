@@ -110,10 +110,13 @@ final class LearningNoteRepository
             throw new ValidationException($path, null, null, 'unsupported LearningNote schema_version');
         }
         $id = $this->requiredString($record, 'id', $path);
-        if (preg_match('/^learning-note\.[A-Za-z0-9._-]+$/', $id) !== 1) {
-            throw new ValidationException($path, null, $id, 'LearningNote id must start with learning-note. and contain only stable identifier characters');
+        if (preg_match(RecordIdGenerator::pattern('learning-note'), $id) !== 1) {
+            throw new ValidationException($path, null, $id, 'LearningNote id must match learning-note.YYYY-MM-DD.<suffix>');
         }
         $patternKey = $this->requiredString($record, 'pattern_key', $path, $id);
+        if (preg_match('/^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)+$/', $patternKey) !== 1) {
+            throw new ValidationException($path, null, $id, 'LearningNote pattern_key must use stable dot-separated lowercase segments');
+        }
         $statusValue = $this->requiredString($record, 'status', $path, $id);
         $status = LearningNoteStatus::tryFrom($statusValue)
             ?? throw new ValidationException($path, null, $id, 'unsupported LearningNote status: ' . $statusValue);
@@ -251,9 +254,13 @@ final class LearningNoteRepository
         if (file_put_contents($temporary, $content, LOCK_EX) === false) {
             throw new ValidationException($temporary, null, $id, 'cannot write temporary LearningNote');
         }
-        if (!rename($temporary, $path)) {
-            @unlink($temporary);
-            throw new ValidationException($path, null, $id, 'cannot atomically publish LearningNote');
+        if (rename($temporary, $path)) {
+            return;
         }
+
+        if (is_file($temporary) && !unlink($temporary)) {
+            throw new ValidationException($temporary, null, $id, 'cannot remove temporary LearningNote after failed publication');
+        }
+        throw new ValidationException($path, null, $id, 'cannot atomically publish LearningNote');
     }
 }
