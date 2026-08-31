@@ -78,6 +78,7 @@ final class LearningNoteTest extends TestCase
     public function testRepositoryRejectsDuplicateActivePatternOwnership(): void
     {
         $root = $this->root();
+        $this->writeFinding($root, 'finding.2026-08-31.abc123');
         $directory = $root . '/notes/active';
         self::assertTrue(mkdir($directory, 0777, true));
         $first = $this->rawNote('learning-note.2026-08-31.111aaa');
