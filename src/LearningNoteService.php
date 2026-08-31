@@ -18,10 +18,15 @@ final readonly class LearningNoteService
     ) {
     }
 
-    /** @param non-empty-list<string> $findingIds */
+    /** @param list<string> $findingIds */
     public function prepare(string $root, array $findingIds, ?string $projectRoot = null): LearningNotePreparation
     {
+        if ($findingIds === []) {
+            throw new ValidationException($root, null, null, 'LearningNote prepare requires at least one Finding');
+        }
+
         $findingsById = $this->findingRepository->loadAll($root);
+        /** @var list<Finding> $selected */
         $selected = [];
         foreach (array_values(array_unique($findingIds)) as $findingId) {
             $finding = $findingsById[$findingId] ?? null;
@@ -44,9 +49,6 @@ final readonly class LearningNoteService
                 throw new ValidationException($root, null, $findingId, 'LearningNote source Finding requires validated_conclusion');
             }
             $selected[] = $finding;
-        }
-        if ($selected === []) {
-            throw new ValidationException($root, null, null, 'LearningNote prepare requires at least one Finding');
         }
 
         $patternKey = $selected[0]->patternKey;
@@ -77,8 +79,7 @@ final readonly class LearningNoteService
                 'evidence' => $finding->evidence,
             ];
         }
-        $scope = array_values(array_unique($scope));
-        sort($scope, SORT_STRING);
+        $scope = $this->sortedUniqueStrings($scope);
 
         $projectRoot ??= (new LearningProjectPaths())->projectRootForLearningRoot($root);
         $existing = $this->noteRepository->findActiveByPatternKey($root, $patternKey);
@@ -131,28 +132,32 @@ final readonly class LearningNoteService
             throw new ValidationException($root, null, $draft->id, 'LearningNote ID already exists');
         }
 
-        $id = $existing?->id ?? $draft->id ?? $this->idGenerator->generate('learning-note');
+        $id = $existing instanceof LearningNote
+            ? $existing->id
+            : ($draft->id ?? $this->idGenerator->generate('learning-note'));
         $now = (new DateTimeImmutable('now'))->format(DateTimeInterface::ATOM);
-        $tags = array_values(array_unique(array_map('trim', $draft->tags)));
-        $tags = array_values(array_filter($tags, static fn (string $tag): bool => $tag !== ''));
-        sort($tags, SORT_STRING);
-        $sourceFindings = array_values(array_unique($draft->sourceFindings));
-        sort($sourceFindings, SORT_STRING);
-        $sourceProposals = array_values(array_unique($draft->sourceProposals));
-        sort($sourceProposals, SORT_STRING);
+        $scope = $this->sortedUniqueStrings(array_merge($existing?->scope ?? [], $preparation->scope));
+        $tags = $this->sortedUniqueStrings(array_merge($existing?->tags ?? [], $draft->tags));
+        $sourceFindings = $this->sortedUniqueStrings(array_merge($existing?->sourceFindings ?? [], $draft->sourceFindings));
+        $sourceProposals = $this->sortedUniqueStrings(array_merge($existing?->sourceProposals ?? [], $draft->sourceProposals));
+        $repositoryEvidence = $this->mergeRepositoryEvidence(
+            $existing?->repositoryEvidence ?? [],
+            $draft->repositoryEvidence,
+        );
+        $createdAt = $existing instanceof LearningNote ? $existing->createdAt : $now;
 
         $note = new LearningNote(
             id: $id,
             patternKey: $preparation->patternKey,
             status: LearningNoteStatus::ACTIVE,
-            scope: $preparation->scope,
+            scope: $scope,
             tags: $tags,
             sourceFindings: $sourceFindings,
             sourceProposals: $sourceProposals,
             validationCase: $preparation->validationCase,
-            repositoryEvidence: $draft->repositoryEvidence,
+            repositoryEvidence: $repositoryEvidence,
             content: $draft->content,
-            createdAt: $existing?->createdAt ?? $now,
+            createdAt: $createdAt,
             updatedAt: $now,
         );
         $this->redactionGuard->assertSafeValue($note->toArray(), 'LearningNote ' . $id, null, $id);
@@ -214,13 +219,27 @@ final readonly class LearningNoteService
         if ($note->repositoryEvidence === []) {
             return LearningNoteEvidenceState::NO_HASHABLE_REPOSITORY_EVIDENCE;
         }
+
+        $realProjectRoot = realpath($projectRoot);
+        if ($realProjectRoot === false || !is_dir($realProjectRoot)) {
+            throw new ValidationException($projectRoot, null, $note->id, 'LearningNote project root does not exist');
+        }
+        $projectPrefix = rtrim(str_replace('\\', '/', $realProjectRoot), '/') . '/';
         $changed = false;
         foreach ($note->repositoryEvidence as $evidence) {
             $path = rtrim($projectRoot, '/\\') . '/' . $evidence->sourceRef;
             if (!is_file($path)) {
                 return LearningNoteEvidenceState::SOURCE_MISSING;
             }
-            $hash = hash_file('sha256', $path);
+            $realSource = realpath($path);
+            if ($realSource === false) {
+                return LearningNoteEvidenceState::SOURCE_MISSING;
+            }
+            $normalizedSource = str_replace('\\', '/', $realSource);
+            if (!str_starts_with($normalizedSource, $projectPrefix)) {
+                throw new ValidationException($path, null, $note->id, 'LearningNote repository evidence resolves outside project root');
+            }
+            $hash = hash_file('sha256', $realSource);
             if (!is_string($hash)) {
                 return LearningNoteEvidenceState::SOURCE_MISSING;
             }
@@ -232,6 +251,35 @@ final readonly class LearningNoteService
         return $changed ? LearningNoteEvidenceState::REVIEW_NEEDED : LearningNoteEvidenceState::CURRENT;
     }
 
+    /**
+     * @param list<string> $values
+     * @return list<string>
+     */
+    private function sortedUniqueStrings(array $values): array
+    {
+        $values = array_values(array_unique(array_map('trim', $values)));
+        $values = array_values(array_filter($values, static fn (string $value): bool => $value !== ''));
+        sort($values, SORT_STRING);
+
+        return $values;
+    }
+
+    /**
+     * @param list<LearningNoteRepositoryEvidence> $existing
+     * @param list<LearningNoteRepositoryEvidence> $incoming
+     * @return list<LearningNoteRepositoryEvidence>
+     */
+    private function mergeRepositoryEvidence(array $existing, array $incoming): array
+    {
+        $bySourceRef = [];
+        foreach (array_merge($existing, $incoming) as $evidence) {
+            $bySourceRef[$evidence->sourceRef] = $evidence;
+        }
+        ksort($bySourceRef, SORT_STRING);
+
+        return array_values($bySourceRef);
+    }
+
     private function project(LearningNote $note, string $projectRoot): LearningNoteProjection
     {
         return new LearningNoteProjection(
@@ -241,8 +289,9 @@ final readonly class LearningNoteService
             scope: $note->scope,
             tags: $note->tags,
             sourceFindings: $note->sourceFindings,
-            title: $note->content->title,
-            guidance: $note->content->guidance,
+            sourceProposals: $note->sourceProposals,
+            validationCase: $note->validationCase,
+            content: $note->content,
             digest: $note->digest(),
             evidenceState: $this->evidenceState($note, $projectRoot),
         );
