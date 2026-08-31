@@ -163,6 +163,7 @@ TXT);
      */
     private function parseOptions(array $tokens): array
     {
+        /** @var array<string, string|list<string>> $options */
         $options = [];
         for ($index = 0, $count = count($tokens); $index < $count; $index++) {
             $token = $tokens[$index];
