@@ -136,12 +136,17 @@ final readonly class LearningNoteService
             ? $existing->id
             : ($draft->id ?? $this->idGenerator->generate('learning-note'));
         $now = (new DateTimeImmutable('now'))->format(DateTimeInterface::ATOM);
-        $scope = $this->sortedUniqueStrings(array_merge($existing?->scope ?? [], $preparation->scope));
-        $tags = $this->sortedUniqueStrings(array_merge($existing?->tags ?? [], $draft->tags));
-        $sourceFindings = $this->sortedUniqueStrings(array_merge($existing?->sourceFindings ?? [], $draft->sourceFindings));
-        $sourceProposals = $this->sortedUniqueStrings(array_merge($existing?->sourceProposals ?? [], $draft->sourceProposals));
+        $existingScope = $existing instanceof LearningNote ? $existing->scope : [];
+        $existingTags = $existing instanceof LearningNote ? $existing->tags : [];
+        $existingSourceFindings = $existing instanceof LearningNote ? $existing->sourceFindings : [];
+        $existingSourceProposals = $existing instanceof LearningNote ? $existing->sourceProposals : [];
+        $existingRepositoryEvidence = $existing instanceof LearningNote ? $existing->repositoryEvidence : [];
+        $scope = $this->sortedUniqueStrings(array_merge($existingScope, $preparation->scope));
+        $tags = $this->sortedUniqueStrings(array_merge($existingTags, $draft->tags));
+        $sourceFindings = $this->sortedUniqueStrings(array_merge($existingSourceFindings, $draft->sourceFindings));
+        $sourceProposals = $this->sortedUniqueStrings(array_merge($existingSourceProposals, $draft->sourceProposals));
         $repositoryEvidence = $this->mergeRepositoryEvidence(
-            $existing?->repositoryEvidence ?? [],
+            $existingRepositoryEvidence,
             $draft->repositoryEvidence,
         );
         $createdAt = $existing instanceof LearningNote ? $existing->createdAt : $now;
