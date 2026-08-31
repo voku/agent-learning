@@ -6,16 +6,27 @@ namespace voku\AgentLearning;
 
 final readonly class LearningNoteRepositoryEvidence
 {
+    public string $sourceRef;
+
     public function __construct(
-        public string $sourceRef,
+        string $sourceRef,
         public string $sha256,
     ) {
-        if (trim($sourceRef) === '') {
+        $sourceRef = str_replace('\\', '/', trim($sourceRef));
+        if ($sourceRef === '') {
             throw new ValidationException('learning-note', null, null, 'repository evidence source_ref must be non-empty');
+        }
+        if (
+            str_starts_with($sourceRef, '/')
+            || preg_match('/^[A-Za-z]:\//', $sourceRef) === 1
+            || in_array('..', explode('/', $sourceRef), true)
+        ) {
+            throw new ValidationException('learning-note', null, null, 'repository evidence source_ref must stay project-relative');
         }
         if (preg_match('/^[a-f0-9]{64}$/', $sha256) !== 1) {
             throw new ValidationException('learning-note', null, null, 'repository evidence sha256 must be a lowercase SHA-256 digest');
         }
+        $this->sourceRef = $sourceRef;
     }
 
     /** @param array<string, mixed> $record */
@@ -30,7 +41,11 @@ final readonly class LearningNoteRepositoryEvidence
             throw new ValidationException($file, null, $recordId, 'repository_evidence.sha256 must be a lowercase SHA-256 digest');
         }
 
-        return new self(trim($sourceRef), $sha256);
+        try {
+            return new self($sourceRef, $sha256);
+        } catch (ValidationException $exception) {
+            throw new ValidationException($file, null, $recordId, $exception->getMessage());
+        }
     }
 
     /** @return array{source_ref: string, sha256: string} */
