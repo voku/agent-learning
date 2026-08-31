@@ -72,24 +72,6 @@ final class LearningNoteRepository
         return null;
     }
 
-    /** @return list<LearningNoteProjection> */
-    public function projections(string $root): array
-    {
-        return array_map(
-            fn (LearningNote $note): LearningNoteProjection => new LearningNoteProjection(
-                id: $note->id,
-                patternKey: $note->patternKey,
-                status: $note->status,
-                scope: $note->scope,
-                tags: $note->tags,
-                sourceFindings: $note->sourceFindings,
-                content: $note->content,
-                sourceDigest: $this->codec->digest($note),
-            ),
-            array_values($this->loadAll($root)),
-        );
-    }
-
     /** @return list<string> */
     private function jsonFiles(string $directory): array
     {
