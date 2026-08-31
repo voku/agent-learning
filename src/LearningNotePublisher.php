@@ -20,10 +20,10 @@ final readonly class LearningNotePublisher
     }
 
     /**
-     * @param list<string>                         $sourceFindingIds
-     * @param list<string>                         $sourceProposalIds
-     * @param list<string>                         $scope
-     * @param list<string>                         $tags
+     * @param list<string>                          $sourceFindingIds
+     * @param list<string>                          $sourceProposalIds
+     * @param list<string>                          $scope
+     * @param list<string>                          $tags
      * @param list<LearningNoteRepositoryEvidence> $repositoryEvidence
      */
     public function publish(
@@ -38,11 +38,32 @@ final readonly class LearningNotePublisher
     ): LearningNotePublicationResult {
         $prepared = $this->preparer->prepare($root, $sourceFindingIds);
         $existing = $this->repository->findActiveByPatternKey($root, $prepared->patternKey);
-        if ($existing !== null && $id !== null && $id !== $existing->id) {
-            throw new ValidationException($root, null, $id, 'active LearningNote pattern_key is already owned by ' . $existing->id);
-        }
-        if ($existing === null && $id !== null && $this->repository->find($root, $id) !== null) {
-            throw new ValidationException($root, null, $id, 'LearningNote id already exists');
+        $now = (new DateTimeImmutable('now'))->format(DateTimeInterface::ATOM);
+
+        if ($existing === null) {
+            if ($id !== null && $this->repository->find($root, $id) !== null) {
+                throw new ValidationException($root, null, $id, 'LearningNote id already exists');
+            }
+            $noteId = $id ?? $this->idGenerator->generate('learning-note');
+            $createdAt = $now;
+            $existingFindings = [];
+            $existingProposals = [];
+            $existingScope = [];
+            $existingTags = [];
+            $existingEvidence = [];
+            $replaceExisting = false;
+        } else {
+            if ($id !== null && $id !== $existing->id) {
+                throw new ValidationException($root, null, $id, 'active LearningNote pattern_key is already owned by ' . $existing->id);
+            }
+            $noteId = $existing->id;
+            $createdAt = $existing->createdAt;
+            $existingFindings = $existing->sourceFindings;
+            $existingProposals = $existing->sourceProposals;
+            $existingScope = $existing->scope;
+            $existingTags = $existing->tags;
+            $existingEvidence = $existing->repositoryEvidence;
+            $replaceExisting = true;
         }
 
         $allowedProposalIds = $prepared->relatedProposalIds;
@@ -52,16 +73,13 @@ final readonly class LearningNotePublisher
             }
         }
 
-        $now = (new DateTimeImmutable('now'))->format(DateTimeInterface::ATOM);
-        $noteId = $existing?->id ?? $id ?? $this->idGenerator->generate('learning-note');
-        $createdAt = $existing?->createdAt ?? $now;
-        $mergedFindings = $this->sortedUnique(array_merge($existing?->sourceFindings ?? [], $sourceFindingIds));
-        $mergedProposals = $this->sortedUnique(array_merge($existing?->sourceProposals ?? [], $sourceProposalIds));
-        $mergedScope = $this->sortedUnique(array_merge($prepared->scope, $existing?->scope ?? [], $scope));
-        $mergedTags = $this->sortedUnique(array_merge($prepared->tags, $existing?->tags ?? [], $tags));
+        $mergedFindings = $this->sortedUnique(array_merge($existingFindings, $sourceFindingIds));
+        $mergedProposals = $this->sortedUnique(array_merge($existingProposals, $sourceProposalIds));
+        $mergedScope = $this->sortedUnique(array_merge($prepared->scope, $existingScope, $scope));
+        $mergedTags = $this->sortedUnique(array_merge($prepared->tags, $existingTags, $tags));
         $mergedEvidence = $this->mergeEvidence(
             $prepared->repositoryEvidence,
-            $existing?->repositoryEvidence ?? [],
+            $existingEvidence,
             $repositoryEvidence,
         );
 
@@ -84,7 +102,7 @@ final readonly class LearningNotePublisher
         $encoded = $this->codec->encode($note);
         $directory = $root . '/notes/active';
         $path = $directory . '/' . $note->id . '.json';
-        $this->writeAtomically($directory, $path, $encoded, $note->id);
+        $this->writeAtomically($directory, $path, $encoded, $note->id, $replaceExisting);
 
         return new LearningNotePublicationResult($note, $path, $this->codec->digest($note));
     }
@@ -137,7 +155,7 @@ final readonly class LearningNotePublisher
             throw new ValidationException($activePath, null, $id, 'cannot stage LearningNote retirement');
         }
         try {
-            $this->writeAtomically($retiredDirectory, $retiredPath, $this->codec->encode($retired), $id);
+            $this->writeAtomically($retiredDirectory, $retiredPath, $this->codec->encode($retired), $id, false);
         } catch (Throwable $throwable) {
             if (!rename($backup, $activePath)) {
                 throw new ValidationException($activePath, null, $id, 'LearningNote retirement failed and active state could not be restored: ' . $throwable->getMessage());
@@ -188,14 +206,23 @@ final readonly class LearningNotePublisher
         return array_values($items);
     }
 
-    private function writeAtomically(string $directory, string $path, string $content, string $id): void
-    {
+    private function writeAtomically(
+        string $directory,
+        string $path,
+        string $content,
+        string $id,
+        bool $replaceExisting,
+    ): void {
         if (!is_dir($directory) && !mkdir($directory, 0777, true) && !is_dir($directory)) {
             throw new ValidationException($directory, null, $id, 'cannot create LearningNote directory');
         }
         if (is_link($path) || (file_exists($path) && !is_file($path))) {
             throw new ValidationException($path, null, $id, 'LearningNote target path is unsafe');
         }
+        if ($replaceExisting && !is_file($path)) {
+            throw new ValidationException($path, null, $id, 'LearningNote update target disappeared before publication');
+        }
+
         $temporaryPath = $directory . '/.' . basename($path) . '.tmp.' . bin2hex(random_bytes(8));
         $handle = fopen($temporaryPath, 'xb');
         if ($handle === false) {
@@ -224,11 +251,31 @@ final readonly class LearningNotePublisher
             $this->removeTemporaryFile($temporaryPath, $id, $exception);
             throw $exception;
         }
-        if (!rename($temporaryPath, $path)) {
-            $exception = new ValidationException($path, null, $id, 'cannot atomically publish LearningNote');
+
+        if ($replaceExisting) {
+            if (!rename($temporaryPath, $path)) {
+                $exception = new ValidationException($path, null, $id, 'cannot atomically replace LearningNote');
+                $this->removeTemporaryFile($temporaryPath, $id, $exception);
+                throw $exception;
+            }
+
+            return;
+        }
+
+        if ($this->filesystemEntryExists($path)) {
+            $exception = new ValidationException($path, null, $id, 'LearningNote file already exists');
             $this->removeTemporaryFile($temporaryPath, $id, $exception);
             throw $exception;
         }
+        if (!link($temporaryPath, $path)) {
+            $reason = $this->filesystemEntryExists($path)
+                ? 'LearningNote file already exists'
+                : 'cannot atomically publish LearningNote';
+            $exception = new ValidationException($path, null, $id, $reason);
+            $this->removeTemporaryFile($temporaryPath, $id, $exception);
+            throw $exception;
+        }
+        $this->removeTemporaryFile($temporaryPath, $id);
     }
 
     private function removeTemporaryFile(string $path, string $id, ?Throwable $cause = null): void
