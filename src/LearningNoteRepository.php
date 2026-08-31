@@ -8,8 +8,11 @@ use DirectoryIterator;
 
 final class LearningNoteRepository
 {
-    public function __construct(private readonly LearningNoteCodec $codec = new LearningNoteCodec())
-    {
+    public function __construct(
+        private readonly LearningNoteCodec $codec = new LearningNoteCodec(),
+        private readonly FindingRepository $findingRepository = new FindingRepository(),
+        private readonly ProposalRepository $proposalRepository = new ProposalRepository(),
+    ) {
     }
 
     /** @return array<string, LearningNote> */
@@ -17,6 +20,8 @@ final class LearningNoteRepository
     {
         $notes = [];
         $activePatternOwners = [];
+        $findingsById = $this->findingRepository->loadAll($root);
+        $proposalsById = null;
         foreach (LearningNoteStatus::cases() as $status) {
             $directory = $root . '/notes/' . $status->value;
             foreach ($this->jsonFiles($directory) as $path) {
@@ -26,6 +31,20 @@ final class LearningNoteRepository
                 }
                 if (isset($notes[$note->id])) {
                     throw new ValidationException($path, null, $note->id, 'duplicate LearningNote id');
+                }
+                foreach ($note->sourceFindings as $findingId) {
+                    $finding = $findingsById[$findingId] ?? null;
+                    if (!$finding instanceof Finding || $finding->validationStatus !== 'validated') {
+                        throw new ValidationException($path, null, $note->id, 'LearningNote source finding lineage is missing or no longer validated: ' . $findingId);
+                    }
+                }
+                if ($note->sourceProposals !== []) {
+                    $proposalsById ??= $this->proposalRepository->loadAll($root, $findingsById);
+                    foreach ($note->sourceProposals as $proposalId) {
+                        if (!isset($proposalsById[$proposalId])) {
+                            throw new ValidationException($path, null, $note->id, 'LearningNote source proposal lineage is missing: ' . $proposalId);
+                        }
+                    }
                 }
                 if ($note->status === LearningNoteStatus::ACTIVE) {
                     $existing = $activePatternOwners[$note->patternKey] ?? null;
