@@ -10,8 +10,17 @@ final readonly class LearningNoteRepositoryEvidence
         public string $sourceRef,
         public string $contentSha256,
     ) {
-        if (trim($sourceRef) === '') {
+        $sourceRef = str_replace('\\', '/', trim($sourceRef));
+        if ($sourceRef === '') {
             throw new ValidationException('LearningNote', null, null, 'repository evidence source_ref must be non-empty');
+        }
+        if (str_starts_with($sourceRef, '/') || preg_match('/^[A-Za-z]:\//', $sourceRef) === 1) {
+            throw new ValidationException('LearningNote', null, null, 'repository evidence source_ref must be project-relative');
+        }
+        foreach (explode('/', $sourceRef) as $segment) {
+            if ($segment === '..') {
+                throw new ValidationException('LearningNote', null, null, 'repository evidence source_ref must not escape project root');
+            }
         }
         if (preg_match('/^[a-f0-9]{64}$/', $contentSha256) !== 1) {
             throw new ValidationException('LearningNote', null, null, 'repository evidence content_sha256 must be a lowercase sha256');
@@ -22,7 +31,7 @@ final readonly class LearningNoteRepositoryEvidence
     public function toArray(): array
     {
         return [
-            'source_ref' => $this->sourceRef,
+            'source_ref' => str_replace('\\', '/', trim($this->sourceRef)),
             'content_sha256' => $this->contentSha256,
         ];
     }
@@ -39,6 +48,10 @@ final readonly class LearningNoteRepositoryEvidence
             throw new ValidationException($file, null, $recordId, 'LearningNote repository evidence requires lowercase sha256 content_sha256');
         }
 
-        return new self(str_replace('\\', '/', trim($sourceRef)), $contentSha256);
+        try {
+            return new self(str_replace('\\', '/', trim($sourceRef)), $contentSha256);
+        } catch (ValidationException $exception) {
+            throw new ValidationException($file, null, $recordId, $exception->getMessage());
+        }
     }
 }
