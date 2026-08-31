@@ -46,7 +46,7 @@ final class LearningNoteCliTest extends TestCase
             ],
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
 
-        $prepare = $this->run($root, ['prepare', '--finding', 'finding.2026-08-31.001']);
+        $prepare = $this->executeCli($root, ['prepare', '--finding', 'finding.2026-08-31.001']);
         self::assertSame(0, $prepare['exit_code'], $prepare['output']);
         $prepared = json_decode($prepare['output'], true, 512, JSON_THROW_ON_ERROR);
         self::assertSame('workflow.owner_boundary', $prepared['pattern_key']);
@@ -72,14 +72,14 @@ final class LearningNoteCliTest extends TestCase
             ],
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
 
-        $publish = $this->run($root, ['publish', '--input', $candidate]);
+        $publish = $this->executeCli($root, ['publish', '--input', $candidate]);
         self::assertSame(0, $publish['exit_code'], $publish['output']);
         $published = json_decode($publish['output'], true, 512, JSON_THROW_ON_ERROR);
         self::assertSame('workflow.owner_boundary', $published['pattern_key']);
         self::assertSame('current', $published['evidence_state']);
         self::assertSame('Use the typed owner boundary.', $published['content']['guidance']);
 
-        $status = $this->run($root, ['status']);
+        $status = $this->executeCli($root, ['status']);
         self::assertSame(0, $status['exit_code'], $status['output']);
         $statusData = json_decode($status['output'], true, 512, JSON_THROW_ON_ERROR);
         self::assertCount(1, $statusData['notes']);
@@ -90,7 +90,7 @@ final class LearningNoteCliTest extends TestCase
      * @param list<string> $arguments
      * @return array{exit_code: int, output: string}
      */
-    private function run(string $root, array $arguments): array
+    private function executeCli(string $root, array $arguments): array
     {
         $parts = [
             escapeshellarg(PHP_BINARY),
