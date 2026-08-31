@@ -40,7 +40,7 @@ final class LearningNoteTest extends TestCase
 
         self::assertSame($created->note->id, $updated->note->id);
         self::assertSame([$first, $second], $updated->note->sourceFindings);
-        self::assertSame(['precedent', 'workflow'], $updated->note->tags);
+        self::assertSame(['learning', 'precedent', 'workflow'], $updated->note->tags);
         self::assertSame('Updated case', $updated->note->content->title);
         self::assertCount(1, (new LearningNoteRepository())->active($root));
     }
