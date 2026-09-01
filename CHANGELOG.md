@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.14.2] - 2026-09-01
+
+### Fixed
+
+- Accept multi-segment governed workflow task IDs as default Finding task references, so a Run can record a Finding for its own work without bypassing Learning validation. Ticket keys and explicit `TODO@...` references remain valid; ambiguous two-segment and malformed IDs remain rejected.
+
+### Validation
+
+- Focused Finding validator regression coverage accepts governed workflow IDs and preserves the invalid-ID boundary.
+
 ## [0.14.1] - 2026-09-01
 
 ### Added
