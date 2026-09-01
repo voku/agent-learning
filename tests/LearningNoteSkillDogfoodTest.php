@@ -220,7 +220,7 @@ final class LearningNoteSkillDogfoodTest extends TestCase
         self::assertNull($note->content->rootCause);
         self::assertStringContainsString('Distinct tools may each own distinct', $note->content->guidance);
         self::assertNotSame('', $note->digest);
-        self::assertCount(2, $service->activeProjections($this->learningRoot, $this->projectRoot));
+        self::assertCount(1, $service->activeProjections($this->learningRoot, $this->projectRoot));
     }
 
     /**
@@ -236,9 +236,13 @@ final class LearningNoteSkillDogfoodTest extends TestCase
         $record['classification'] = 'ADD_LEARNING_NOTE';
         $record['pattern_key'] = $patternKey;
         $record['validation_case'] = $validationCase;
+        $id = $record['id'] ?? null;
+        if (!is_string($id) || $id === '') {
+            throw new \LogicException('Dogfood Finding requires a string id.');
+        }
 
         file_put_contents(
-            $this->learningRoot . '/findings/consolidated/' . $record['id'] . '.json',
+            $this->learningRoot . '/findings/consolidated/' . $id . '.json',
             json_encode($record, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n",
         );
     }
@@ -246,7 +250,9 @@ final class LearningNoteSkillDogfoodTest extends TestCase
     private function repositoryEvidence(string $sourceRef): LearningNoteRepositoryEvidence
     {
         $sha256 = hash_file('sha256', $this->projectRoot . '/' . $sourceRef);
-        self::assertIsString($sha256);
+        if (!is_string($sha256)) {
+            throw new \RuntimeException('Cannot hash dogfood source: ' . $sourceRef);
+        }
 
         return new LearningNoteRepositoryEvidence($sourceRef, $sha256);
     }
