@@ -80,6 +80,46 @@ final readonly class LearningCatalog
         );
     }
 
+    /** @return list<FindingProjection> */
+    public function findings(?string $status = null): array
+    {
+        $state = $this->state();
+        $findings = [];
+        foreach ($state->findingsById as $finding) {
+            if ($status !== null && $finding->status->value !== $status) {
+                continue;
+            }
+            $findings[] = $this->findingProjection($finding, $state->proposalsById);
+        }
+
+        usort(
+            $findings,
+            static fn (FindingProjection $left, FindingProjection $right): int => [$right->createdAt, $right->id] <=> [$left->createdAt, $left->id],
+        );
+
+        return $findings;
+    }
+
+    /** @return list<ProposalProjection> */
+    public function proposals(?string $status = null): array
+    {
+        $state = $this->state();
+        $proposals = [];
+        foreach ($state->proposalsById as $proposal) {
+            if ($status !== null && $proposal->status->value !== $status) {
+                continue;
+            }
+            $proposals[] = $this->proposalProjection($proposal, $state->findingsById);
+        }
+
+        usort(
+            $proposals,
+            static fn (ProposalProjection $left, ProposalProjection $right): int => [$right->createdAt, $right->id] <=> [$left->createdAt, $left->id],
+        );
+
+        return $proposals;
+    }
+
     public function finding(string $findingId): ?FindingProjection
     {
         $state = $this->state();
