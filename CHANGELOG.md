@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Expose `findings(?string $status = null)` and `proposals(?string $status = null)` list queries on `LearningCatalog` to enable full catalog browsing and status-filtered views.
+
 ## [0.14.0] - 2026-09-01
 
 ### Added

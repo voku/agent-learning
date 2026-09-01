@@ -90,6 +90,34 @@ final class LearningCatalogTest extends TestCase
         self::assertSame([], $unknown->guidance);
     }
 
+    public function testFindingsAndProposalsListQueriesSupportFiltering(): void
+    {
+        $catalog = new LearningCatalog($this->root);
+
+        $allFindings = $catalog->findings();
+        self::assertCount(2, $allFindings);
+
+        $validatedFindings = $catalog->findings('validated');
+        self::assertCount(2, $validatedFindings);
+
+        $candidateFindings = $catalog->findings('candidate');
+        self::assertSame([], $candidateFindings);
+
+        $allProposals = $catalog->proposals();
+        self::assertCount(2, $allProposals);
+
+        $approvedProposals = $catalog->proposals('approved');
+        self::assertCount(1, $approvedProposals);
+        self::assertSame('proposal.2026-06-08.001', $approvedProposals[0]->id);
+
+        $rejectedProposals = $catalog->proposals('rejected');
+        self::assertCount(1, $rejectedProposals);
+        self::assertSame('proposal.2026-06-08.002', $rejectedProposals[0]->id);
+
+        $candidateProposals = $catalog->proposals('candidate');
+        self::assertSame([], $candidateProposals);
+    }
+
     public function testCatalogReadsDoNotMutateLearningRoot(): void
     {
         $before = $this->snapshot($this->root);

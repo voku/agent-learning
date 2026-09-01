@@ -80,6 +80,48 @@ final readonly class LearningCatalog
         );
     }
 
+    /**
+     * @return list<FindingProjection>
+     */
+    public function findings(?string $status = null): array
+    {
+        $state = $this->state();
+        $targetStatus = $status !== null && $status !== '' ? FindingStatus::tryFrom($status) : null;
+        $findings = [];
+
+        foreach ($state->findingsById as $finding) {
+            if ($targetStatus !== null && $finding->status !== $targetStatus) {
+                continue;
+            }
+            $findings[] = $this->findingProjection($finding, $state->proposalsById);
+        }
+
+        usort($findings, static fn (FindingProjection $a, FindingProjection $b): int => $b->createdAt <=> $a->createdAt ?: $b->id <=> $a->id);
+
+        return $findings;
+    }
+
+    /**
+     * @return list<ProposalProjection>
+     */
+    public function proposals(?string $status = null): array
+    {
+        $state = $this->state();
+        $targetStatus = $status !== null && $status !== '' ? ProposalStatus::tryFrom($status) : null;
+        $proposals = [];
+
+        foreach ($state->proposalsById as $proposal) {
+            if ($targetStatus !== null && $proposal->status !== $targetStatus) {
+                continue;
+            }
+            $proposals[] = $this->proposalProjection($proposal, $state->findingsById);
+        }
+
+        usort($proposals, static fn (ProposalProjection $a, ProposalProjection $b): int => $b->createdAt <=> $a->createdAt ?: $b->id <=> $a->id);
+
+        return $proposals;
+    }
+
     public function finding(string $findingId): ?FindingProjection
     {
         $state = $this->state();
