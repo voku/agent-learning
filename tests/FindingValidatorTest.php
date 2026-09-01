@@ -52,6 +52,55 @@ final class FindingValidatorTest extends TestCase
         $validator->validate($finding, 'finding.json');
     }
 
+    /**
+     * A governed agent-loop Run may carry a descriptive task id rather than a
+     * ticket key. Rejecting it made a Run unable to record findings for its own
+     * work, which quietly pushed every such Run to "no durable learning".
+     */
+    #[DataProvider('governedWorkflowTaskIds')]
+    public function testDefaultTaskIdPatternMatchesGovernedWorkflowTaskId(string $taskId): void
+    {
+        $validator = new FindingValidator();
+        $finding = $this->createFinding($taskId);
+
+        $this->expectNotToPerformAssertions();
+        $validator->validate($finding, 'finding.json');
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function governedWorkflowTaskIds(): iterable
+    {
+        yield 'lowercase slice' => ['roles-impact-approver-view-001'];
+        yield 'shortest real id' => ['roles-v2-foundation'];
+        yield 'mixed case prefix' => ['LOCAL-m365-external-mail-suffix-employee-flag'];
+        yield 'dotted segment' => ['init.instructions-symlink-safety-001'];
+    }
+
+    /**
+     * Two segments stay reserved for ticket keys, so a malformed one is still a
+     * missing task reference rather than an accidental workflow id.
+     */
+    #[DataProvider('stillInvalidTaskIds')]
+    public function testDefaultTaskIdPatternStillRejectsNonReferences(string $taskId): void
+    {
+        $validator = new FindingValidator();
+        $finding = $this->createFinding($taskId);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('missing task references');
+        $validator->validate($finding, 'finding.json');
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function stillInvalidTaskIds(): iterable
+    {
+        yield 'lowercase ticket key' => ['project-123'];
+        yield 'single word' => ['refactor'];
+        yield 'two segments only' => ['some-task'];
+        yield 'leading hyphen' => ['-roles-impact-001'];
+        yield 'whitespace' => ['roles impact 001'];
+    }
+
     public function testCustomTaskIdPatternMatchesConfiguredValue(): void
     {
         $validator = new FindingValidator(
