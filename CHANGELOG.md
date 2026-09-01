@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-01
+
+### Added
+
+- Add first-class evidence-backed `LearningNote` precedents for `ADD_LEARNING_NOTE`, with a typed Learning-owned prepare/publish/read/status/retire boundary, stable `pattern_key` ownership, exact Finding/Proposal lineage, redaction, source-drift states, and compact read projections. LearningNotes are durable solved-case precedent, not active guidance or mutation authority.
+- Add the package-owned `agent-learning-note` authoring skill and standalone CLI. The flow grounds current facts separately from validated historical Findings and synthesis, preserves human promotion authority, and ships with clean copied Composer consumer proof plus real bug-shaped and architecture/workflow-shaped dogfood.
+
+### Fixed
+
+- Make `finding-create` failures report the accepted evidence types and missing requirements together so a caller can repair an invalid Finding in one round trip.
+- Expose `outcome_withheld_reason` through the typed `RecallSelectionEvent` owner API so downstream consumers do not need to inspect raw Learning JSONL history.
+- Retire writes of the unversioned legacy outcome shape while keeping existing historical records readable, so new Learning state uses the versioned owner format without rewriting history.
+- Make the installed `agent-learning-note` binary resolve Composer/package autoloading through the same supported path as the primary CLI instead of assuming a package-local `vendor/autoload.php`.
+
+### Validation
+
+- PR #57 established the durable typed LearningNote owner contract and passed exact-head package CI on PHP 8.3, 8.4 and 8.5.
+- PR #59 passed exact-head package CI on PHP 8.3, 8.4 and 8.5, the focused LearningNote authoring regressions, two real-case dogfood fixtures, and the clean copied Composer installed-skill consumer.
+
 ## [0.13.6] - 2026-08-26
 
 ### Fixed
