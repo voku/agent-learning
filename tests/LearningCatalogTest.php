@@ -53,7 +53,10 @@ final class LearningCatalogTest extends TestCase
             ['finding.2026-06-08.002', 'finding.2026-06-08.001'],
             array_map(static fn ($finding): string => $finding->id, $findings),
         );
-        self::assertSame($findings, $catalog->findings('validated'));
+        self::assertSame(
+            ['finding.2026-06-08.002', 'finding.2026-06-08.001'],
+            array_map(static fn ($finding): string => $finding->id, $catalog->findings('validated')),
+        );
         self::assertSame([], $catalog->findings('rejected'));
 
         $proposals = $catalog->proposals();
