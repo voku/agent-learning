@@ -80,44 +80,42 @@ final readonly class LearningCatalog
         );
     }
 
-    /**
-     * @return list<FindingProjection>
-     */
+    /** @return list<FindingProjection> */
     public function findings(?string $status = null): array
     {
         $state = $this->state();
-        $targetStatus = $status !== null && $status !== '' ? FindingStatus::tryFrom($status) : null;
         $findings = [];
-
         foreach ($state->findingsById as $finding) {
-            if ($targetStatus !== null && $finding->status !== $targetStatus) {
+            if ($status !== null && $finding->status->value !== $status) {
                 continue;
             }
             $findings[] = $this->findingProjection($finding, $state->proposalsById);
         }
 
-        usort($findings, static fn (FindingProjection $a, FindingProjection $b): int => $b->createdAt <=> $a->createdAt ?: $b->id <=> $a->id);
+        usort(
+            $findings,
+            static fn (FindingProjection $left, FindingProjection $right): int => [$right->createdAt, $right->id] <=> [$left->createdAt, $left->id],
+        );
 
         return $findings;
     }
 
-    /**
-     * @return list<ProposalProjection>
-     */
+    /** @return list<ProposalProjection> */
     public function proposals(?string $status = null): array
     {
         $state = $this->state();
-        $targetStatus = $status !== null && $status !== '' ? ProposalStatus::tryFrom($status) : null;
         $proposals = [];
-
         foreach ($state->proposalsById as $proposal) {
-            if ($targetStatus !== null && $proposal->status !== $targetStatus) {
+            if ($status !== null && $proposal->status->value !== $status) {
                 continue;
             }
             $proposals[] = $this->proposalProjection($proposal, $state->findingsById);
         }
 
-        usort($proposals, static fn (ProposalProjection $a, ProposalProjection $b): int => $b->createdAt <=> $a->createdAt ?: $b->id <=> $a->id);
+        usort(
+            $proposals,
+            static fn (ProposalProjection $left, ProposalProjection $right): int => [$right->createdAt, $right->id] <=> [$left->createdAt, $left->id],
+        );
 
         return $proposals;
     }

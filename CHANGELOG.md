@@ -1,10 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [0.14.1] - 2026-09-01
 
 ### Added
 
-- Expose `findings(?string $status = null)` and `proposals(?string $status = null)` list queries on `LearningCatalog` to enable full catalog browsing and status-filtered views.
+- Expose complete read-only Finding and Proposal lists through `LearningCatalog`, with optional owner-status filtering and deterministic newest-first ordering, so consumers can browse Learning state without private storage scans.
+
+### Validation
+
+- Exact-head PHP 8.3, 8.4 and 8.5 package CI and the clean installed-skill consumer pass on the owner API follow-up.
 
 ## [0.14.0] - 2026-09-01
 

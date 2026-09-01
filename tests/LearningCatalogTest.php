@@ -43,6 +43,38 @@ final class LearningCatalogTest extends TestCase
         self::assertContains('proposal.2026-06-08.002', $overview->recentProposalIds);
     }
 
+    public function testCompleteListQueriesPreserveOwnerProjectionAndStatusFiltering(): void
+    {
+        $catalog = new LearningCatalog($this->root);
+
+        $findings = $catalog->findings();
+        self::assertCount(2, $findings);
+        self::assertSame(
+            ['finding.2026-06-08.002', 'finding.2026-06-08.001'],
+            array_map(static fn ($finding): string => $finding->id, $findings),
+        );
+        self::assertSame(
+            ['finding.2026-06-08.002', 'finding.2026-06-08.001'],
+            array_map(static fn ($finding): string => $finding->id, $catalog->findings('validated')),
+        );
+        self::assertSame([], $catalog->findings('rejected'));
+
+        $proposals = $catalog->proposals();
+        self::assertCount(2, $proposals);
+        self::assertSame(
+            ['proposal.2026-06-08.002', 'proposal.2026-06-08.001'],
+            array_map(static fn ($proposal): string => $proposal->id, $proposals),
+        );
+        self::assertSame(['proposal.2026-06-08.001'], array_map(
+            static fn ($proposal): string => $proposal->id,
+            $catalog->proposals('approved'),
+        ));
+        self::assertSame(['proposal.2026-06-08.002'], array_map(
+            static fn ($proposal): string => $proposal->id,
+            $catalog->proposals('rejected'),
+        ));
+    }
+
     public function testDetailQueriesPreserveFindingProposalGuidanceLineage(): void
     {
         $catalog = new LearningCatalog($this->root);
@@ -124,6 +156,8 @@ final class LearningCatalogTest extends TestCase
         $catalog = new LearningCatalog($this->root);
 
         $catalog->overview();
+        $catalog->findings();
+        $catalog->proposals();
         $catalog->finding('finding.2026-06-08.001');
         $catalog->proposal('proposal.2026-06-08.002');
         $catalog->guidance('proposal.2026-06-08.001');
