@@ -19,3 +19,45 @@ jobs:
           tools: composer:v2
       - run: composer install --no-interaction --prefer-dist
       - run: composer ci
+
+  installed-skill-consumer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+      - name: Install package into clean copied consumer
+        shell: bash
+        run: |
+          set -euo pipefail
+          consumer="$(mktemp -d)"
+          cd "$consumer"
+          cat > composer.json <<JSON
+          {
+            "name": "agent-learning/installed-skill-consumer",
+            "minimum-stability": "dev",
+            "prefer-stable": true,
+            "repositories": [
+              {
+                "type": "path",
+                "url": "$GITHUB_WORKSPACE",
+                "options": {"symlink": false}
+              }
+            ],
+            "require": {
+              "voku/agent-learning": "@dev"
+            }
+          }
+          JSON
+          composer update --no-interaction --prefer-dist
+          test -d vendor/voku/agent-learning
+          test ! -L vendor/voku/agent-learning
+          test -f vendor/voku/agent-learning/skills/agent-learning-note/SKILL.md
+          test -x vendor/bin/agent-learning-note
+          vendor/bin/agent-learning-note help | grep -F 'prepare|publish|status|retire'
+          grep -F 'agent-learning-note prepare' vendor/voku/agent-learning/skills/agent-learning-note/SKILL.md
+          grep -F 'agent-learning-note publish' vendor/voku/agent-learning/skills/agent-learning-note/SKILL.md
+          ! grep -F 'cat > notes/' vendor/voku/agent-learning/skills/agent-learning-note/SKILL.md
