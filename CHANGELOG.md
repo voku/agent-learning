@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-01
+
+### Added
+
+- Add first-class evidence-backed `LearningNote` precedents for `ADD_LEARNING_NOTE`, with typed prepare/publish/status/retire owner boundaries, stable `pattern_key` ownership, exact Finding/Proposal lineage, redaction, source-drift reporting, and compact read projections. A LearningNote is durable precedent and does not become active guidance merely by existing.
+- Add the package-owned `agent-learning-note` authoring skill. It requires the deterministic owner prepare/publish boundaries, separates current facts from historical findings and synthesis, supports bug-shaped and architecture/workflow-shaped cases, and never auto-promotes a note into Memory, Skills, Proposals, or Constraints.
+- Add real dogfood for two reviewed `agent-loop` learnings: linked-worktree repository detection and tool-coupled instruction ownership, plus a clean copied Composer consumer proving the skill and owner CLI ship together.
+
+### Fixed
+
+- Make the standalone `agent-learning-note` binary resolve package/source or Composer-installed autoloading the same way as the primary package CLI, so a mirrored Composer install no longer looks for a nonexistent package-local `vendor/autoload.php`.
+
+### Validation
+
+- PR #57 established the typed LearningNote owner contract and passed exact-head package CI on PHP 8.3, 8.4 and 8.5.
+- PR #59 passed exact-head package CI on PHP 8.3, 8.4 and 8.5 plus the clean copied Composer installed-skill consumer.
+
 ## [0.13.6] - 2026-08-26
 
 ### Fixed
@@ -438,7 +455,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 ### Added
 
 - Add strict recall-selection and per-guidance outcome event models, parsers, and JSONL repositories.
-- Add deterministic `GuidanceUsageProjector` summaries for eligibility, selection, application, explicit outcomes, distinct tasks, timestamps, and evidence event IDs.
+- Add deterministic `GuidanceUsageProjector` summaries for recall eligibility, selection, application, explicit outcomes, distinct tasks, timestamps, and evidence event IDs.
 - Add typed evolution decisions for promotion, staleness, replacement, conflict, and no-action review results.
 - Add separate conservative policies for finding-to-memory, memory-to-skill, skill-to-constraint, memory staleness, skill staleness, and constraint review.
 - Add `guidance-evaluate` CLI to validate event histories, print deterministic usage summaries and decisions, and optionally write reviewable candidate proposals.
@@ -483,8 +500,8 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 ### Added
 
 - Add typed constraint promotion models (`ConstraintSpecification`, `ConstraintEngine`, `Detectability`, `FalsePositiveRisk`) for hard-constraint candidates.
-- Add promotion-gate validation for confirmed findings, scope, boundaries, detectability, validation commands, false-positive risk, and engine-compatible target paths.
-- Add `constraint-export` to write generation packages containing specifications, source findings/proposals, examples, validation plans, and generation prompts.
+- Add promotion-gate validation for confirmed findings, scope, boundaries, detectability, validation commands, declared false-positive risk, local example rule references where available, and engine-compatible target paths/commands.
+- Add `constraint-export` to write generation packages containing specifications, source findings/proposals, examples, validation plans, and generation prompts for coding-agent rule generation.
 - Add generated-rule outcome result types such as `violation_detected`, `false_positive`, `rule_suppressed`, and `rule_disabled`.
 
 ### Changed
@@ -512,7 +529,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 - Print selected findings before writing consolidation input.
 - Append `templates/consolidation-prompt.md` from the learning root during `prepare`.
 - Add proposal lifecycle directory validation through `ProposalLifecycle`.
-- Add `FindingSelection` for explicit consolidation input selection.
+- `FindingSelection` adds explicit consolidation input selection.
 
 ### Changed
 
