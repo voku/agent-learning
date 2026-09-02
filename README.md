@@ -1,8 +1,8 @@
 # Coding Agent | Learning-Loops
 
-Reviewable finding, proposal, redaction, and decision-history tooling for coding-agent learning loops.
+Reviewable finding, precedent, proposal, redaction, and decision-history tooling for coding-agent learning loops.
 
-This library provides core domain logic and validation classes to support structured post-session learning for coding agents. It separates raw experiences (Findings) from potential guideline changes (Proposals), keeping the agent's knowledge extraction workflow structured, secure, and fully auditable.
+This library provides core domain logic and validation classes to support structured post-session learning for coding agents. It separates raw experiences (Findings), reusable solved-case precedent (LearningNotes), and potential guideline changes (Proposals), keeping the agent's knowledge extraction workflow structured, secure, and fully auditable.
 
 ---
 
@@ -20,6 +20,15 @@ A **Finding** represents a single raw experience or observation captured from a 
   * `validation_case`: concrete `given` / `when` / `then` behavior check.
 
 `ADD_LEARNING_NOTE` is the default durable capture. `CREATE_SKILL` should be rare; prefer `UPDATE_SKILL` when an existing skill already owns the behavior. `IGNORE` is valid for praise, vague reflection, one-off details, and already-covered guidance.
+
+### LearningNotes
+A **LearningNote** is a durable, evidence-backed solved-case precedent derived from validated Findings classified `ADD_LEARNING_NOTE`. It preserves useful context such as what happened, what failed, why the resolution worked, and when the lesson does or does not apply without promoting one case into active project guidance.
+
+LearningNotes have stable `pattern_key` ownership, exact Finding/Proposal lineage, versioned schema, redaction, repository-evidence currentness, and explicit `active` / `retired` lifecycle state. The typed `LearningNoteService` owns prepare, publish, read/status, and retire operations; consumers use `LearningNoteProjection` instead of reconstructing `notes/**` paths.
+
+A LearningNote is **precedent, not authority**. Its existence does not approve mutation, widen task scope, satisfy validation, apply a Proposal, or create/update a Skill or Constraint. `voku/agent-recall-compiler` may deterministically select current LearningNotes as bounded low-authority precedent, while reviewed active guidance remains stronger.
+
+See [docs/learning-notes.md](docs/learning-notes.md). Agentic authoring is provided by the package-owned [`agent-learning-note`](skills/agent-learning-note/SKILL.md) skill over the deterministic owner boundary.
 
 ### Proposals
 A **Proposal** defines a potential durable mutation to the repository's guidelines or instructions (e.g., in `MEMORY.md` or dedicated agent skills). 
@@ -44,7 +53,7 @@ Findings must be backed by concrete, verifiable evidence. Supported types includ
 ### Using ctx as historical evidence
 `agent-learning` does not index agent history itself. If [ctx](https://github.com/ctxrs/ctx) is installed, use it before writing findings to discover relevant prior sessions, failed attempts, rejected approaches, and validation history.
 
-ctx hits are evidence references, not durable memory. Record only bounded summaries and ctx IDs in findings. Durable learning still flows through validated findings, proposals, and reviewed decisions.
+ctx hits are evidence references, not durable memory. Record only bounded summaries and ctx IDs in findings. Durable learning still flows through validated findings, LearningNotes where appropriate, proposals, and reviewed decisions.
 
 ctx helps find what happened before; agent-learning decides what deserves to survive.
 
@@ -98,6 +107,9 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 ### Value Objects & Enums
 * [Finding](src/Finding.php): Read-only entity representing a captured session finding.
 * [FindingStatus](src/FindingStatus.php): Enum defining finding lifecycles (`candidate`, `validated`, `invalidated`, `rejected`, `superseded`, `consolidated`, `archived`).
+* [LearningNote](src/LearningNote.php): Read-only durable solved-case precedent with stable pattern identity and exact source lineage.
+* [LearningNoteStatus](src/LearningNoteStatus.php): Enum defining LearningNote lifecycle (`active`, `retired`).
+* [LearningNoteProjection](src/LearningNoteProjection.php): Compact read-only sibling/Recall projection that hides private storage layout.
 * [Proposal](src/Proposal.php): Read-only entity representing a proposed modification to guidelines.
 * [ProposalStatus](src/ProposalStatus.php): Enum defining proposal states (`candidate`, `approved`, `rejected`, `applied`, `retired`).
 * [Action](src/Action.php): Enum representing actions (`NO_DURABLE_LEARNING`, `ADD`, `DELETE`, `REPLACE`, `REJECT`).
@@ -111,6 +123,7 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 * [FindingParser](src/FindingParser.php): Parses a finding JSON record or file.
 * [ProposalParser](src/ProposalParser.php): Parses a proposal JSON record or file.
 * [FindingRepository](src/FindingRepository.php): Loads validated findings from root directories.
+* [LearningNoteRepository](src/LearningNoteRepository.php): Owns private LearningNote persistence and active/retired state; consumers should prefer the service/projection boundary.
 * [ProposalRepository](src/ProposalRepository.php): Loads proposals under different lifecycle folders.
 * [RecallSelectionEventRepository](src/RecallSelectionEventRepository.php): Loads immutable recall-selection JSONL events produced by `voku/agent-recall-compiler`.
 * [GuidanceOutcomeEventRepository](src/GuidanceOutcomeEventRepository.php): Loads immutable per-guidance outcome JSONL events.
@@ -126,6 +139,7 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 * [ConstraintManifestActivator](src/ConstraintManifestActivator.php): Writes the active manifest consumed by recall tooling after an approved or applied constraint rule exists in the project.
 
 ### Utilities & Infrastructure
+* [LearningNoteService](src/LearningNoteService.php): Typed prepare/publish/read/status/retire owner boundary with lineage, redaction, duplicate-pattern and currentness validation.
 * [ConsolidationPromptBuilder](src/ConsolidationPromptBuilder.php): Assembles validated findings and rejected proposals history into a structured LLM consolidation prompt.
 * [ConstraintGenerationPackageExporter](src/ConstraintGenerationPackageExporter.php): Exports `specification.json`, source findings/proposals, examples, validation plan, and generation prompt for coding-agent rule generation.
 * [ConstraintLoopRunner](src/ConstraintLoopRunner.php): Drives the approved generated-rule close-out path by exporting, applying, and activating a hard constraint with one explicit command.
@@ -292,6 +306,7 @@ With learning triage:
 This package ships package-specific skills under `skills/`:
 
 - [`agent-learning-consumer`](skills/agent-learning-consumer/SKILL.md): for end users setting up a learning root, capturing findings, validating proposals, and preparing consolidation input.
+- [`agent-learning-note`](skills/agent-learning-note/SKILL.md): for authoring or updating one evidence-grounded LearningNote from explicit validated Finding IDs through `LearningNoteService`/CLI owner boundaries; it never promotes the note into active guidance.
 - [`agent-learning-ctx-evidence`](skills/agent-learning-ctx-evidence/SKILL.md): for using ctx-backed local agent-history search as bounded evidence references without importing raw transcripts.
 - [`agent-hard-constraint-author`](skills/agent-hard-constraint-author/SKILL.md): for end users promoting validated findings into executable PHPStan, PHP-CS-Fixer, test, or CI constraints.
 - [`agent-learning-maintainer`](skills/agent-learning-maintainer/SKILL.md): for maintainers changing `voku/agent-learning` source, tests, docs, or local vendor syncs.
@@ -318,7 +333,7 @@ make phpstan
 
 ### CLI
 
-The Composer binary exposes the package workflow without requiring consuming-project classes:
+The Composer binaries expose the package workflows without requiring consuming-project classes:
 
 ```bash
 vendor/bin/agent-learning validate --root infra/doc/agent-learning
@@ -329,7 +344,14 @@ vendor/bin/agent-learning constraint-export --root infra/doc/agent-learning --pr
 vendor/bin/agent-learning constraint-activate --root infra/doc/agent-learning --proposal proposal.2026-06-08.001.json
 vendor/bin/agent-learning constraint-loop --root infra/doc/agent-learning proposal.2026-06-08.001 --by lars --commit working-tree --validation infra/doc/agent-learning/validation-results/proposal.2026-06-08.001.json --approve-candidate
 vendor/bin/agent-learning guidance-evaluate --root infra/doc/agent-learning --selection-history history/recall-selections.jsonl --outcome-history history/outcomes.jsonl
+
+vendor/bin/agent-learning-note prepare --root infra/doc/agent-learning --finding finding.2026-06-08.001 --project-root .
+vendor/bin/agent-learning-note publish --root infra/doc/agent-learning --input learning-note-candidate.json --project-root .
+vendor/bin/agent-learning-note status --root infra/doc/agent-learning --project-root .
+vendor/bin/agent-learning-note retire --root infra/doc/agent-learning learning-note.tests.add-before-change --reason "Superseded by reviewed current guidance."
 ```
+
+`agent-learning-note prepare` emits only owner-validated authoring inputs. `publish` revalidates source Finding lineage, redaction, duplicate pattern ownership, schema, and repository evidence before atomically writing a durable note. `status` exposes typed currentness without making callers parse private storage.
 
 `prepare` prints the selected finding IDs before writing the prompt. Empty selections fail unless `--allow-empty` is passed. If `templates/consolidation-prompt.md` exists under the learning root, its content is appended to the generated consolidation input as a project-specific prompt addendum.
 
