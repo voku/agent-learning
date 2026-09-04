@@ -88,6 +88,8 @@ vendor/bin/agent-learning proposal-reanchor MEMORY.md \
 
 Every applied `memory`/`skill` proof on that target is re-pinned in one transaction, and only while each proposal's own guidance wording is still present - the same assertion the validator makes - so a target that lost a rule is refused and rolled back rather than re-pinned. Proofs are matched by the file they resolve to rather than by how they spell it, so `MEMORY.md` and `./MEMORY.md` are one target and no subset is left stale. Approval, application and validation evidence stay untouched; the repair adds the new hash, an explicit actor and an explicit reason, and one record per proposal in `history/reanchored-proposals.jsonl`.
 
+Every transition - `approve`, `reject`, `retire`, `acknowledge`, `apply` and `reanchor` - allocates its history id and writes under one root-scoped exclusive lock held at `history/.transition.lock`, because each allocates that id by scanning the log it is about to append to. Concurrent runs would otherwise agree on the same sequence number and write duplicate ids into immutable history.
+
 Re-anchoring is a proof repair, not a decision. It never makes a target that lost the rule look applied, and it is not a substitute for `proposal-retire` when the guidance itself should leave the active pool.
 
 ```bash
