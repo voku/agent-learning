@@ -17,10 +17,11 @@ final class OutcomeRepository
     }
 
     /**
+     * @param array<string, Proposal> $proposalsById Retained only until current first-party positional callers are cut over.
      * @return list<array<string, mixed>>
      * @throws ValidationException
      */
-    public function loadAll(string $root): array
+    public function loadAll(string $root, array $proposalsById = []): array
     {
         $path = $root . '/history/outcomes.jsonl';
         if (!is_file($path)) {
