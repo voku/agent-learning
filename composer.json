@@ -8,10 +8,28 @@
     "issues": "https://github.com/voku/agent-learning/issues",
     "source": "https://github.com/voku/agent-learning"
   },
+  "keywords": [
+    "agent",
+    "coding-agent",
+    "learning",
+    "precedents",
+    "findings",
+    "proposals",
+    "decision-history",
+    "ai",
+    "llm",
+    "memory"
+  ],
   "authors": [
     {
       "name": "Lars Moelleken",
       "homepage": "https://github.com/voku"
+    }
+  ],
+  "funding": [
+    {
+      "type": "github",
+      "url": "https://github.com/voku"
     }
   ],
   "require": {

@@ -3,7 +3,13 @@
 Reviewable finding, precedent, proposal, redaction, and decision-history tooling for coding-agent learning loops.
 
 [![Build Status](https://github.com/voku/agent-learning/actions/workflows/ci.yml/badge.svg)](https://github.com/voku/agent-learning/actions)
-[![License](https://img.shields.io/github/license/voku/agent-learning.svg)](LICENSE)
+[![Latest Stable Version](https://poser.pugx.org/voku/agent-learning/v/stable)](https://packagist.org/packages/voku/agent-learning)
+[![Total Downloads](https://poser.pugx.org/voku/agent-learning/downloads)](https://packagist.org/packages/voku/agent-learning)
+[![Monthly Downloads](https://poser.pugx.org/voku/agent-learning/d/monthly)](https://packagist.org/packages/voku/agent-learning)
+[![License](https://poser.pugx.org/voku/agent-learning/license)](https://packagist.org/packages/voku/agent-learning)
+[![PHP Version Require](https://poser.pugx.org/voku/agent-learning/require/php)](https://packagist.org/packages/voku/agent-learning)
+[![GitHub Stars](https://img.shields.io/github/stars/voku/agent-learning?style=flat-square)](https://github.com/voku/agent-learning/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/voku/agent-learning?style=flat-square)](https://github.com/voku/agent-learning/network/members)
 
 This library provides core domain logic and validation classes to support structured post-session learning for coding agents. It separates raw experiences (Findings), reusable solved-case precedent (LearningNotes), and potential guideline changes (Proposals), keeping the agent's knowledge extraction workflow structured, secure, and fully auditable.
 
