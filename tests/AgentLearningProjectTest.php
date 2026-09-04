@@ -125,7 +125,7 @@ final class AgentLearningProjectTest extends TestCase
         self::assertStringContainsString('prepare selection matched no validated findings', implode("\n", $output));
     }
 
-    public function testCliValidateCommandFailsOnUnknownProposalReferenceInOutcomes(): void
+    public function testCliValidateCommandRejectsLegacyOutcomeHistoryBeforeInterpretingProposalReferences(): void
     {
         $root = $this->createLearningRoot();
         $outcome = [
@@ -149,7 +149,10 @@ final class AgentLearningProjectTest extends TestCase
         exec($command, $output, $exitCode);
 
         self::assertSame(1, $exitCode, implode("\n", $output));
-        self::assertStringContainsString('outcome references unknown proposal', implode("\n", $output));
+        self::assertStringContainsString(
+            'legacy outcome.* records are unsupported after the pre-1.0 cut',
+            implode("\n", $output),
+        );
     }
 
     private function createLearningRoot(): string
