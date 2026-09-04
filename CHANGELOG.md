@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `proposal-reanchor` repairs an applied `memory`/`skill` proof after its target file legitimately changed. `applied_validation.target_content_hash` pins the whole target, so a shared guidance home such as `MEMORY.md` could not be edited again - not even to repair an evidence path a directory move invalidated - without every applied record on that file reporting drift it did not cause; retiring answered a curation question nobody asked and re-applying is closed to an applied record. The transition re-pins the hash only when the proposal's own guidance wording is still present, keeps approval/application/validation evidence unchanged, and requires an explicit actor and reason recorded in `history/reanchored-proposals.jsonl`.
+- `history/reanchored-proposals.jsonl` is validated like the other transition logs: every record must name a known proposal, a reason, and who re-anchored it.
+
+### Changed
+
+- The five dated transition-id generators share one scan, so a new transition cannot disagree with the existing ones about what "next" is.
+
 ## [0.14.2] - 2026-09-01
 
 ### Fixed

@@ -57,6 +57,23 @@ final class DecisionHistoryValidator
                 throw new ValidationException($retiredPath, null, $proposalId, 'retired proposal requires a reason');
             }
         }
+
+        // A re-anchor changes an applied proof rather than a decision, so the log
+        // has to say who repaired it and why; an unexplained re-pin would be
+        // indistinguishable from quietly following the target wherever it drifts.
+        $reanchoredPath = $root . '/history/reanchored-proposals.jsonl';
+        foreach ($this->jsonRecords($reanchoredPath) as $record) {
+            $proposalId = $this->requireString($record, 'proposal_id', $reanchoredPath, null);
+            if (!isset($proposalsById[$proposalId])) {
+                throw new ValidationException($reanchoredPath, null, $proposalId, 'history references unknown proposal');
+            }
+            if (trim((string)($record['reason'] ?? '')) === '') {
+                throw new ValidationException($reanchoredPath, null, $proposalId, 're-anchored proposal requires a reason');
+            }
+            if (trim((string)($record['reanchored_by'] ?? '')) === '') {
+                throw new ValidationException($reanchoredPath, null, $proposalId, 're-anchored proposal requires reanchored_by');
+            }
+        }
     }
 
     /**
