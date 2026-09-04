@@ -233,29 +233,10 @@ final class ProposalTransitionManager
 
     public function generateAcknowledgementId(string $root, ?DateTimeImmutable $date = null): string
     {
-        $dateObj = $date ?? new DateTimeImmutable('now');
-        $dateStr = $dateObj->format('Y-m-d');
-        $prefix = 'acknowledgement.' . $dateStr . '.';
-
-        $path = $root . '/history/acknowledged-proposals.jsonl';
-        $maxNum = 0;
-        if (is_file($path)) {
-            $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            if ($lines !== false) {
-                foreach ($lines as $line) {
-                    $decoded = json_decode($line, true);
-                    $id = $decoded['id'] ?? '';
-                    if (str_starts_with($id, $prefix)) {
-                        $suffix = substr($id, strlen($prefix));
-                        if (is_numeric($suffix)) {
-                            $maxNum = max($maxNum, (int)$suffix);
-                        }
-                    }
-                }
-            }
-        }
-
-        return $prefix . sprintf('%03d', $maxNum + 1);
+        return $this->generateSequentialHistoryId(
+            $root . '/history/acknowledged-proposals.jsonl',
+            'acknowledgement.' . ($date ?? new DateTimeImmutable('now'))->format('Y-m-d') . '.',
+        );
     }
 
     /**
@@ -319,85 +300,261 @@ final class ProposalTransitionManager
         $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $retiredPath, $retirementLine, 'retirement');
     }
 
-    public function generateRetirementId(string $root, ?DateTimeImmutable $date = null): string
+    /**
+     * Re-anchor every applied guidance proof pinned to one target file.
+     *
+     * `applied_validation.target_content_hash` pins the whole target, so a shared
+     * guidance home such as `MEMORY.md` cannot be edited again - not even to
+     * repair an evidence path a directory move invalidated - without every
+     * applied record on that file reporting drift it did not cause. Retiring
+     * answers a curation question nobody asked, and `apply()` is closed to a
+     * record that is already applied, so the proof had no way back to the truth.
+     *
+     * The unit of repair is the target rather than one proposal, because drift is
+     * a property of the file: repairing one of several proofs on the same target
+     * would leave the root invalid and could therefore never commit.
+     *
+     * This is a proof repair, not a decision. Each proposal's own guidance wording
+     * must still be present - the same assertion the validator makes - and the
+     * approval, application and validation evidence stay exactly as they were.
+     * Only the hash, an explicit actor and an explicit reason are added.
+     *
+     * @return list<string> the repaired proposal ids, in stable order
+     * @throws ValidationException when no applied proof names the target, the
+     *                             target is missing, or one of them no longer
+     *                             carries the guidance it claims
+     */
+    public function reanchorTarget(string $root, string $sourceRef, string $actor, string $reason): array
     {
-        $dateObj = $date ?? new DateTimeImmutable('now');
-        $dateStr = $dateObj->format('Y-m-d');
-        $prefix = 'retirement.' . $dateStr . '.';
-
-        $path = $root . '/history/retired-proposals.jsonl';
-        $maxNum = 0;
-        if (is_file($path)) {
-            $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            if ($lines !== false) {
-                foreach ($lines as $line) {
-                    $decoded = json_decode($line, true);
-                    $id = $decoded['id'] ?? '';
-                    if (str_starts_with($id, $prefix)) {
-                        $suffix = substr($id, strlen($prefix));
-                        if (is_numeric($suffix)) {
-                            $maxNum = max($maxNum, (int)$suffix);
-                        }
-                    }
-                }
-            }
+        $sourceRef = trim(str_replace('\\', '/', $sourceRef));
+        if ($sourceRef === '') {
+            throw new ValidationException($root, null, null, 'target source ref must be explicit');
+        }
+        if (trim($actor) === '') {
+            throw new ValidationException($root, null, null, 'actor name must be explicit');
+        }
+        if (trim($reason) === '') {
+            throw new ValidationException($root, null, null, 're-anchor reason must be explicit');
         }
 
-        return $prefix . sprintf('%03d', $maxNum + 1);
+        $projectRoot = (new LearningRootResolver())->resolve($root)->projectRoot;
+        if ($this->escapesProjectRoot($sourceRef)) {
+            throw new ValidationException($root, null, null, 'target source ref must stay inside the project root: ' . $sourceRef);
+        }
+        $canonicalTarget = $this->canonicalTargetPath($projectRoot, $sourceRef);
+        $hash = $canonicalTarget === null ? false : hash_file('sha256', $canonicalTarget);
+        if ($hash === false) {
+            throw new ValidationException($root, null, null, 'applied guidance target does not exist: ' . $sourceRef);
+        }
+        $hash = strtolower($hash);
+
+        $now = new DateTimeImmutable('now');
+        $nowStr = $now->format(DateTimeInterface::ATOM);
+        $parser = new ProposalParser();
+        $guidanceValidator = new AppliedGuidanceTargetValidator();
+
+        $writes = [];
+        $historyLines = [];
+        $repaired = [];
+        $sequence = 0;
+        foreach ($this->appliedGuidanceFiles($root) as $proposalPath) {
+            $record = $parser->parseFile($proposalPath);
+            if (!in_array($record->targetType, [GuidanceType::MEMORY->value, GuidanceType::SKILL->value], true)) {
+                continue;
+            }
+
+            $validation = $record->raw['applied_validation'] ?? null;
+            if (!is_array($validation)) {
+                continue;
+            }
+            // Proofs are matched by the file they resolve to, not by how they
+            // spell it. `MEMORY.md` and `./MEMORY.md` are both valid in-root
+            // references to the same target, and repairing only one spelling
+            // would leave the others stale - which the repository validation at
+            // the end of the transaction would then roll the whole repair back
+            // for, naming a proposal the caller never had a way to reach.
+            $recordRef = $validation['target_source_ref'] ?? null;
+            if (!is_string($recordRef) || $this->escapesProjectRoot($recordRef)) {
+                continue;
+            }
+            if ($this->canonicalTargetPath($projectRoot, $recordRef) !== $canonicalTarget) {
+                continue;
+            }
+
+            $validation['target_content_hash'] = $hash;
+            $validation['reanchored_by'] = $actor;
+            $validation['reanchored_at'] = $nowStr;
+            $validation['reanchor_reason'] = $reason;
+            $data = $record->raw;
+            $data['applied_validation'] = $validation;
+
+            // A target that lost the rule must fail before anything is written,
+            // rather than be re-pinned to a file that no longer proves it.
+            $guidanceValidator->validate($parser->parseRecord($data, $proposalPath), $root, $proposalPath);
+
+            $writes[$proposalPath] = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            $historyLines[] = json_encode([
+                'id' => $this->generateReanchorId($root, $now, $sequence++),
+                'proposal_id' => $record->id,
+                'reanchored_by' => $actor,
+                'reanchored_at' => $nowStr,
+                'reason' => $reason,
+                'target_source_ref' => $sourceRef,
+                'target_content_hash' => $hash,
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+            $repaired[] = $record->id;
+        }
+
+        if ($repaired === []) {
+            throw new ValidationException($root, null, null, 'no applied memory/skill proof names target: ' . $sourceRef);
+        }
+
+        $this->persistReanchor($root, $writes, implode('', $historyLines));
+
+        return $repaired;
+    }
+
+    /**
+     * @param array<string, string> $writes proposal path => repaired content
+     * @throws ValidationException when the repaired root does not validate
+     */
+    private function persistReanchor(string $root, array $writes, string $historyLines): void
+    {
+        $historyPath = $root . '/history/reanchored-proposals.jsonl';
+        $originalProposals = [];
+        foreach (array_keys($writes) as $path) {
+            $original = file_get_contents($path);
+            if ($original === false) {
+                throw new ValidationException($path, null, null, 'cannot read proposal file');
+            }
+            $originalProposals[$path] = $original;
+        }
+        $originalHistory = is_file($historyPath) ? file_get_contents($historyPath) : null;
+        if ($originalHistory === false) {
+            throw new ValidationException($historyPath, null, null, 'cannot read proposal history file');
+        }
+
+        try {
+            foreach ($writes as $path => $content) {
+                if (file_put_contents($path, $content) === false) {
+                    throw new ValidationException($path, null, null, 'failed to write proposal file');
+                }
+            }
+            $historyDir = dirname($historyPath);
+            if (!is_dir($historyDir) && !mkdir($historyDir, 0777, true) && !is_dir($historyDir)) {
+                throw new ValidationException($historyPath, null, null, 'failed to create proposal history directory');
+            }
+            if (file_put_contents($historyPath, $historyLines, FILE_APPEND) === false) {
+                throw new ValidationException($historyPath, null, null, 'failed to append proposal history');
+            }
+
+            $this->validateRepository($root);
+        } catch (\Throwable $exception) {
+            foreach ($originalProposals as $path => $content) {
+                file_put_contents($path, $content);
+            }
+            if ($originalHistory === null) {
+                if (is_file($historyPath)) {
+                    unlink($historyPath);
+                }
+            } else {
+                file_put_contents($historyPath, $originalHistory);
+            }
+
+            throw new ValidationException($root, null, null, 'proposal re-anchor failed and was rolled back: ' . $exception->getMessage());
+        }
+    }
+
+    /**
+     * Whether a target source ref points outside the project root.
+     *
+     * Mirrors `AppliedGuidanceTargetValidator`: an absolute path, a drive letter
+     * or any `..` segment is not an in-root reference.
+     */
+    private function escapesProjectRoot(string $sourceRef): bool
+    {
+        $normalized = str_replace('\\', '/', trim($sourceRef));
+
+        return $normalized === ''
+            || str_starts_with($normalized, '/')
+            || preg_match('~^[A-Za-z]:/~', $normalized) === 1
+            || in_array('..', explode('/', $normalized), true);
+    }
+
+    /**
+     * The real path an in-root target source ref names, or null when it does not
+     * resolve to a file inside the project root.
+     */
+    private function canonicalTargetPath(string $projectRoot, string $sourceRef): ?string
+    {
+        $normalized = ltrim(str_replace('\\', '/', trim($sourceRef)), '/');
+        $realProjectRoot = realpath($projectRoot);
+        $realTargetPath = realpath(rtrim($projectRoot, '/\\') . '/' . $normalized);
+        if ($realProjectRoot === false || $realTargetPath === false || !is_file($realTargetPath)) {
+            return null;
+        }
+
+        $projectPrefix = rtrim(str_replace('\\', '/', $realProjectRoot), '/') . '/';
+        $target = str_replace('\\', '/', $realTargetPath);
+
+        return str_starts_with($target, $projectPrefix) ? $target : null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function appliedGuidanceFiles(string $root): array
+    {
+        $directory = $root . '/proposals/applied';
+        if (!is_dir($directory)) {
+            return [];
+        }
+
+        $files = glob($directory . '/*.json');
+        if ($files === false) {
+            return [];
+        }
+        sort($files, SORT_STRING);
+
+        return $files;
+    }
+
+    /**
+     * One re-anchor repairs every proof on a target, and the log has not been
+     * written yet while those ids are allocated, so the caller passes how many
+     * records it already allocated in this transaction.
+     */
+    public function generateReanchorId(string $root, ?DateTimeImmutable $date = null, int $offset = 0): string
+    {
+        return $this->generateSequentialHistoryId(
+            $root . '/history/reanchored-proposals.jsonl',
+            'reanchor.' . ($date ?? new DateTimeImmutable('now'))->format('Y-m-d') . '.',
+            $offset,
+        );
+    }
+
+    public function generateRetirementId(string $root, ?DateTimeImmutable $date = null): string
+    {
+        return $this->generateSequentialHistoryId(
+            $root . '/history/retired-proposals.jsonl',
+            'retirement.' . ($date ?? new DateTimeImmutable('now'))->format('Y-m-d') . '.',
+        );
     }
 
     public function generateDecisionId(string $root, ?DateTimeImmutable $date = null): string
     {
-        $dateObj = $date ?? new DateTimeImmutable('now');
-        $dateStr = $dateObj->format('Y-m-d');
-        $prefix = 'decision.' . $dateStr . '.';
-
-        $path = $root . '/history/decisions.jsonl';
-        $maxNum = 0;
-        if (is_file($path)) {
-            $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            if ($lines !== false) {
-                foreach ($lines as $line) {
-                    $decoded = json_decode($line, true);
-                    $id = $decoded['id'] ?? '';
-                    if (str_starts_with($id, $prefix)) {
-                        $suffix = substr($id, strlen($prefix));
-                        if (is_numeric($suffix)) {
-                            $maxNum = max($maxNum, (int)$suffix);
-                        }
-                    }
-                }
-            }
-        }
-
-        return $prefix . sprintf('%03d', $maxNum + 1);
+        return $this->generateSequentialHistoryId(
+            $root . '/history/decisions.jsonl',
+            'decision.' . ($date ?? new DateTimeImmutable('now'))->format('Y-m-d') . '.',
+        );
     }
 
     public function generateRejectionId(string $root, ?DateTimeImmutable $date = null): string
     {
-        $dateObj = $date ?? new DateTimeImmutable('now');
-        $dateStr = $dateObj->format('Y-m-d');
-        $prefix = 'rejection.' . $dateStr . '.';
-
-        $path = $root . '/history/rejected-proposals.jsonl';
-        $maxNum = 0;
-        if (is_file($path)) {
-            $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            if ($lines !== false) {
-                foreach ($lines as $line) {
-                    $decoded = json_decode($line, true);
-                    $id = $decoded['id'] ?? '';
-                    if (str_starts_with($id, $prefix)) {
-                        $suffix = substr($id, strlen($prefix));
-                        if (is_numeric($suffix)) {
-                            $maxNum = max($maxNum, (int)$suffix);
-                        }
-                    }
-                }
-            }
-        }
-
-        return $prefix . sprintf('%03d', $maxNum + 1);
+        return $this->generateSequentialHistoryId(
+            $root . '/history/rejected-proposals.jsonl',
+            'rejection.' . ($date ?? new DateTimeImmutable('now'))->format('Y-m-d') . '.',
+        );
     }
 
     /**
@@ -491,6 +648,35 @@ final class ProposalTransitionManager
         $decisionLine = json_encode($decisionRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
         $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $decisionsPath, $decisionLine, 'apply');
+    }
+
+    /**
+     * Next sequential id for a dated history prefix in a JSONL transition log.
+     *
+     * Every transition log allocates its ids the same way; keeping one scan means
+     * a new transition cannot quietly disagree with the existing ones about what
+     * "next" is.
+     */
+    private function generateSequentialHistoryId(string $path, string $prefix, int $offset = 0): string
+    {
+        $maxNum = 0;
+        if (is_file($path)) {
+            $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            if ($lines !== false) {
+                foreach ($lines as $line) {
+                    $decoded = json_decode($line, true);
+                    $id = is_array($decoded) && is_string($decoded['id'] ?? null) ? $decoded['id'] : '';
+                    if (str_starts_with($id, $prefix)) {
+                        $suffix = substr($id, strlen($prefix));
+                        if (is_numeric($suffix)) {
+                            $maxNum = max($maxNum, (int) $suffix);
+                        }
+                    }
+                }
+            }
+        }
+
+        return $prefix . sprintf('%03d', $maxNum + 1 + $offset);
     }
 
     private function persistTransition(

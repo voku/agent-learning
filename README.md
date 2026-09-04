@@ -78,6 +78,18 @@ The command never approves, applies, retires, deletes, archives, or rewrites gui
 
 Review a stale/replacement/conflict result by preserving the decision record first, then explicitly acknowledge/reject it or create/approve/apply a separately reviewed `REPLACE`/`DELETE` proposal. Retire previously applied guidance only with `proposal-retire` and an explicit reason; the proposal remains auditable in `proposals/retired/` and immutable history, but is excluded from active recall. Archive or supersede a finding through its lifecycle transition with a recorded reason; a replacement must retain validated source-finding lineage.
 
+An applied `memory`/`skill` proposal proves it landed by pinning the whole target file in `applied_validation.target_content_hash`. A shared home such as `MEMORY.md` carries many rows, so an edit to any other row - a repository layout move repairing an evidence path, for example - makes every proof on that file report drift it did not cause. Repair them with `proposal-reanchor`, which takes the target, not one proposal, because the drift belongs to the file:
+
+```bash
+vendor/bin/agent-learning proposal-reanchor MEMORY.md \
+  --by maintainer \
+  --reason 'Repaired an unrelated MEMORY.md evidence path after a repository layout move.'
+```
+
+Every applied `memory`/`skill` proof on that target is re-pinned in one transaction, and only while each proposal's own guidance wording is still present - the same assertion the validator makes - so a target that lost a rule is refused and rolled back rather than re-pinned. Proofs are matched by the file they resolve to rather than by how they spell it, so `MEMORY.md` and `./MEMORY.md` are one target and no subset is left stale. Approval, application and validation evidence stay untouched; the repair adds the new hash, an explicit actor and an explicit reason, and one record per proposal in `history/reanchored-proposals.jsonl`.
+
+Re-anchoring is a proof repair, not a decision. It never makes a target that lost the rule look applied, and it is not a substitute for `proposal-retire` when the guidance itself should leave the active pool.
+
 ```bash
 vendor/bin/agent-learning dream \
   --root infra/doc/agent-learning \
