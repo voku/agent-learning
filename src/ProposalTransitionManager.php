@@ -338,8 +338,11 @@ final class ProposalTransitionManager
         }
 
         $projectRoot = (new LearningRootResolver())->resolve($root)->projectRoot;
-        $targetPath = rtrim($projectRoot, '/\\') . '/' . ltrim($sourceRef, '/');
-        $hash = is_file($targetPath) ? hash_file('sha256', $targetPath) : false;
+        if ($this->escapesProjectRoot($sourceRef)) {
+            throw new ValidationException($root, null, null, 'target source ref must stay inside the project root: ' . $sourceRef);
+        }
+        $canonicalTarget = $this->canonicalTargetPath($projectRoot, $sourceRef);
+        $hash = $canonicalTarget === null ? false : hash_file('sha256', $canonicalTarget);
         if ($hash === false) {
             throw new ValidationException($root, null, null, 'applied guidance target does not exist: ' . $sourceRef);
         }
@@ -364,8 +367,17 @@ final class ProposalTransitionManager
             if (!is_array($validation)) {
                 continue;
             }
+            // Proofs are matched by the file they resolve to, not by how they
+            // spell it. `MEMORY.md` and `./MEMORY.md` are both valid in-root
+            // references to the same target, and repairing only one spelling
+            // would leave the others stale - which the repository validation at
+            // the end of the transaction would then roll the whole repair back
+            // for, naming a proposal the caller never had a way to reach.
             $recordRef = $validation['target_source_ref'] ?? null;
-            if (!is_string($recordRef) || trim(str_replace('\\', '/', $recordRef)) !== $sourceRef) {
+            if (!is_string($recordRef) || $this->escapesProjectRoot($recordRef)) {
+                continue;
+            }
+            if ($this->canonicalTargetPath($projectRoot, $recordRef) !== $canonicalTarget) {
                 continue;
             }
 
@@ -451,6 +463,41 @@ final class ProposalTransitionManager
 
             throw new ValidationException($root, null, null, 'proposal re-anchor failed and was rolled back: ' . $exception->getMessage());
         }
+    }
+
+    /**
+     * Whether a target source ref points outside the project root.
+     *
+     * Mirrors `AppliedGuidanceTargetValidator`: an absolute path, a drive letter
+     * or any `..` segment is not an in-root reference.
+     */
+    private function escapesProjectRoot(string $sourceRef): bool
+    {
+        $normalized = str_replace('\\', '/', trim($sourceRef));
+
+        return $normalized === ''
+            || str_starts_with($normalized, '/')
+            || preg_match('~^[A-Za-z]:/~', $normalized) === 1
+            || in_array('..', explode('/', $normalized), true);
+    }
+
+    /**
+     * The real path an in-root target source ref names, or null when it does not
+     * resolve to a file inside the project root.
+     */
+    private function canonicalTargetPath(string $projectRoot, string $sourceRef): ?string
+    {
+        $normalized = ltrim(str_replace('\\', '/', trim($sourceRef)), '/');
+        $realProjectRoot = realpath($projectRoot);
+        $realTargetPath = realpath(rtrim($projectRoot, '/\\') . '/' . $normalized);
+        if ($realProjectRoot === false || $realTargetPath === false || !is_file($realTargetPath)) {
+            return null;
+        }
+
+        $projectPrefix = rtrim(str_replace('\\', '/', $realProjectRoot), '/') . '/';
+        $target = str_replace('\\', '/', $realTargetPath);
+
+        return str_starts_with($target, $projectPrefix) ? $target : null;
     }
 
     /**

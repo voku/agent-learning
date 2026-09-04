@@ -73,6 +73,19 @@ final class DecisionHistoryValidator
             if (trim((string)($record['reanchored_by'] ?? '')) === '') {
                 throw new ValidationException($reanchoredPath, null, $proposalId, 're-anchored proposal requires reanchored_by');
             }
+            if (trim((string)($record['reanchored_at'] ?? '')) === '') {
+                throw new ValidationException($reanchoredPath, null, $proposalId, 're-anchored proposal requires reanchored_at');
+            }
+            // The target proof is the whole point of the record: a re-anchor that
+            // does not say which file it re-pinned, and to what, is an audit entry
+            // that cannot be checked against the repository it claims to describe.
+            if (trim((string)($record['target_source_ref'] ?? '')) === '') {
+                throw new ValidationException($reanchoredPath, null, $proposalId, 're-anchored proposal requires target_source_ref');
+            }
+            $hash = strtolower(trim((string)($record['target_content_hash'] ?? '')));
+            if (preg_match('/^[a-f0-9]{64}$/', $hash) !== 1) {
+                throw new ValidationException($reanchoredPath, null, $proposalId, 're-anchored proposal requires target_content_hash as sha256 hex');
+            }
         }
     }
 

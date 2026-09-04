@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning\Tests;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use voku\AgentLearning\AppliedGuidanceTargetValidator;
+use voku\AgentLearning\DecisionHistoryValidator;
 use voku\AgentLearning\ProposalParser;
+use voku\AgentLearning\ProposalRepository;
 use voku\AgentLearning\ProposalTransitionManager;
 use voku\AgentLearning\ValidationException;
 
@@ -130,6 +133,102 @@ final class ProposalReanchorTest extends TestCase
         self::assertSame($ids, array_unique($ids), 'two repairs in one transaction must not share an id.');
     }
 
+    /**
+     * `AppliedGuidanceTargetValidator` accepts `MEMORY.md` and `./MEMORY.md` as
+     * the same in-root target, so proofs written at different times can spell one
+     * file two ways. Matching on the reference text repaired only one spelling and
+     * left the other stale, which the end-of-transaction repository validation
+     * then rolled the whole repair back for - naming a proposal the caller had no
+     * way to reach.
+     */
+    public function testProofsAreMatchedByTargetIdentityNotByHowTheySpellIt(): void
+    {
+        $this->writeAppliedProposal(self::SECOND_ID, self::SECOND_RULE, $this->hashMemory(), './MEMORY.md');
+        $this->writeMemory(self::FIRST_RULE, self::SECOND_RULE, 'An unrelated row moved home.');
+
+        $repaired = (new ProposalTransitionManager())->reanchorTarget($this->root, 'MEMORY.md', 'lars', 'Layout move.');
+
+        self::assertSame([self::FIRST_ID, self::SECOND_ID], $repaired);
+        foreach ([self::FIRST_ID, self::SECOND_ID] as $id) {
+            /** @var array<string, mixed> $record */
+            $record = json_decode(
+                (string) file_get_contents($this->root . '/proposals/applied/' . $id . '.json'),
+                true,
+                512,
+                JSON_THROW_ON_ERROR,
+            );
+            /** @var array<string, mixed> $validation */
+            $validation = $record['applied_validation'];
+            self::assertSame($this->hashMemory(), $validation['target_content_hash']);
+        }
+    }
+
+    /**
+     * The target proof is the whole content of a re-anchor record. An entry that
+     * does not say which file it re-pinned, or to what, is an audit line that
+     * cannot be checked against the repository it claims to describe.
+     *
+     * @param array<string, mixed> $record
+     */
+    #[DataProvider('incompleteReanchorRecordProvider')]
+    public function testAnIncompleteReanchorAuditRecordIsRejected(array $record, string $expected): void
+    {
+        (new ProposalTransitionManager())->reanchorTarget($this->root, 'MEMORY.md', 'lars', 'Layout move.');
+        file_put_contents(
+            $this->root . '/history/reanchored-proposals.jsonl',
+            json_encode($record, JSON_THROW_ON_ERROR) . "\n",
+        );
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessageMatches($expected);
+
+        (new DecisionHistoryValidator())->validateHistory(
+            $this->root,
+            (new ProposalRepository())->loadAll($this->root, []),
+        );
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>, string}>
+     */
+    public static function incompleteReanchorRecordProvider(): iterable
+    {
+        $complete = [
+            'id' => 'reanchor.2026-06-08.001',
+            'proposal_id' => self::FIRST_ID,
+            'reanchored_by' => 'lars',
+            'reanchored_at' => '2026-06-08T14:00:00+00:00',
+            'reason' => 'Layout move.',
+            'target_source_ref' => 'MEMORY.md',
+            'target_content_hash' => str_repeat('a', 64),
+        ];
+
+        yield 'without a timestamp' => [
+            [...$complete, 'reanchored_at' => ' '],
+            '/requires reanchored_at/',
+        ];
+        yield 'without a target' => [
+            [...$complete, 'target_source_ref' => ''],
+            '/requires target_source_ref/',
+        ];
+        yield 'without a target hash' => [
+            array_diff_key($complete, ['target_content_hash' => null]),
+            '/requires target_content_hash as sha256 hex/',
+        ];
+        yield 'with a malformed target hash' => [
+            [...$complete, 'target_content_hash' => 'not-a-sha256'],
+            '/requires target_content_hash as sha256 hex/',
+        ];
+    }
+
+    public function testATargetRefThatEscapesTheProjectRootIsRefused(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessageMatches('/must stay inside the project root/');
+
+        (new ProposalTransitionManager())->reanchorTarget($this->root, '../MEMORY.md', 'lars', 'A reason.');
+    }
+
     public function testARepairIsRefusedWhenOneTargetRowLostItsGuidance(): void
     {
         $this->writeMemory(self::FIRST_RULE);
@@ -217,7 +316,7 @@ final class ProposalReanchorTest extends TestCase
         file_put_contents($this->root . '/MEMORY.md', "# Memory\n\n" . implode("\n\n", $rows) . "\n");
     }
 
-    private function writeAppliedProposal(string $proposalId, string $rule, string $targetHash): void
+    private function writeAppliedProposal(string $proposalId, string $rule, string $targetHash, string $sourceRef = 'MEMORY.md'): void
     {
         /** @var array<string, mixed> $proposal */
         $proposal = json_decode(
@@ -241,7 +340,7 @@ final class ProposalReanchorTest extends TestCase
             'status' => 'passed',
             'exit_code' => 0,
             'commit' => 'commit123',
-            'target_source_ref' => 'MEMORY.md',
+            'target_source_ref' => $sourceRef,
             'target_content_hash' => $targetHash,
             'summary' => 'Fixture application evidence.',
         ];

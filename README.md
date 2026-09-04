@@ -86,7 +86,7 @@ vendor/bin/agent-learning proposal-reanchor MEMORY.md \
   --reason 'Repaired an unrelated MEMORY.md evidence path after a repository layout move.'
 ```
 
-Every applied `memory`/`skill` proof naming that target is re-pinned in one transaction, and only when each proposal's own guidance wording is still present - the same assertion the validator makes - so a target that lost a rule is refused and rolled back rather than re-pinned. Approval, application and validation evidence stay untouched; the repair adds the new hash, an explicit actor and an explicit reason, and one record per proposal in `history/reanchored-proposals.jsonl`.
+Every applied `memory`/`skill` proof on that target is re-pinned in one transaction, and only while each proposal's own guidance wording is still present - the same assertion the validator makes - so a target that lost a rule is refused and rolled back rather than re-pinned. Proofs are matched by the file they resolve to rather than by how they spell it, so `MEMORY.md` and `./MEMORY.md` are one target and no subset is left stale. Approval, application and validation evidence stay untouched; the repair adds the new hash, an explicit actor and an explicit reason, and one record per proposal in `history/reanchored-proposals.jsonl`.
 
 Re-anchoring is a proof repair, not a decision. It never makes a target that lost the rule look applied, and it is not a substitute for `proposal-retire` when the guidance itself should leave the active pool.
 

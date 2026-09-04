@@ -5,7 +5,7 @@
 ### Added
 
 - `proposal-reanchor <target>` repairs the applied `memory`/`skill` proofs pinned to one target file after it legitimately changed. `applied_validation.target_content_hash` pins the whole target, so a shared guidance home such as `MEMORY.md` could not be edited again - not even to repair an evidence path a directory move invalidated - without every applied record on that file reporting drift it did not cause; retiring answered a curation question nobody asked and re-applying is closed to an applied record. The repair is scoped to the target rather than one proposal because the drift belongs to the file: repairing one of several proofs would leave the root invalid and could never commit. It re-pins the hash in one transaction and only while each proposal's own guidance wording is still present, keeps approval/application/validation evidence unchanged, and requires an explicit actor and reason recorded per proposal in `history/reanchored-proposals.jsonl`.
-- `history/reanchored-proposals.jsonl` is validated like the other transition logs: every record must name a known proposal, a reason, and who re-anchored it.
+- `history/reanchored-proposals.jsonl` is validated like the other transition logs: every record must name a known proposal, a reason, who re-anchored it and when, plus the target it re-pinned and that target's sha256 - the proof is the whole content of the record, so an entry missing it cannot be checked against the repository it describes.
 
 ### Changed
 
