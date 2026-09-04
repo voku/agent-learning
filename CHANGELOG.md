@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-09-04
+
 ### Changed
 
 - Move package-owned skills from root `skills/` to `resources/skills/` following the shared repository layout convention. Introduce `PackageResources` as the single owner of package-shipped asset paths.
