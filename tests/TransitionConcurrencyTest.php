@@ -71,7 +71,7 @@ final class TransitionConcurrencyTest extends TestCase
         foreach ($processes as $id => $process) {
             $result = $this->awaitProcess($process);
             if ($result['exit'] !== 0) {
-                $failures[$id] = trim($result['stderr'] . $result['stdout']);
+                $failures[$id] = trim($result['output']);
             }
         }
 
@@ -116,7 +116,13 @@ final class TransitionConcurrencyTest extends TestCase
      * filesystem, so anything short of two interpreters contending for it would
      * be testing the harness instead of the guarantee.
      *
-     * @return array{resource, array<int, resource>}
+     * Both child streams go to a file rather than a pipe. Draining two pipes in
+     * sequence deadlocks as soon as the child fills the one the parent is not
+     * reading yet - and a child that fails loudly is exactly the case this test
+     * exists to report, so the deadlock would swallow the report. A file sink
+     * cannot block, so the failure text always survives.
+     *
+     * @return array{resource, string}
      */
     private function startRetire(string $proposalId, float $startAt): array
     {
@@ -131,32 +137,30 @@ final class TransitionConcurrencyTest extends TestCase
             var_export($proposalId, true),
         );
 
+        $outputPath = $this->root . '/' . $proposalId . '.output';
         $pipes = [];
         $process = proc_open(
             [PHP_BINARY, '-r', substr($script, 6)],
-            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            [1 => ['file', $outputPath, 'w'], 2 => ['file', $outputPath, 'a']],
             $pipes,
         );
         if (!is_resource($process)) {
             throw new RuntimeException('cannot start a concurrent transition process');
         }
 
-        return [$process, $pipes];
+        return [$process, $outputPath];
     }
 
     /**
-     * @param array{resource, array<int, resource>} $process
-     * @return array{exit: int, stdout: string, stderr: string}
+     * @param array{resource, string} $process
+     * @return array{exit: int, output: string}
      */
     private function awaitProcess(array $process): array
     {
-        [$handle, $pipes] = $process;
-        $stdout = (string) stream_get_contents($pipes[1]);
-        $stderr = (string) stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
+        [$handle, $outputPath] = $process;
+        $exit = proc_close($handle);
 
-        return ['exit' => proc_close($handle), 'stdout' => $stdout, 'stderr' => $stderr];
+        return ['exit' => $exit, 'output' => is_file($outputPath) ? (string) file_get_contents($outputPath) : ''];
     }
 
     private function writeAppliedProposal(string $proposalId): void
