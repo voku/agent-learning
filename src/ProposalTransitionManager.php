@@ -737,6 +737,18 @@ final class ProposalTransitionManager
         }
     }
 
+    /**
+     * Writes one transition's proposal and history under the root lock.
+     *
+     * `$historyLine` is a closure rather than a finished string on purpose: it
+     * allocates the record's id from the log this call is about to append to, so
+     * it must run inside the lock. Building the line at the call site would put
+     * the allocation back outside it, which is the race this indirection exists
+     * to close.
+     *
+     * @param (Closure(): string)|null $historyLine
+     * @throws ValidationException when the write fails or leaves the root invalid
+     */
     private function persistTransition(
         string $root,
         string $proposalId,
