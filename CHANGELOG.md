@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Move package-owned skills from root `skills/` to `resources/skills/` following the shared repository layout convention. Introduce `PackageResources` as the single owner of package-shipped asset paths.
+
 ### Fixed
 
 - Every transition now allocates its history id and writes under one root-scoped exclusive lock. `approve`, `reject`, `retire`, `acknowledge`, `apply` and `reanchor` each allocated their next id by scanning the log they were about to append to, so two runs that both read before either appended agreed on the same sequence number and wrote duplicate audit ids - into immutable history, the one place this package cannot repair. The lock file is `history/.transition.lock`, beside the logs it guards, so a project that already ignores `history/` ignores it too.

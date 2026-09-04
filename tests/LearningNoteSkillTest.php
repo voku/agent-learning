@@ -5,12 +5,21 @@ declare(strict_types=1);
 namespace voku\AgentLearning\Tests;
 
 use PHPUnit\Framework\TestCase;
+use voku\AgentLearning\PackageResources;
 
 final class LearningNoteSkillTest extends TestCase
 {
+    public function testPackageResourcesResolvesShippedSkillsRoot(): void
+    {
+        self::assertSame('resources/skills', PackageResources::SKILLS);
+        self::assertDirectoryExists(PackageResources::skillsRoot());
+        self::assertFileExists(PackageResources::skillsRoot() . '/agent-learning-note/SKILL.md');
+        self::assertFileExists(PackageResources::skillsRoot() . '/agent-learning-consumer/SKILL.md');
+    }
+
     public function testPackagedSkillUsesTypedOwnerBoundariesAndPreservesAuthority(): void
     {
-        $path = __DIR__ . '/../skills/agent-learning-note/SKILL.md';
+        $path = __DIR__ . '/../resources/skills/agent-learning-note/SKILL.md';
         self::assertFileExists($path);
         $skill = (string) file_get_contents($path);
 
@@ -37,7 +46,7 @@ final class LearningNoteSkillTest extends TestCase
 
     public function testSkillNeverInstructsDirectLearningNoteStorageMutation(): void
     {
-        $skill = (string) file_get_contents(__DIR__ . '/../skills/agent-learning-note/SKILL.md');
+        $skill = (string) file_get_contents(__DIR__ . '/../resources/skills/agent-learning-note/SKILL.md');
 
         self::assertStringNotContainsString('mkdir notes/', $skill);
         self::assertStringNotContainsString('file_put_contents', $skill);
@@ -48,7 +57,7 @@ final class LearningNoteSkillTest extends TestCase
 
     public function testConsumerSkillRoutesAddLearningNoteToTheDedicatedSkill(): void
     {
-        $consumer = (string) file_get_contents(__DIR__ . '/../skills/agent-learning-consumer/SKILL.md');
+        $consumer = (string) file_get_contents(__DIR__ . '/../resources/skills/agent-learning-consumer/SKILL.md');
 
         self::assertStringContainsString('package-owned `agent-learning-note` skill', $consumer);
         self::assertStringContainsString('agent-learning-note prepare', $consumer);

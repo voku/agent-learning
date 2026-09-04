@@ -28,7 +28,7 @@ LearningNotes have stable `pattern_key` ownership, exact Finding/Proposal lineag
 
 A LearningNote is **precedent, not authority**. Its existence does not approve mutation, widen task scope, satisfy validation, apply a Proposal, or create/update a Skill or Constraint. `voku/agent-recall-compiler` may deterministically select current LearningNotes as bounded low-authority precedent, while reviewed active guidance remains stronger.
 
-See [docs/learning-notes.md](docs/learning-notes.md). Agentic authoring is provided by the package-owned [`agent-learning-note`](skills/agent-learning-note/SKILL.md) skill over the deterministic owner boundary.
+See [docs/learning-notes.md](docs/learning-notes.md). Agentic authoring is provided by the package-owned [`agent-learning-note`](resources/skills/agent-learning-note/SKILL.md) skill over the deterministic owner boundary.
 
 ### Proposals
 A **Proposal** defines a potential durable mutation to the repository's guidelines or instructions (e.g., in `MEMORY.md` or dedicated agent skills). 
@@ -319,11 +319,11 @@ With learning triage:
 
 This package ships package-specific skills under `skills/`:
 
-- [`agent-learning-consumer`](skills/agent-learning-consumer/SKILL.md): for end users setting up a learning root, capturing findings, validating proposals, and preparing consolidation input.
-- [`agent-learning-note`](skills/agent-learning-note/SKILL.md): for authoring or updating one evidence-grounded LearningNote from explicit validated Finding IDs through `LearningNoteService`/CLI owner boundaries; it never promotes the note into active guidance.
-- [`agent-learning-ctx-evidence`](skills/agent-learning-ctx-evidence/SKILL.md): for using ctx-backed local agent-history search as bounded evidence references without importing raw transcripts.
-- [`agent-hard-constraint-author`](skills/agent-hard-constraint-author/SKILL.md): for end users promoting validated findings into executable PHPStan, PHP-CS-Fixer, test, or CI constraints.
-- [`agent-learning-maintainer`](skills/agent-learning-maintainer/SKILL.md): for maintainers changing `voku/agent-learning` source, tests, docs, or local vendor syncs.
+- [`agent-learning-consumer`](resources/skills/agent-learning-consumer/SKILL.md): for end users setting up a learning root, capturing findings, validating proposals, and preparing consolidation input.
+- [`agent-learning-note`](resources/skills/agent-learning-note/SKILL.md): for authoring or updating one evidence-grounded LearningNote from explicit validated Finding IDs through `LearningNoteService`/CLI owner boundaries; it never promotes the note into active guidance.
+- [`agent-learning-ctx-evidence`](resources/skills/agent-learning-ctx-evidence/SKILL.md): for using ctx-backed local agent-history search as bounded evidence references without importing raw transcripts.
+- [`agent-hard-constraint-author`](resources/skills/agent-hard-constraint-author/SKILL.md): for end users promoting validated findings into executable PHPStan, PHP-CS-Fixer, test, or CI constraints.
+- [`agent-learning-maintainer`](resources/skills/agent-learning-maintainer/SKILL.md): for maintainers changing `voku/agent-learning` source, tests, docs, or local vendor syncs.
 
 ### Running Tests
 To run unit and integration tests for this package:

@@ -1,5 +1,15 @@
 # Upgrading
 
+## Packaged skills move to `resources/skills/`
+
+Skills shipped by this package have moved from the repository root `skills/` to `resources/skills/`:
+
+```text
+skills/ -> resources/skills/
+```
+
+Runtime code can use `PackageResources::skillsRoot()` or `PackageResources::SKILLS` rather than hardcoding the path.
+
 ## Record IDs are allocated, not guessed
 
 `ProposalIdGenerator` is replaced by `RecordIdGenerator`. If you constructed it

@@ -55,9 +55,9 @@ jobs:
           composer update --no-interaction --prefer-dist
           test -d vendor/voku/agent-learning
           test ! -L vendor/voku/agent-learning
-          test -f vendor/voku/agent-learning/skills/agent-learning-note/SKILL.md
+          test -f vendor/voku/agent-learning/resources/skills/agent-learning-note/SKILL.md
           test -x vendor/bin/agent-learning-note
           vendor/bin/agent-learning-note help | grep -F 'prepare|publish|status|retire'
-          grep -F 'agent-learning-note prepare' vendor/voku/agent-learning/skills/agent-learning-note/SKILL.md
-          grep -F 'agent-learning-note publish' vendor/voku/agent-learning/skills/agent-learning-note/SKILL.md
-          ! grep -F 'cat > notes/' vendor/voku/agent-learning/skills/agent-learning-note/SKILL.md
+          grep -F 'agent-learning-note prepare' vendor/voku/agent-learning/resources/skills/agent-learning-note/SKILL.md
+          grep -F 'agent-learning-note publish' vendor/voku/agent-learning/resources/skills/agent-learning-note/SKILL.md
+          ! grep -F 'cat > notes/' vendor/voku/agent-learning/resources/skills/agent-learning-note/SKILL.md
