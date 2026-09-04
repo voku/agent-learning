@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace voku\AgentLearning\Tests;
 
 use PHPUnit\Framework\TestCase;
-use voku\AgentLearning\GuidanceOutcomeEventRepository;
 use voku\AgentLearning\OutcomeRepository;
 use voku\AgentLearning\ValidationException;
 
@@ -36,16 +35,16 @@ final class OutcomeRepositoryTest extends TestCase
         self::assertSame($record, $outcomes[0]);
     }
 
-    public function testRejectsNewLegacyOutcomeSummaryWrites(): void
+    public function testRejectsLegacyOutcomeSummaryWrites(): void
     {
         $repo = new OutcomeRepository();
 
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('legacy outcome.* records are read-only compatibility');
+        $this->expectExceptionMessage('legacy outcome.* records are unsupported after the pre-1.0 cut');
         $repo->record($this->root, $this->legacyOutcome('outcome.2026-06-20.001'));
     }
 
-    public function testKeepsHistoricalLegacyOutcomeReadable(): void
+    public function testRejectsHistoricalLegacyOutcomeReads(): void
     {
         $legacy = $this->legacyOutcome('outcome.2026-06-20.001');
         file_put_contents(
@@ -53,29 +52,32 @@ final class OutcomeRepositoryTest extends TestCase
             json_encode($legacy, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n",
         );
 
-        $outcomes = (new OutcomeRepository())->loadAll($this->root);
-
-        self::assertSame([$legacy], $outcomes);
-        self::assertSame(1, (new GuidanceOutcomeEventRepository())->countLegacyRecords($this->root));
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('legacy outcome.* records are unsupported after the pre-1.0 cut');
+        (new OutcomeRepository())->loadAll($this->root);
     }
 
-    public function testMixedLegacyAndCurrentHistoryRemainsReadable(): void
+    public function testDoesNotAppendCurrentOutcomeBehindUnsupportedLegacyHistory(): void
     {
+        $path = $this->root . '/history/outcomes.jsonl';
         $legacy = $this->legacyOutcome('outcome.2026-06-20.001');
-        file_put_contents(
-            $this->root . '/history/outcomes.jsonl',
-            json_encode($legacy, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n",
-        );
+        $legacyLine = json_encode($legacy, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
+        file_put_contents($path, $legacyLine);
 
-        $current = $this->currentOutcome('guidance-outcome.2026-06-20.002');
-        (new OutcomeRepository())->record($this->root, $current);
+        try {
+            (new OutcomeRepository())->record(
+                $this->root,
+                $this->currentOutcome('guidance-outcome.2026-06-20.002'),
+            );
+            self::fail('Expected unsupported legacy history to fail closed.');
+        } catch (ValidationException $exception) {
+            self::assertStringContainsString(
+                'legacy outcome.* records are unsupported after the pre-1.0 cut',
+                $exception->getMessage(),
+            );
+        }
 
-        $outcomes = (new OutcomeRepository())->loadAll($this->root);
-        self::assertSame(
-            ['outcome.2026-06-20.001', 'guidance-outcome.2026-06-20.002'],
-            array_column($outcomes, 'id'),
-        );
-        self::assertSame(1, (new GuidanceOutcomeEventRepository())->countLegacyRecords($this->root));
+        self::assertSame($legacyLine, file_get_contents($path));
     }
 
     public function testRejectsUnsupportedCurrentSchemaVersion(): void
