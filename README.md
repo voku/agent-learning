@@ -1,8 +1,65 @@
-# Coding Agent | Learning-Loops
+# Agent Learning (`voku/agent-learning`)
 
 Reviewable finding, precedent, proposal, redaction, and decision-history tooling for coding-agent learning loops.
 
+[![Build Status](https://github.com/voku/agent-learning/actions/workflows/ci.yml/badge.svg)](https://github.com/voku/agent-learning/actions)
+[![License](https://img.shields.io/github/license/voku/agent-learning.svg)](LICENSE)
+
 This library provides core domain logic and validation classes to support structured post-session learning for coding agents. It separates raw experiences (Findings), reusable solved-case precedent (LearningNotes), and potential guideline changes (Proposals), keeping the agent's knowledge extraction workflow structured, secure, and fully auditable.
+
+## Requirements
+
+| Requirement | Version |
+| --- | --- |
+| PHP | `^8.3` |
+| ext-json | `*` |
+
+## Installation
+
+```bash
+composer require voku/agent-learning
+```
+
+The package exposes the standalone CLI:
+
+```bash
+vendor/bin/agent-learning
+```
+
+## Quick Start
+
+```bash
+# Validate findings, proposals, and decision history
+vendor/bin/agent-learning validate --root=infra/doc/agent-learning
+
+# Check validated findings backlog waiting for consolidation
+vendor/bin/agent-learning backlog --root=infra/doc/agent-learning
+
+# Run the deterministic maintenance audit (Dream report)
+vendor/bin/agent-learning dream --root=infra/doc/agent-learning --report=.agent-loop/dream/latest.json --dry-run
+
+# Rebuild compact history projections (active-guidance and chronicle)
+vendor/bin/agent-learning history-rebuild --root=infra/doc/agent-learning
+vendor/bin/agent-learning history-status --root=infra/doc/agent-learning
+```
+
+## Shipped Assets & PackageResources
+
+The package ships 5 first-party workflow skills under `resources/skills/`:
+- `agent-hard-constraint-author`
+- `agent-learning-consumer`
+- `agent-learning-ctx-evidence`
+- `agent-learning-maintainer`
+- `agent-learning-note`
+
+Consumers and tool integrations can resolve them programmatically without hard-coding filesystem paths:
+
+```php
+use voku\AgentLearning\PackageResources;
+
+$skillsRoot = PackageResources::skillsRoot();
+// returns /path/to/vendor/voku/agent-learning/resources/skills
+```
 
 ---
 
