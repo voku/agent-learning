@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning;
 
+use Closure;
 use DateTimeImmutable;
 use DateTimeInterface;
 
@@ -101,15 +102,13 @@ final class ProposalTransitionManager
         }
         $targetPath = $targetDir . '/' . $proposalId . '.json';
 
-        $decisionId = $this->generateDecisionId($root, $now);
-        $decisionRecord = [
-            'id' => $decisionId,
+        $decisionLine = fn (): string => json_encode([
+            'id' => $this->generateDecisionId($root, $now),
             'proposal_id' => $proposalId,
             'status' => 'approved',
             'approved_by' => $actor,
             'approved_at' => $nowStr,
-        ];
-        $decisionLine = json_encode($decisionRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
         $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $decisionsPath, $decisionLine, 'approval');
     }
@@ -154,13 +153,11 @@ final class ProposalTransitionManager
         }
         $targetPath = $targetDir . '/' . $proposalId . '.json';
 
-        $rejectionId = $this->generateRejectionId($root, $now);
-        $rejectionRecord = [
-            'id' => $rejectionId,
+        $rejectionLine = fn (): string => json_encode([
+            'id' => $this->generateRejectionId($root, $now),
             'proposal_id' => $proposalId,
             'reason' => $reason,
-        ];
-        $rejectionLine = json_encode($rejectionRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
         $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $rejectedPath, $rejectionLine, 'rejection');
     }
@@ -218,15 +215,13 @@ final class ProposalTransitionManager
         }
         $targetPath = $targetDir . '/' . $proposalId . '.json';
 
-        $acknowledgementId = $this->generateAcknowledgementId($root, $now);
-        $acknowledgementRecord = [
-            'id' => $acknowledgementId,
+        $acknowledgementLine = fn (): string => json_encode([
+            'id' => $this->generateAcknowledgementId($root, $now),
             'proposal_id' => $proposalId,
             'acknowledged_by' => $actor,
             'acknowledged_at' => $nowStr,
             'reason' => $reason,
-        ];
-        $acknowledgementLine = json_encode($acknowledgementRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
         $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $acknowledgedPath, $acknowledgementLine, 'acknowledgement');
     }
@@ -287,15 +282,13 @@ final class ProposalTransitionManager
         }
         $targetPath = $targetDir . '/' . $proposalId . '.json';
 
-        $retirementId = $this->generateRetirementId($root, $now);
-        $retirementRecord = [
-            'id' => $retirementId,
+        $retirementLine = fn (): string => json_encode([
+            'id' => $this->generateRetirementId($root, $now),
             'proposal_id' => $proposalId,
             'retired_by' => $actor,
             'retired_at' => $nowStr,
             'reason' => $reason,
-        ];
-        $retirementLine = json_encode($retirementRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
         $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $retiredPath, $retirementLine, 'retirement');
     }
@@ -354,9 +347,7 @@ final class ProposalTransitionManager
         $guidanceValidator = new AppliedGuidanceTargetValidator();
 
         $writes = [];
-        $historyLines = [];
         $repaired = [];
-        $sequence = 0;
         foreach ($this->appliedGuidanceFiles($root) as $proposalPath) {
             $record = $parser->parseFile($proposalPath);
             if (!in_array($record->targetType, [GuidanceType::MEMORY->value, GuidanceType::SKILL->value], true)) {
@@ -393,15 +384,6 @@ final class ProposalTransitionManager
             $guidanceValidator->validate($parser->parseRecord($data, $proposalPath), $root, $proposalPath);
 
             $writes[$proposalPath] = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-            $historyLines[] = json_encode([
-                'id' => $this->generateReanchorId($root, $now, $sequence++),
-                'proposal_id' => $record->id,
-                'reanchored_by' => $actor,
-                'reanchored_at' => $nowStr,
-                'reason' => $reason,
-                'target_source_ref' => $sourceRef,
-                'target_content_hash' => $hash,
-            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
             $repaired[] = $record->id;
         }
 
@@ -409,7 +391,28 @@ final class ProposalTransitionManager
             throw new ValidationException($root, null, null, 'no applied memory/skill proof names target: ' . $sourceRef);
         }
 
-        $this->persistReanchor($root, $writes, implode('', $historyLines));
+        // Allocated inside the transaction's lock rather than here: ids are read
+        // from the log that this write is about to extend, so allocating them
+        // before the lock is exactly the window where two runs agree on the same
+        // sequence number.
+        $historyLines = function () use ($root, $now, $repaired, $actor, $nowStr, $reason, $sourceRef, $hash): string {
+            $lines = '';
+            foreach ($repaired as $sequence => $proposalId) {
+                $lines .= json_encode([
+                    'id' => $this->generateReanchorId($root, $now, $sequence),
+                    'proposal_id' => $proposalId,
+                    'reanchored_by' => $actor,
+                    'reanchored_at' => $nowStr,
+                    'reason' => $reason,
+                    'target_source_ref' => $sourceRef,
+                    'target_content_hash' => $hash,
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+            }
+
+            return $lines;
+        };
+
+        $this->persistReanchor($root, $writes, $historyLines);
 
         return $repaired;
     }
@@ -418,7 +421,19 @@ final class ProposalTransitionManager
      * @param array<string, string> $writes proposal path => repaired content
      * @throws ValidationException when the repaired root does not validate
      */
-    private function persistReanchor(string $root, array $writes, string $historyLines): void
+    private function persistReanchor(string $root, array $writes, Closure $historyLines): void
+    {
+        $this->withRootLock($root, function () use ($root, $writes, $historyLines): void {
+            $this->persistReanchorLocked($root, $writes, $historyLines);
+        });
+    }
+
+    /**
+     * @param array<string, string> $writes proposal path => repaired content
+     * @param Closure(): string     $historyLines
+     * @throws ValidationException when the repaired root does not validate
+     */
+    private function persistReanchorLocked(string $root, array $writes, Closure $historyLines): void
     {
         $historyPath = $root . '/history/reanchored-proposals.jsonl';
         $originalProposals = [];
@@ -444,7 +459,7 @@ final class ProposalTransitionManager
             if (!is_dir($historyDir) && !mkdir($historyDir, 0777, true) && !is_dir($historyDir)) {
                 throw new ValidationException($historyPath, null, null, 'failed to create proposal history directory');
             }
-            if (file_put_contents($historyPath, $historyLines, FILE_APPEND) === false) {
+            if (file_put_contents($historyPath, $historyLines(), FILE_APPEND) === false) {
                 throw new ValidationException($historyPath, null, null, 'failed to append proposal history');
             }
 
@@ -633,9 +648,8 @@ final class ProposalTransitionManager
         }
         $targetPath = $targetDir . '/' . $proposalId . '.json';
 
-        $decisionId = $this->generateDecisionId($root, $now);
-        $decisionRecord = [
-            'id' => $decisionId,
+        $decisionLine = fn (): string => json_encode([
+            'id' => $this->generateDecisionId($root, $now),
             'proposal_id' => $proposalId,
             'status' => 'applied',
             'approved_by' => $proposal->approvedBy ?? $actor,
@@ -644,8 +658,7 @@ final class ProposalTransitionManager
             'applied_at' => $nowStr,
             'commit' => $commit,
             'validation' => $validationData,
-        ];
-        $decisionLine = json_encode($decisionRecord, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
         $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $decisionsPath, $decisionLine, 'apply');
     }
@@ -679,6 +692,51 @@ final class ProposalTransitionManager
         return $prefix . sprintf('%03d', $maxNum + 1 + $offset);
     }
 
+    /**
+     * Runs one transition's history-id allocation and its writes under a single
+     * root-scoped exclusive lock.
+     *
+     * Every transition allocates its next id by scanning the log it is about to
+     * append to, so allocation and persistence have to be one critical section:
+     * two runs that both read the log before either appends agree on the same
+     * sequence number and write duplicate audit ids. The lock is per learning
+     * root because that, not the individual log file, is the unit transitions
+     * validate as a whole.
+     *
+     * The lock file lives beside the logs it guards, so a project that already
+     * ignores `history/` ignores it too.
+     *
+     * @param Closure(): void $operation
+     * @throws ValidationException when the lock cannot be taken
+     */
+    private function withRootLock(string $root, Closure $operation): void
+    {
+        $lockDirectory = $root . '/history';
+        if (!is_dir($lockDirectory) && !mkdir($lockDirectory, 0777, true) && !is_dir($lockDirectory)) {
+            throw new ValidationException($lockDirectory, null, null, 'failed to create the transition lock directory');
+        }
+
+        $lockPath = $lockDirectory . '/.transition.lock';
+        $handle = fopen($lockPath, 'c');
+        if ($handle === false) {
+            throw new ValidationException($lockPath, null, null, 'cannot open the transition lock');
+        }
+
+        try {
+            if (!flock($handle, LOCK_EX)) {
+                throw new ValidationException($lockPath, null, null, 'cannot acquire the transition lock');
+            }
+
+            try {
+                $operation();
+            } finally {
+                flock($handle, LOCK_UN);
+            }
+        } finally {
+            fclose($handle);
+        }
+    }
+
     private function persistTransition(
         string $root,
         string $proposalId,
@@ -686,7 +744,44 @@ final class ProposalTransitionManager
         string $targetPath,
         string $updatedContent,
         ?string $historyPath,
-        ?string $historyLine,
+        ?Closure $historyLine,
+        string $transition,
+    ): void {
+        $this->withRootLock($root, function () use (
+            $root,
+            $proposalId,
+            $proposalPath,
+            $targetPath,
+            $updatedContent,
+            $historyPath,
+            $historyLine,
+            $transition,
+        ): void {
+            $this->persistTransitionLocked(
+                $root,
+                $proposalId,
+                $proposalPath,
+                $targetPath,
+                $updatedContent,
+                $historyPath,
+                $historyLine,
+                $transition,
+            );
+        });
+    }
+
+    /**
+     * @param (Closure(): string)|null $historyLine
+     * @throws ValidationException
+     */
+    private function persistTransitionLocked(
+        string $root,
+        string $proposalId,
+        string $proposalPath,
+        string $targetPath,
+        string $updatedContent,
+        ?string $historyPath,
+        ?Closure $historyLine,
         string $transition,
     ): void {
         $originalProposalContent = file_get_contents($proposalPath);
@@ -721,7 +816,7 @@ final class ProposalTransitionManager
                 if (!is_dir($historyDir) && !mkdir($historyDir, 0777, true) && !is_dir($historyDir)) {
                     throw new ValidationException($historyPath, null, $proposalId, 'failed to create proposal history directory');
                 }
-                if (file_put_contents($historyPath, $historyLine, FILE_APPEND) === false) {
+                if (file_put_contents($historyPath, $historyLine(), FILE_APPEND) === false) {
                     throw new ValidationException($historyPath, null, $proposalId, 'failed to append proposal history');
                 }
             }
