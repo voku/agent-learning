@@ -301,104 +301,188 @@ final class ProposalTransitionManager
     }
 
     /**
-     * Re-anchor an applied guidance proof after its target file legitimately changed.
+     * Re-anchor every applied guidance proof pinned to one target file.
      *
-     * `applied_validation.target_content_hash` pins the whole target file, so a
-     * shared home such as `MEMORY.md` cannot be edited again - not even to repair
-     * an evidence path a directory move invalidated - without the applied record
-     * reporting drift it did not cause. Retiring the proposal would answer a
-     * curation question nobody asked, and re-applying is closed to an already
-     * applied record, so the proof had no way back to the truth.
+     * `applied_validation.target_content_hash` pins the whole target, so a shared
+     * guidance home such as `MEMORY.md` cannot be edited again - not even to
+     * repair an evidence path a directory move invalidated - without every
+     * applied record on that file reporting drift it did not cause. Retiring
+     * answers a curation question nobody asked, and `apply()` is closed to a
+     * record that is already applied, so the proof had no way back to the truth.
      *
-     * This is a proof repair, not a new decision: the guidance wording must still
-     * be in the target, and the approval, application and validation evidence stay
-     * exactly as they were. Only the file hash, and an explicit actor and reason,
-     * are added.
+     * The unit of repair is the target rather than one proposal, because drift is
+     * a property of the file: repairing one of several proofs on the same target
+     * would leave the root invalid and could therefore never commit.
      *
-     * @throws ValidationException when the record is not applied guidance, or the
-     *                             target no longer carries the guidance it claims
+     * This is a proof repair, not a decision. Each proposal's own guidance wording
+     * must still be present - the same assertion the validator makes - and the
+     * approval, application and validation evidence stay exactly as they were.
+     * Only the hash, an explicit actor and an explicit reason are added.
+     *
+     * @return list<string> the repaired proposal ids, in stable order
+     * @throws ValidationException when no applied proof names the target, the
+     *                             target is missing, or one of them no longer
+     *                             carries the guidance it claims
      */
-    public function reanchor(string $root, string $proposalId, string $actor, string $reason): void
+    public function reanchorTarget(string $root, string $sourceRef, string $actor, string $reason): array
     {
+        $sourceRef = trim(str_replace('\\', '/', $sourceRef));
+        if ($sourceRef === '') {
+            throw new ValidationException($root, null, null, 'target source ref must be explicit');
+        }
         if (trim($actor) === '') {
-            throw new ValidationException('', null, $proposalId, 'actor name must be explicit');
+            throw new ValidationException($root, null, null, 'actor name must be explicit');
         }
         if (trim($reason) === '') {
-            throw new ValidationException('', null, $proposalId, 're-anchor reason must be explicit');
-        }
-
-        $proposalPath = $this->resolveProposalPath($proposalId, $root);
-        $parser = new ProposalParser();
-        $proposal = $parser->parseFile($proposalPath);
-
-        if ($proposal->status !== ProposalStatus::APPLIED) {
-            throw new ValidationException($proposalPath, null, $proposalId, 'proposal is not applied');
-        }
-        if (!in_array($proposal->targetType, [GuidanceType::MEMORY->value, GuidanceType::SKILL->value], true)) {
-            throw new ValidationException(
-                $proposalPath,
-                null,
-                $proposalId,
-                're-anchoring applies to memory or skill guidance proofs, not target_type: ' . (string) $proposal->targetType,
-            );
-        }
-
-        $validation = $proposal->raw['applied_validation'] ?? null;
-        if (!is_array($validation)) {
-            throw new ValidationException($proposalPath, null, $proposalId, 'applied proposal has no applied_validation evidence to re-anchor');
-        }
-        $sourceRef = $validation['target_source_ref'] ?? null;
-        if (!is_string($sourceRef) || trim($sourceRef) === '') {
-            throw new ValidationException($proposalPath, null, $proposalId, 'applied proposal has no target_source_ref to re-anchor');
+            throw new ValidationException($root, null, null, 're-anchor reason must be explicit');
         }
 
         $projectRoot = (new LearningRootResolver())->resolve($root)->projectRoot;
-        $targetPath = rtrim($projectRoot, '/\\') . '/' . ltrim(str_replace('\\', '/', trim($sourceRef)), '/');
+        $targetPath = rtrim($projectRoot, '/\\') . '/' . ltrim($sourceRef, '/');
         $hash = is_file($targetPath) ? hash_file('sha256', $targetPath) : false;
         if ($hash === false) {
-            throw new ValidationException($proposalPath, null, $proposalId, 'applied guidance target does not exist: ' . $sourceRef);
+            throw new ValidationException($root, null, null, 'applied guidance target does not exist: ' . $sourceRef);
         }
+        $hash = strtolower($hash);
 
         $now = new DateTimeImmutable('now');
         $nowStr = $now->format(DateTimeInterface::ATOM);
+        $parser = new ProposalParser();
+        $guidanceValidator = new AppliedGuidanceTargetValidator();
 
-        $data = $proposal->raw;
-        $validation['target_content_hash'] = strtolower($hash);
-        $validation['reanchored_by'] = $actor;
-        $validation['reanchored_at'] = $nowStr;
-        $validation['reanchor_reason'] = $reason;
-        $data['applied_validation'] = $validation;
+        $writes = [];
+        $historyLines = [];
+        $repaired = [];
+        $sequence = 0;
+        foreach ($this->appliedGuidanceFiles($root) as $proposalPath) {
+            $record = $parser->parseFile($proposalPath);
+            if (!in_array($record->targetType, [GuidanceType::MEMORY->value, GuidanceType::SKILL->value], true)) {
+                continue;
+            }
 
-        // The repaired record has to satisfy the same proof the validator applies,
-        // so a target that no longer carries the guidance fails before anything is
-        // written rather than being re-pinned to a file that lost the rule.
-        (new AppliedGuidanceTargetValidator())->validate(
-            $parser->parseRecord($data, $proposalPath),
-            $root,
-            $proposalPath,
-        );
+            $validation = $record->raw['applied_validation'] ?? null;
+            if (!is_array($validation)) {
+                continue;
+            }
+            $recordRef = $validation['target_source_ref'] ?? null;
+            if (!is_string($recordRef) || trim(str_replace('\\', '/', $recordRef)) !== $sourceRef) {
+                continue;
+            }
 
-        $updatedContent = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            $validation['target_content_hash'] = $hash;
+            $validation['reanchored_by'] = $actor;
+            $validation['reanchored_at'] = $nowStr;
+            $validation['reanchor_reason'] = $reason;
+            $data = $record->raw;
+            $data['applied_validation'] = $validation;
 
-        $historyPath = $root . '/history/reanchored-proposals.jsonl';
-        $historyLine = json_encode([
-            'id' => $this->generateReanchorId($root, $now),
-            'proposal_id' => $proposalId,
-            'reanchored_by' => $actor,
-            'reanchored_at' => $nowStr,
-            'reason' => $reason,
-            'target_source_ref' => $sourceRef,
-            'target_content_hash' => strtolower($hash),
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+            // A target that lost the rule must fail before anything is written,
+            // rather than be re-pinned to a file that no longer proves it.
+            $guidanceValidator->validate($parser->parseRecord($data, $proposalPath), $root, $proposalPath);
 
-        $this->persistTransition($root, $proposalId, $proposalPath, $proposalPath, $updatedContent, $historyPath, $historyLine, 're-anchor');
+            $writes[$proposalPath] = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            $historyLines[] = json_encode([
+                'id' => $this->generateReanchorId($root, $now, $sequence++),
+                'proposal_id' => $record->id,
+                'reanchored_by' => $actor,
+                'reanchored_at' => $nowStr,
+                'reason' => $reason,
+                'target_source_ref' => $sourceRef,
+                'target_content_hash' => $hash,
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+            $repaired[] = $record->id;
+        }
+
+        if ($repaired === []) {
+            throw new ValidationException($root, null, null, 'no applied memory/skill proof names target: ' . $sourceRef);
+        }
+
+        $this->persistReanchor($root, $writes, implode('', $historyLines));
+
+        return $repaired;
     }
 
-    public function generateReanchorId(string $root, ?DateTimeImmutable $date = null): string
+    /**
+     * @param array<string, string> $writes proposal path => repaired content
+     * @throws ValidationException when the repaired root does not validate
+     */
+    private function persistReanchor(string $root, array $writes, string $historyLines): void
+    {
+        $historyPath = $root . '/history/reanchored-proposals.jsonl';
+        $originalProposals = [];
+        foreach (array_keys($writes) as $path) {
+            $original = file_get_contents($path);
+            if ($original === false) {
+                throw new ValidationException($path, null, null, 'cannot read proposal file');
+            }
+            $originalProposals[$path] = $original;
+        }
+        $originalHistory = is_file($historyPath) ? file_get_contents($historyPath) : null;
+        if ($originalHistory === false) {
+            throw new ValidationException($historyPath, null, null, 'cannot read proposal history file');
+        }
+
+        try {
+            foreach ($writes as $path => $content) {
+                if (file_put_contents($path, $content) === false) {
+                    throw new ValidationException($path, null, null, 'failed to write proposal file');
+                }
+            }
+            $historyDir = dirname($historyPath);
+            if (!is_dir($historyDir) && !mkdir($historyDir, 0777, true) && !is_dir($historyDir)) {
+                throw new ValidationException($historyPath, null, null, 'failed to create proposal history directory');
+            }
+            if (file_put_contents($historyPath, $historyLines, FILE_APPEND) === false) {
+                throw new ValidationException($historyPath, null, null, 'failed to append proposal history');
+            }
+
+            $this->validateRepository($root);
+        } catch (\Throwable $exception) {
+            foreach ($originalProposals as $path => $content) {
+                file_put_contents($path, $content);
+            }
+            if ($originalHistory === null) {
+                if (is_file($historyPath)) {
+                    unlink($historyPath);
+                }
+            } else {
+                file_put_contents($historyPath, $originalHistory);
+            }
+
+            throw new ValidationException($root, null, null, 'proposal re-anchor failed and was rolled back: ' . $exception->getMessage());
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function appliedGuidanceFiles(string $root): array
+    {
+        $directory = $root . '/proposals/applied';
+        if (!is_dir($directory)) {
+            return [];
+        }
+
+        $files = glob($directory . '/*.json');
+        if ($files === false) {
+            return [];
+        }
+        sort($files, SORT_STRING);
+
+        return $files;
+    }
+
+    /**
+     * One re-anchor repairs every proof on a target, and the log has not been
+     * written yet while those ids are allocated, so the caller passes how many
+     * records it already allocated in this transaction.
+     */
+    public function generateReanchorId(string $root, ?DateTimeImmutable $date = null, int $offset = 0): string
     {
         return $this->generateSequentialHistoryId(
             $root . '/history/reanchored-proposals.jsonl',
             'reanchor.' . ($date ?? new DateTimeImmutable('now'))->format('Y-m-d') . '.',
+            $offset,
         );
     }
 
@@ -526,7 +610,7 @@ final class ProposalTransitionManager
      * a new transition cannot quietly disagree with the existing ones about what
      * "next" is.
      */
-    private function generateSequentialHistoryId(string $path, string $prefix): string
+    private function generateSequentialHistoryId(string $path, string $prefix, int $offset = 0): string
     {
         $maxNum = 0;
         if (is_file($path)) {
@@ -545,7 +629,7 @@ final class ProposalTransitionManager
             }
         }
 
-        return $prefix . sprintf('%03d', $maxNum + 1);
+        return $prefix . sprintf('%03d', $maxNum + 1 + $offset);
     }
 
     private function persistTransition(

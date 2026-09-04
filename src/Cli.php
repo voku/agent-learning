@@ -842,12 +842,12 @@ final class Cli
     {
         $parsed = $this->parseOptions($tokens);
         $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
-        $proposalId = $parsed['arguments'][0] ?? null;
+        $sourceRef = $parsed['arguments'][0] ?? $this->stringOption($parsed['options'], 'target');
         $actor = $this->stringOption($parsed['options'], 'by');
         $reason = $this->stringOption($parsed['options'], 'reason');
 
-        if ($proposalId === null || trim($proposalId) === '') {
-            throw new ValidationException($root, null, null, 'proposal-reanchor requires proposal ID argument');
+        if ($sourceRef === null || trim($sourceRef) === '') {
+            throw new ValidationException($root, null, null, 'proposal-reanchor requires the target source ref argument');
         }
         if ($actor === null || trim($actor) === '') {
             throw new ValidationException($root, null, null, 'proposal-reanchor requires --by actor option');
@@ -856,8 +856,12 @@ final class Cli
             throw new ValidationException($root, null, null, 'proposal-reanchor requires --reason option');
         }
 
-        (new ProposalTransitionManager())->reanchor($root, $proposalId, $actor, $reason);
-        $this->write(sprintf("Re-anchored applied guidance proof: %s\n", $proposalId));
+        $repaired = (new ProposalTransitionManager())->reanchorTarget($root, $sourceRef, $actor, $reason);
+        $this->write(sprintf(
+            "Re-anchored applied guidance proofs for %s: %s\n",
+            $sourceRef,
+            implode(', ', $repaired),
+        ));
 
         return 0;
     }
@@ -887,7 +891,7 @@ final class Cli
             . "  proposal-acknowledge Formally close a candidate NO_DURABLE_LEARNING proposal without approving or rejecting it.\n"
             . "  proposal-mark-applied Mark an approved proposal as applied externally.\n"
             . "  proposal-retire      Retire an applied proposal once its target fully captures the change.\n"
-            . "  proposal-reanchor    Re-pin an applied memory/skill proof after its target file legitimately changed.\n\n"
+            . "  proposal-reanchor    Re-pin every applied memory/skill proof on one target file after it legitimately changed.\n\n"
             . "Options:\n"
             . "  --root PATH              Learning root or project root. Defaults to auto-discovery.\n"
             . "  --task-id-pattern REGEX  Override finding task id validation.\n"
