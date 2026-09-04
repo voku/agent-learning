@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.15.0] - 2026-09-04
 
 ### Added
 
@@ -10,6 +10,10 @@
 ### Changed
 
 - The five dated transition-id generators share one scan, so a new transition cannot disagree with the existing ones about what "next" is.
+
+### Fixed
+
+- `proposal-reanchor` matches proofs by the file they resolve to rather than by how they spell it. `AppliedGuidanceTargetValidator` accepts `MEMORY.md` and `./MEMORY.md` as the same in-root target, so a root whose proofs used both forms repaired only one subset and then rolled the whole transaction back citing a proposal the caller had no way to name.
 
 ## [0.14.2] - 2026-09-01
 
