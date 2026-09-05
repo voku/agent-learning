@@ -38,6 +38,9 @@ final readonly class FindingCreator
         string $sensitivity,
         ?string $id = null,
         ?string $taskIdPattern = null,
+        ?LearningClassification $classification = null,
+        ?string $patternKey = null,
+        ?ValidationCase $validationCase = null,
     ): FindingCreationResult {
         $id ??= $this->idGenerator->generate('finding');
         $directory = $root . '/findings/' . $this->lifecycle->directoryFor(FindingStatus::VALIDATED);
@@ -58,6 +61,15 @@ final readonly class FindingCreator
             'status' => FindingStatus::VALIDATED->value,
             'sensitivity' => $sensitivity,
         ];
+        if ($classification instanceof LearningClassification) {
+            $raw['classification'] = $classification->value;
+        }
+        if ($patternKey !== null) {
+            $raw['pattern_key'] = $patternKey;
+        }
+        if ($validationCase instanceof ValidationCase) {
+            $raw['validation_case'] = $validationCase->toArray();
+        }
 
         $finding = $this->parser->parseRecord($raw, $path);
         $validator = $taskIdPattern === null
