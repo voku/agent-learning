@@ -599,7 +599,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 - Reject invalid finding status and `validation_status` combinations.
 - Reject invalid proposal action and status combinations, such as `REJECT` with `approved`.
-- Reject proposal files whose embedded status does not match its `proposals/<status>/` directory.
+- Reject proposal files whose embedded status does not match their `proposals/<status>/` directory.
 - Validate `approved_at` timestamps on proposals when approval metadata is present.
 
 ## [0.0.1] - 2026-06-09
