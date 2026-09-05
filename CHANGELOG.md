@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-09-05
+
+### Added
+
+- Allow `FindingCreator::createValidated()` to publish optional typed `classification`, `pattern_key`, and `validation_case` metadata through the Learning owner boundary, so hosts can create an `ADD_LEARNING_NOTE` Finding that is immediately consumable by `LearningNoteService::prepare()` without hand-writing Learning-private storage.
+
+### Validation
+
+- PR #70 passed exact-head PHP 8.3, 8.4 and 8.5 package CI plus the clean installed-skill consumer before merge.
+
 ## [0.16.0] - 2026-09-04
 
 ### Changed
@@ -177,10 +187,8 @@
   allocated rather than guessed. Findings never had an allocator at all, and
   `ProposalIdGenerator` derived the next number by scanning the local
   directory for the highest one - unique only for a writer who can see every
-  other writer. In a system built for several agents on several branches, two
-  branches each saw `.004`, each allocated `.005`, and each passed its own
-  validation because neither could load the other's file. The duplicate only
-  appeared at the merge, where renumbering is most expensive.
+  other writer. Printing an ID is the smallest primitive that removes the guess, so nothing has to hand-pick a suffix again.
+- Finding and proposal ID validation accepts both the legacy sequential suffix and the new random one. **Existing IDs are not migrated**: they are published in changelogs, memory rows and proposal citations, and rewriting them would break every reference to buy nothing.
 
 ### Changed
 
@@ -188,10 +196,6 @@
   Allocated IDs now carry a random suffix (`proposal.2026-08-14.a3f2c1`)
   instead of a per-day sequence. The date prefix is unchanged, so a record set
   still reads as a timeline.
-- Finding and proposal ID validation accepts both the legacy sequential suffix
-  and the new random one. **Existing IDs are not migrated**: they are published
-  in changelogs, memory rows and proposal citations, and rewriting them would
-  break every reference to buy nothing.
 
 ### Fixed
 
