@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-09-05
+
+### Added
+
+- Allow `FindingCreator::createValidated()` to publish optional typed `classification`, `pattern_key`, and `validation_case` metadata through the Learning owner boundary, so hosts can create an `ADD_LEARNING_NOTE` Finding that is immediately consumable by `LearningNoteService::prepare()` without hand-writing Learning-private storage.
+
+### Validation
+
+- PR #70 passed exact-head PHP 8.3, 8.4 and 8.5 package CI plus the clean installed-skill consumer before merge.
+
 ## [0.16.0] - 2026-09-04
 
 ### Changed
