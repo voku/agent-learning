@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-07
+
+### Added
+
+- Add the Learning-owned lineage projection over released `voku/agent-graph:^0.2.0`, limited to six mechanically encoded relation kinds across Findings, Proposals, and active LearningNotes. Projection is deterministic and deduplicated; no inferred similarity or generic graph mutation surface is introduced.
+- Add `LearningLineageService` as the bounded typed owner API for rebuilding and querying the private derived lineage graph. Ordinary `lineage()` reads use a cheap Learning-source generation revision and expose only Learning identities, depths, and relations, while `verifyCurrent()` performs the deeper source-byte fingerprint and SQLite integrity verification.
+- Bound lineage traversal to depth 8 and 500 related identities, preserve owner relation direction and kind in results, terminate cycles, and report truncation instead of allowing unbounded neighbourhood expansion.
+
+### Validation
+
+- PR #74 passed exact-head PHP 8.3, 8.4 and 8.5 package CI plus the clean installed-skill consumer for the typed six-kind projection and released `agent-graph 0.2.x` dependency.
+- PR #76 passed exact-head PHP 8.3, 8.4 and 8.5 `composer ci` plus the clean installed-skill consumer for deterministic rebuild/query parity, stale-generation rejection, cyclic boundedness/truncation, and explicit deep verification.
+- The real committed `agent-loop` Learning root currently contains 72 projected durable records (53 Findings and 19 Proposals), so the separate `agent-learning#73` hundreds-of-real-records scale acceptance remains open and is not claimed by this release.
+
 ## [0.16.1] - 2026-09-05
 
 ### Added
