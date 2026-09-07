@@ -11,6 +11,7 @@ use voku\AgentLearning\LearningNoteProjection;
 
 final readonly class LearningLineageProjector
 {
+    public const string FINDING_FROM_TASK = 'finding_from_task';
     public const string PROPOSAL_FROM_FINDING = 'proposal_from_finding';
     public const string PROPOSAL_SUPERSEDES = 'proposal_supersedes';
     public const string PROPOSAL_CONFLICTS_WITH = 'proposal_conflicts_with';
@@ -31,6 +32,7 @@ final readonly class LearningLineageProjector
         $relationsByKey = [];
 
         foreach ($findings as $finding) {
+            $this->add($relationsByKey, $finding->taskId, self::FINDING_FROM_TASK, $finding->id);
             foreach ($finding->proposalIds as $proposalId) {
                 $this->add($relationsByKey, $finding->id, self::PROPOSAL_FROM_FINDING, $proposalId);
             }
