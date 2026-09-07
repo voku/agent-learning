@@ -115,6 +115,41 @@ final class LearningLineageServiceTest extends TestCase
         self::assertFalse($result->lineage->truncated);
     }
 
+    public function testTaskPrecedentQueryReturnsBoundedEmptyObservationWithoutLineageSources(): void
+    {
+        $root = sys_get_temp_dir() . '/agent-learning-lineage-empty-' . bin2hex(random_bytes(6));
+        self::assertTrue(mkdir($root, 0o775, true));
+
+        try {
+            $result = (new LearningLineageService())->precedentsForTask(
+                $root,
+                'EMPTY-123',
+                maximumRelatedIdentities: 10,
+            );
+
+            self::assertSame('EMPTY-123', $result->taskId);
+            self::assertSame([], $result->precedents);
+            self::assertSame('EMPTY-123', $result->lineage->identityId);
+            self::assertSame([], $result->lineage->identityIds);
+            self::assertSame(['EMPTY-123' => 0], $result->lineage->depthByIdentityId);
+            self::assertSame([], $result->lineage->relations);
+            self::assertSame(3, $result->lineage->maximumDepth);
+            self::assertSame(10, $result->lineage->maximumResults);
+            self::assertFalse($result->lineage->truncated);
+            self::assertFileDoesNotExist($root . '/.derived/lineage/graph.sqlite');
+        } finally {
+            $this->removeDirectory($root);
+        }
+    }
+
+    public function testMissingGraphStillFailsWhenLineageSourcesExist(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Derived Learning lineage graph not found; rebuild it first.');
+
+        (new LearningLineageService())->precedentsForTask($this->root, 'PROJECT-1234');
+    }
+
     public function testChangedOwnerStateRejectsStaleDerivedGraph(): void
     {
         $service = new LearningLineageService();
