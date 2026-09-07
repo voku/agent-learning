@@ -15,23 +15,27 @@ use voku\AgentGraph\Sqlite\GraphStore;
 use voku\AgentLearning\Lineage\LearningLineageProjector;
 use voku\AgentLearning\Lineage\LearningLineageRelation;
 use voku\AgentLearning\Lineage\LearningLineageResult;
+use voku\AgentLearning\Lineage\LearningTaskPrecedentResult;
 
 /**
  * Learning-owned boundary over the rebuildable lineage projection.
  *
  * The graph database and agent-graph API stay private. Ordinary lineage reads
  * compare a cheap owner-state generation revision and do not decode Learning
- * documents. Explicit verification additionally hashes all projected sources
- * and runs graph integrity checks.
+ * documents. Task precedent reads traverse only bounded owner lineage and then
+ * decode the selected active LearningNotes. Explicit verification additionally
+ * hashes all projected sources and runs graph integrity checks.
  */
 final readonly class LearningLineageService
 {
     private const int MAXIMUM_DEPTH = 8;
     private const int MAXIMUM_RESULTS = 500;
+    private const string PROJECTION_VERSION = '2';
 
     public function __construct(
         private LearningLineageProjector $projector = new LearningLineageProjector(),
         private LearningNoteService $noteService = new LearningNoteService(),
+        private LearningNoteRepository $noteRepository = new LearningNoteRepository(),
     ) {
     }
 
@@ -78,15 +82,103 @@ final readonly class LearningLineageService
         if ($identityId === '') {
             throw new InvalidArgumentException('Learning lineage identity must be non-empty.');
         }
-        if ($maximumDepth < 1 || $maximumDepth > self::MAXIMUM_DEPTH) {
-            throw new InvalidArgumentException('Learning lineage depth must be between 1 and ' . self::MAXIMUM_DEPTH . '.');
-        }
-        if ($maximumResults < 1 || $maximumResults > self::MAXIMUM_RESULTS) {
-            throw new InvalidArgumentException('Learning lineage result limit must be between 1 and ' . self::MAXIMUM_RESULTS . '.');
-        }
+        $this->assertLimits($maximumDepth, $maximumResults);
 
         $store = $this->openCurrent($this->normalizedRoot($root));
 
+        return $this->traverse(
+            $store,
+            $identityId,
+            $maximumDepth,
+            $maximumResults,
+            allowTaskAnchorAtRoot: false,
+        );
+    }
+
+    public function precedentsForTask(
+        string $root,
+        string $taskId,
+        ?string $projectRoot = null,
+        int $maximumRelatedIdentities = 100,
+    ): LearningTaskPrecedentResult {
+        $taskId = trim($taskId);
+        if ($taskId === '') {
+            throw new InvalidArgumentException('Learning task precedent query requires a non-empty task id.');
+        }
+        $this->assertLimits(3, $maximumRelatedIdentities);
+
+        $root = $this->normalizedRoot($root);
+        $revisionBefore = $this->sourceRevision($root);
+        $store = $this->openCurrent($root);
+        $lineage = $this->traverse(
+            $store,
+            $taskId,
+            maximumDepth: 3,
+            maximumResults: $maximumRelatedIdentities,
+            allowTaskAnchorAtRoot: true,
+        );
+
+        $projectRoot ??= (new LearningProjectPaths())->projectRootForLearningRoot($root);
+        $precedents = [];
+        foreach ($lineage->identityIds as $identityId) {
+            if (!str_starts_with($identityId, 'learning-note.')) {
+                continue;
+            }
+
+            $note = $this->noteRepository->findActive($root, $identityId);
+            if ($note === null) {
+                throw new RuntimeException('Current Learning lineage references unavailable active LearningNote: ' . $identityId);
+            }
+            $precedents[] = new LearningNoteProjection(
+                id: $note->id,
+                patternKey: $note->patternKey,
+                status: $note->status,
+                scope: $note->scope,
+                tags: $note->tags,
+                sourceFindings: $note->sourceFindings,
+                sourceProposals: $note->sourceProposals,
+                validationCase: $note->validationCase,
+                content: $note->content,
+                digest: $note->digest(),
+                evidenceState: $this->noteService->evidenceState($note, $projectRoot),
+            );
+        }
+        usort(
+            $precedents,
+            static fn (LearningNoteProjection $left, LearningNoteProjection $right): int => $left->id <=> $right->id,
+        );
+
+        $revisionAfter = $this->sourceRevision($root);
+        if (!hash_equals($revisionBefore, $revisionAfter)) {
+            throw new RuntimeException('Learning state changed during task precedent query; retry from one owner generation.');
+        }
+
+        return new LearningTaskPrecedentResult($taskId, $precedents, $lineage);
+    }
+
+    public function verifyCurrent(string $root): void
+    {
+        $root = $this->normalizedRoot($root);
+        $store = $this->openCurrent($root);
+        $actualFingerprint = $store->sourceFingerprint();
+        $expectedFingerprint = $this->sourceFingerprint($root);
+        if ($actualFingerprint === null || !hash_equals($expectedFingerprint, $actualFingerprint)) {
+            throw new RuntimeException('Derived Learning lineage graph failed source fingerprint verification.');
+        }
+
+        $integrityFailures = $store->integrityFailures();
+        if ($integrityFailures !== []) {
+            throw new RuntimeException('Derived Learning lineage graph failed integrity checks: ' . implode(', ', $integrityFailures));
+        }
+    }
+
+    private function traverse(
+        GraphStore $store,
+        string $identityId,
+        int $maximumDepth,
+        int $maximumResults,
+        bool $allowTaskAnchorAtRoot,
+    ): LearningLineageResult {
         /** @var SplQueue<array{id: string, depth: int}> $queue */
         $queue = new SplQueue();
         $queue->enqueue(['id' => $identityId, 'depth' => 0]);
@@ -114,6 +206,11 @@ final readonly class LearningLineageService
             usort($relations, self::compareGraphRelations(...));
 
             foreach ($relations as $relation) {
+                if ($relation->kind === LearningLineageProjector::FINDING_FROM_TASK) {
+                    if (!$allowTaskAnchorAtRoot || $current['depth'] !== 0 || $relation->sourceId !== $identityId) {
+                        continue;
+                    }
+                }
                 if (count($relation->targetIds) !== 1) {
                     throw new RuntimeException('Learning lineage graph contains an invalid multi-target relation: ' . $relation->id);
                 }
@@ -186,22 +283,6 @@ final readonly class LearningLineageService
         );
     }
 
-    public function verifyCurrent(string $root): void
-    {
-        $root = $this->normalizedRoot($root);
-        $store = $this->openCurrent($root);
-        $actualFingerprint = $store->sourceFingerprint();
-        $expectedFingerprint = $this->sourceFingerprint($root);
-        if ($actualFingerprint === null || !hash_equals($expectedFingerprint, $actualFingerprint)) {
-            throw new RuntimeException('Derived Learning lineage graph failed source fingerprint verification.');
-        }
-
-        $integrityFailures = $store->integrityFailures();
-        if ($integrityFailures !== []) {
-            throw new RuntimeException('Derived Learning lineage graph failed integrity checks: ' . implode(', ', $integrityFailures));
-        }
-    }
-
     private function openCurrent(string $root): GraphStore
     {
         $database = $this->databasePath($root);
@@ -217,6 +298,16 @@ final readonly class LearningLineageService
         }
 
         return $store;
+    }
+
+    private function assertLimits(int $maximumDepth, int $maximumResults): void
+    {
+        if ($maximumDepth < 1 || $maximumDepth > self::MAXIMUM_DEPTH) {
+            throw new InvalidArgumentException('Learning lineage depth must be between 1 and ' . self::MAXIMUM_DEPTH . '.');
+        }
+        if ($maximumResults < 1 || $maximumResults > self::MAXIMUM_RESULTS) {
+            throw new InvalidArgumentException('Learning lineage result limit must be between 1 and ' . self::MAXIMUM_RESULTS . '.');
+        }
     }
 
     private static function compareGraphRelations(GraphRelation $left, GraphRelation $right): int
@@ -252,6 +343,7 @@ final readonly class LearningLineageService
     private function sourceRevision(string $root): string
     {
         $context = hash_init('sha256');
+        hash_update($context, 'learning-lineage-projection:' . self::PROJECTION_VERSION . "\0");
         foreach ($this->sourceFiles($root) as $path) {
             $stat = stat($path);
             if (!is_array($stat)) {
@@ -270,6 +362,7 @@ final readonly class LearningLineageService
     private function sourceFingerprint(string $root): string
     {
         $context = hash_init('sha256');
+        hash_update($context, 'learning-lineage-projection:' . self::PROJECTION_VERSION . "\0");
         foreach ($this->sourceFiles($root) as $path) {
             hash_update($context, $this->relativePath($root, $path) . "\0");
             if (!hash_update_file($context, $path)) {
