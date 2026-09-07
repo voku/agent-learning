@@ -115,6 +115,51 @@ final class LearningLineageServiceTest extends TestCase
         self::assertFalse($result->lineage->truncated);
     }
 
+    public function testTaskPrecedentsIncludeActiveNotesWhenTaskHasNoDirectLineage(): void
+    {
+        $note = new LearningNote(
+            id: 'learning-note.2026-09-07.abcdef',
+            patternKey: 'project.cli_bootstrap',
+            status: LearningNoteStatus::ACTIVE,
+            scope: ['src/'],
+            tags: ['packaging'],
+            sourceFindings: ['finding.2026-06-08.001'],
+            sourceProposals: [],
+            validationCase: new ValidationCase('Given.', 'When.', 'Then.'),
+            repositoryEvidence: [],
+            content: new LearningNoteContent(
+                title: 'Keep installed CLI bootstrap portable',
+                context: 'Composer-installed consumers need a supported bootstrap path.',
+                guidance: 'Resolve package and consumer autoloaders through the supported owner path.',
+                whyItWorks: 'The package remains usable both standalone and when installed.',
+                whenToApply: 'When changing an installed CLI entrypoint.',
+                whenNotToApply: 'When no packaged executable is involved.',
+                verification: 'Run the clean installed consumer.',
+            ),
+            createdAt: '2026-09-07T00:00:00+00:00',
+            updatedAt: '2026-09-07T00:00:00+00:00',
+        );
+        (new LearningNoteRepository())->publish($this->root, $note);
+
+        $service = new LearningLineageService();
+        $service->rebuild($this->root, $this->root);
+
+        $result = $service->precedentsForTask(
+            $this->root,
+            'NEW-TASK-999',
+            projectRoot: $this->root,
+            maximumRelatedIdentities: 10,
+        );
+
+        self::assertSame('NEW-TASK-999', $result->taskId);
+        self::assertCount(1, $result->precedents);
+        self::assertSame($note->id, $result->precedents[0]->id);
+        self::assertSame([], $result->lineage->identityIds);
+        self::assertSame(['NEW-TASK-999' => 0], $result->lineage->depthByIdentityId);
+        self::assertSame([], $result->lineage->relations);
+        self::assertFalse($result->lineage->truncated);
+    }
+
     public function testTaskPrecedentQueryReturnsBoundedEmptyObservationWithoutLineageSources(): void
     {
         $root = sys_get_temp_dir() . '/agent-learning-lineage-empty-' . bin2hex(random_bytes(6));
@@ -140,6 +185,29 @@ final class LearningLineageServiceTest extends TestCase
         } finally {
             $this->removeDirectory($root);
         }
+    }
+
+    public function testTaskPrecedentQueryReturnsBoundedEmptyObservationWhenRootDirectoryDoesNotExist(): void
+    {
+        $root = sys_get_temp_dir() . '/agent-learning-lineage-nonexistent-' . bin2hex(random_bytes(6));
+        self::assertDirectoryDoesNotExist($root);
+
+        $result = (new LearningLineageService())->precedentsForTask(
+            $root,
+            'EMPTY-456',
+            maximumRelatedIdentities: 10,
+        );
+
+        self::assertSame('EMPTY-456', $result->taskId);
+        self::assertSame([], $result->precedents);
+        self::assertSame('EMPTY-456', $result->lineage->identityId);
+        self::assertSame([], $result->lineage->identityIds);
+        self::assertSame(['EMPTY-456' => 0], $result->lineage->depthByIdentityId);
+        self::assertSame([], $result->lineage->relations);
+        self::assertSame(3, $result->lineage->maximumDepth);
+        self::assertSame(10, $result->lineage->maximumResults);
+        self::assertFalse($result->lineage->truncated);
+        self::assertDirectoryDoesNotExist($root);
     }
 
     public function testMissingGraphStillFailsWhenLineageSourcesExist(): void

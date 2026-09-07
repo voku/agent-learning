@@ -33,10 +33,20 @@ final class LearningNoteRepository
     /** @return array<string, LearningNote> */
     public function loadActive(string $root): array
     {
-        return array_filter(
-            $this->loadAll($root),
-            static fn (LearningNote $note): bool => $note->status === LearningNoteStatus::ACTIVE,
-        );
+        $notes = [];
+        foreach ($this->jsonFiles($root . '/notes/' . LearningNoteStatus::ACTIVE->value) as $path) {
+            $note = $this->read($path);
+            if ($note->status !== LearningNoteStatus::ACTIVE) {
+                throw new ValidationException($path, null, $note->id, 'learning note status does not match storage directory');
+            }
+            if (isset($notes[$note->id])) {
+                throw new ValidationException($path, null, $note->id, 'duplicate LearningNote ID');
+            }
+            $notes[$note->id] = $note;
+        }
+        ksort($notes, SORT_STRING);
+
+        return $notes;
     }
 
     public function find(string $root, string $id): ?LearningNote

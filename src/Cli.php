@@ -39,6 +39,7 @@ final class Cli
                 'dream' => $this->dreamCommand($tokens),
                 'history-rebuild' => $this->historyRebuildCommand($tokens),
                 'history-status' => $this->historyStatusCommand($tokens),
+                'lineage-rebuild' => $this->lineageRebuildCommand($tokens),
                 'backlog' => $this->backlogCommand($tokens),
                 'finding-create' => $this->findingCreateCommand($tokens),
                 'finding-id' => $this->findingIdCommand($tokens),
@@ -228,6 +229,23 @@ final class Cli
             $runtimeMilliseconds,
             $projection->inputDigest,
         ));
+
+        return 0;
+    }
+
+    /**
+     * Explicitly rebuild the derived private lineage SQLite graph.
+     *
+     * @param list<string> $tokens
+     */
+    private function lineageRebuildCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $projectRoot = $this->stringOption($parsed['options'], 'project-root');
+        (new LearningLineageService())->rebuild($root, $projectRoot);
+
+        $this->write(sprintf("Derived Learning lineage graph rebuilt for %s\n", $root));
 
         return 0;
     }

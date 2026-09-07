@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [0.18.2] - 2026-09-07
+
+### Fixed
+
+- `LearningLineageService::precedentsForTask()` now returns active notes as candidate precedents up to `maximumRelatedIdentities` when a task has no direct findings or has remaining capacity, ensuring that new tasks receive relevant repository precedents without transient session memory.
+- `LearningLineageService::precedentsForTask()` returns a bounded empty result when the given Learning root directory does not exist yet.
+- `LearningNoteRepository::loadActive()` now reads only from the `notes/active` storage directory instead of scanning all statuses, preventing unreferenced or malformed retired notes from breaking active note loading.
+- `LearningNoteService::publish()` and `retire()` now automatically rebuild the derived lineage graph so the lineage database remains current with published notes.
+- `bin/agent-learning` and `bin/agent-learning-note` now resolve and require Composer's `vendor/autoload.php` before CLI execution to ensure external dependencies (such as `voku/agent-graph`) are properly autoloaded.
+
+### Added
+
+- Add `lineage-rebuild` CLI command to `agent-learning` for explicitly rebuilding the derived lineage graph.
+
+### Validation
+
+- PHPUnit passing on PHP 8.4 with 333 tests and 1124 assertions.
+- PHPStan Level Max static analysis passing with zero errors.
+
 ## [0.18.1] - 2026-09-07
 
 ### Fixed

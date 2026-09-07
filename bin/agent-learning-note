@@ -5,6 +5,19 @@ declare(strict_types=1);
 
 use voku\AgentLearning\LearningNoteCli;
 
+$autoloadCandidates = [
+    __DIR__ . '/../../../autoload.php',
+    __DIR__ . '/../vendor/autoload.php',
+    getcwd() . '/vendor/autoload.php',
+];
+
+foreach ($autoloadCandidates as $autoloadCandidate) {
+    if (is_file($autoloadCandidate)) {
+        require_once $autoloadCandidate;
+        break;
+    }
+}
+
 spl_autoload_register(static function (string $class): void {
     $prefix = 'voku\\AgentLearning\\';
     if (!str_starts_with($class, $prefix)) {
@@ -19,19 +32,6 @@ spl_autoload_register(static function (string $class): void {
 
 if (class_exists(LearningNoteCli::class)) {
     exit((new LearningNoteCli())->run($argv));
-}
-
-$autoloadCandidates = [
-    __DIR__ . '/../vendor/autoload.php',
-    __DIR__ . '/../../../autoload.php',
-    getcwd() . '/vendor/autoload.php',
-];
-
-foreach ($autoloadCandidates as $autoloadCandidate) {
-    if (is_file($autoloadCandidate)) {
-        require $autoloadCandidate;
-        exit((new LearningNoteCli())->run($argv));
-    }
 }
 
 fwrite(STDERR, "Cannot find Composer autoload file for voku/agent-learning.\n");

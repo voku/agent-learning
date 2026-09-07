@@ -15,6 +15,7 @@ final readonly class LearningNoteService
         private LearningNoteRepository $noteRepository = new LearningNoteRepository(),
         private RecordIdGenerator $idGenerator = new RecordIdGenerator(),
         private RedactionGuard $redactionGuard = new RedactionGuard(),
+        private ?LearningLineageService $lineageService = null,
     ) {
     }
 
@@ -174,6 +175,7 @@ final readonly class LearningNoteService
         $this->noteRepository->publish($root, $note);
 
         $projectRoot ??= (new LearningProjectPaths())->projectRootForLearningRoot($root);
+        ($this->lineageService ?? new LearningLineageService())->rebuild($root, $projectRoot);
 
         return $this->project($note, $projectRoot);
     }
@@ -208,6 +210,7 @@ final readonly class LearningNoteService
         $this->noteRepository->publish($root, $retired);
         $this->noteRepository->removeActive($root, $id);
         $projectRoot = (new LearningProjectPaths())->projectRootForLearningRoot($root);
+        ($this->lineageService ?? new LearningLineageService())->rebuild($root, $projectRoot);
 
         return $this->project($retired, $projectRoot);
     }

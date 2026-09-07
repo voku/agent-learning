@@ -107,6 +107,22 @@ final readonly class LearningLineageService
         }
         $this->assertLimits(3, $maximumRelatedIdentities);
 
+        if (!is_dir($root)) {
+            return new LearningTaskPrecedentResult(
+                taskId: $taskId,
+                precedents: [],
+                lineage: new LearningLineageResult(
+                    identityId: $taskId,
+                    identityIds: [],
+                    depthByIdentityId: [$taskId => 0],
+                    relations: [],
+                    maximumDepth: 3,
+                    maximumResults: $maximumRelatedIdentities,
+                    truncated: false,
+                ),
+            );
+        }
+
         $root = $this->normalizedRoot($root);
         $revisionBefore = $this->sourceRevision($root);
         if (!is_file($this->databasePath($root)) && $this->sourceFiles($root) === []) {
@@ -164,6 +180,17 @@ final readonly class LearningLineageService
                 evidenceState: $this->noteService->evidenceState($note, $projectRoot),
             );
         }
+        $existingIds = array_fill_keys(array_map(static fn (LearningNoteProjection $p): string => $p->id, $precedents), true);
+        foreach ($this->noteService->activeProjections($root, $projectRoot) as $activeNote) {
+            if (isset($existingIds[$activeNote->id])) {
+                continue;
+            }
+            if (count($precedents) >= $maximumRelatedIdentities) {
+                break;
+            }
+            $precedents[] = $activeNote;
+        }
+
         usort(
             $precedents,
             static fn (LearningNoteProjection $left, LearningNoteProjection $right): int => $left->id <=> $right->id,
