@@ -40,7 +40,7 @@ final class LearningLineageProjectorTest extends TestCase
         );
 
         $signatures = array_map(
-            static fn (GraphRelation $relation): string => $relation->sourceId . '|' . $relation->kind . '|' . $relation->targetIds[0],
+            static fn (GraphRelation $relation): string => $relation->sourceId . '|' . $relation->kind . '|' . implode(',', $relation->targetIds),
             $relations,
         );
         sort($signatures, SORT_STRING);
