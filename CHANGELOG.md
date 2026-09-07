@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-07
+
+### Added
+
+- Add the exact persisted `finding_from_task` lineage relation and `LearningLineageService::precedentsForTask()` so consumers can seed bounded precedent lookup from one task id without scanning the full Learning corpus. Task anchors are traversed only by the task-precedent API; ordinary `lineage()` stays record-focused and does not fan out through sibling Findings from the same task.
+- Add `LearningTaskPrecedentResult`, which keeps the bounded lineage identities, relations, limits, and truncation state visible alongside selected active LearningNote projections.
+- Add `LearningNoteRepository::findActive()` as a true point read for `notes/active/<id>.json`; task-precedent lookup decodes only LearningNote ids returned by bounded lineage and re-checks the Learning source generation after those reads.
+
+### Changed
+
+- Include lineage projection version `2` in the derived graph revision and fingerprint identity. Graphs built before the task-anchor relation therefore fail stale after upgrade instead of silently returning an incomplete task-precedent result.
+
+### Validation
+
+- PR #79 passed exact-head PHP 8.3, 8.4 and 8.5 `composer ci` plus the clean installed-skill consumer. Regression coverage proves exact task anchoring, preserves ordinary record-lineage boundaries, surfaces truncation, and demonstrates that a malformed unrelated retired LearningNote is not decoded by the task-precedent path.
+- The separate `agent-learning#73` hundreds-of-real-records acceptance remains open; this release adds the bounded owner API required for Recall dogfood and does not claim that external scale evidence.
+
 ## [0.17.0] - 2026-09-07
 
 ### Added
