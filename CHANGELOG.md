@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-09-07
+
+### Fixed
+
+- `LearningLineageService::precedentsForTask()` now treats a genuinely empty Learning root as an explicit bounded empty result when no derived lineage database exists. Hosts that install `agent-learning` therefore do not become broken merely because they have no Learning records yet.
+- Preserve fail-closed behavior when Learning source records exist but the derived lineage graph is missing or stale; the empty-state fix does not turn missing derived state into silent absence.
+
+### Validation
+
+- PR #82 passed the package compatibility gate and clean installed-consumer proof for the owner-first empty-state distinction required by `voku/agent-recall-compiler#159`.
+- The separate `agent-learning#73` real-hundreds scale gate remains open and is not claimed by this patch release.
+
+
 ## [0.18.0] - 2026-09-07
 
 ### Added
