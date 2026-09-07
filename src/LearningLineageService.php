@@ -109,6 +109,27 @@ final readonly class LearningLineageService
 
         $root = $this->normalizedRoot($root);
         $revisionBefore = $this->sourceRevision($root);
+        if (!is_file($this->databasePath($root)) && $this->sourceFiles($root) === []) {
+            $revisionAfter = $this->sourceRevision($root);
+            if (!hash_equals($revisionBefore, $revisionAfter)) {
+                throw new RuntimeException('Learning state changed during task precedent query; retry from one owner generation.');
+            }
+
+            return new LearningTaskPrecedentResult(
+                taskId: $taskId,
+                precedents: [],
+                lineage: new LearningLineageResult(
+                    identityId: $taskId,
+                    identityIds: [],
+                    depthByIdentityId: [$taskId => 0],
+                    relations: [],
+                    maximumDepth: 3,
+                    maximumResults: $maximumRelatedIdentities,
+                    truncated: false,
+                ),
+            );
+        }
+
         $store = $this->openCurrent($root);
         $lineage = $this->traverse(
             $store,
