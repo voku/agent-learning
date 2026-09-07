@@ -44,6 +44,29 @@ final class LearningNoteRepository
         return $this->loadAll($root)[$id] ?? null;
     }
 
+    public function findActive(string $root, string $id): ?LearningNote
+    {
+        $id = trim($id);
+        if (preg_match(RecordIdGenerator::pattern('learning-note'), $id) !== 1) {
+            throw new ValidationException($root, null, $id !== '' ? $id : null, 'LearningNote id must match learning-note.YYYY-MM-DD.<suffix>');
+        }
+
+        $path = rtrim($root, '/\\') . '/notes/' . LearningNoteStatus::ACTIVE->value . '/' . $id . '.json';
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $note = $this->read($path);
+        if ($note->id !== $id) {
+            throw new ValidationException($path, null, $note->id, 'LearningNote id does not match storage filename');
+        }
+        if ($note->status !== LearningNoteStatus::ACTIVE) {
+            throw new ValidationException($path, null, $note->id, 'learning note status does not match active storage directory');
+        }
+
+        return $note;
+    }
+
     public function findActiveByPatternKey(string $root, string $patternKey): ?LearningNote
     {
         $match = null;
