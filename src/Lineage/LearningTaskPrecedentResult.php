@@ -6,11 +6,7 @@ namespace voku\AgentLearning\Lineage;
 
 use voku\AgentLearning\LearningNoteProjection;
 
-/**
- * Bounded Learning-owned precedent projection for one exact persisted task id.
- *
- * @param list<LearningNoteProjection> $precedents
- */
+/** Bounded Learning-owned precedent projection for one exact persisted task id. */
 final readonly class LearningTaskPrecedentResult
 {
     /** @param list<LearningNoteProjection> $precedents */
