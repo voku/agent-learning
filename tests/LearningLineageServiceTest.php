@@ -136,7 +136,6 @@ final class LearningLineageServiceTest extends TestCase
             $record,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         );
-        self::assertIsString($encoded);
         self::assertNotFalse(file_put_contents($path, $encoded . "\n"));
     }
 
