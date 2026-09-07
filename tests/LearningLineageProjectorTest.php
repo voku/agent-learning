@@ -46,6 +46,8 @@ final class LearningLineageProjectorTest extends TestCase
         sort($signatures, SORT_STRING);
 
         $expected = [
+            'TASK-1|finding_from_task|finding.a',
+            'TASK-1|finding_from_task|finding.b',
             'finding.a|note_from_finding|learning-note.1',
             'finding.a|proposal_from_finding|proposal.1',
             'finding.a|proposal_from_finding|proposal.2',
@@ -58,11 +60,11 @@ final class LearningLineageProjectorTest extends TestCase
         sort($expected, SORT_STRING);
 
         self::assertSame($expected, $signatures);
-        self::assertCount(8, $relations);
+        self::assertCount(10, $relations);
         foreach ($relations as $relation) {
             self::assertCount(1, $relation->targetIds);
             self::assertMatchesRegularExpression(
-                '/^learning-lineage\.(?:proposal_from_finding|proposal_supersedes|proposal_conflicts_with|proposal_corrects|note_from_finding|note_from_proposal)\.[a-f0-9]{24}$/',
+                '/^learning-lineage\.(?:finding_from_task|proposal_from_finding|proposal_supersedes|proposal_conflicts_with|proposal_corrects|note_from_finding|note_from_proposal)\.[a-f0-9]{24}$/',
                 $relation->id,
             );
         }
