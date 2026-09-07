@@ -1,0 +1,41 @@
+name: Prepare 0.18.1 changelog
+
+on:
+  push:
+    branches:
+      - release/0.18.1
+    paths:
+      - .github/workflows/prepare-0.18.1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Insert 0.18.1 changelog entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('CHANGELOG.md')
+          text = path.read_text()
+          marker = '## [Unreleased]\n'
+          entry = '''## [0.18.1] - 2026-09-07\n\n### Fixed\n\n- `LearningLineageService::precedentsForTask()` now treats a genuinely empty Learning root as an explicit bounded empty result when no derived lineage database exists. Hosts that install `agent-learning` therefore do not become broken merely because they have no Learning records yet.\n- Preserve fail-closed behavior when Learning source records exist but the derived lineage graph is missing or stale; the empty-state fix does not turn missing derived state into silent absence.\n\n### Validation\n\n- PR #82 passed the package compatibility gate and clean installed-consumer proof for the owner-first empty-state distinction required by `voku/agent-recall-compiler#159`.\n- The separate `agent-learning#73` real-hundreds scale gate remains open and is not claimed by this patch release.\n\n'''
+          if '## [0.18.1] - 2026-09-07' in text:
+              raise SystemExit(0)
+          if marker not in text:
+              raise SystemExit('Unreleased marker not found')
+          path.write_text(text.replace(marker, marker + '\n' + entry, 1))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if test -z "$(git status --porcelain -- CHANGELOG.md)"; then
+            exit 0
+          fi
+          git add CHANGELOG.md
+          git commit -m 'release: document agent-learning 0.18.1'
+          git push origin HEAD:release/0.18.1
