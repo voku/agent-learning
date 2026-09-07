@@ -63,12 +63,12 @@ final readonly class LearningLineageProjector
             static fn (GraphRelation $left, GraphRelation $right): int => [
                 $left->sourceId,
                 $left->kind,
-                $left->targetIds[0],
+                implode("\0", $left->targetIds),
                 $left->id,
             ] <=> [
                 $right->sourceId,
                 $right->kind,
-                $right->targetIds[0],
+                implode("\0", $right->targetIds),
                 $right->id,
             ],
         );
