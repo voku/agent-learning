@@ -11,7 +11,12 @@ use RecursiveIteratorIterator;
 use RuntimeException;
 use SplFileInfo;
 use voku\AgentLearning\LearningLineageService;
+use voku\AgentLearning\LearningNote;
+use voku\AgentLearning\LearningNoteContent;
+use voku\AgentLearning\LearningNoteRepository;
+use voku\AgentLearning\LearningNoteStatus;
 use voku\AgentLearning\Lineage\LearningLineageProjector;
+use voku\AgentLearning\ValidationCase;
 
 final class LearningLineageServiceTest extends TestCase
 {
@@ -55,6 +60,59 @@ final class LearningLineageServiceTest extends TestCase
             $first->toArray(),
             $service->lineage($this->root, 'proposal.2026-06-08.001')->toArray(),
         );
+    }
+
+    public function testTaskPrecedentsUseBoundedLineageAndPointReadOnlySelectedActiveNotes(): void
+    {
+        $note = new LearningNote(
+            id: 'learning-note.2026-09-07.abcdef',
+            patternKey: 'project.cli_bootstrap',
+            status: LearningNoteStatus::ACTIVE,
+            scope: ['src/'],
+            tags: ['packaging'],
+            sourceFindings: ['finding.2026-06-08.001'],
+            sourceProposals: [],
+            validationCase: new ValidationCase('Given.', 'When.', 'Then.'),
+            repositoryEvidence: [],
+            content: new LearningNoteContent(
+                title: 'Keep installed CLI bootstrap portable',
+                context: 'Composer-installed consumers need a supported bootstrap path.',
+                guidance: 'Resolve package and consumer autoloaders through the supported owner path.',
+                whyItWorks: 'The package remains usable both standalone and when installed.',
+                whenToApply: 'When changing an installed CLI entrypoint.',
+                whenNotToApply: 'When no packaged executable is involved.',
+                verification: 'Run the clean installed consumer.',
+            ),
+            createdAt: '2026-09-07T00:00:00+00:00',
+            updatedAt: '2026-09-07T00:00:00+00:00',
+        );
+        (new LearningNoteRepository())->publish($this->root, $note);
+
+        $service = new LearningLineageService();
+        $service->rebuild($this->root, $this->root);
+
+        $retiredDirectory = $this->root . '/notes/retired';
+        self::assertTrue(is_dir($retiredDirectory) || mkdir($retiredDirectory, 0o775, true));
+        self::assertNotFalse(file_put_contents($retiredDirectory . '/malformed.json', '{not-json'));
+
+        $result = $service->precedentsForTask(
+            $this->root,
+            'PROJECT-1234',
+            projectRoot: $this->root,
+            maximumRelatedIdentities: 10,
+        );
+
+        self::assertSame('PROJECT-1234', $result->taskId);
+        self::assertCount(1, $result->precedents);
+        self::assertSame($note->id, $result->precedents[0]->id);
+        self::assertSame('no_hashable_repository_evidence', $result->precedents[0]->evidenceState->value);
+        self::assertContains('finding.2026-06-08.001', $result->lineage->identityIds);
+        self::assertContains($note->id, $result->lineage->identityIds);
+        self::assertContains(
+            LearningLineageProjector::FINDING_FROM_TASK,
+            array_map(static fn ($relation): string => $relation->kind, $result->lineage->relations),
+        );
+        self::assertFalse($result->lineage->truncated);
     }
 
     public function testChangedOwnerStateRejectsStaleDerivedGraph(): void
