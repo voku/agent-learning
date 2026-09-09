@@ -222,24 +222,12 @@ final readonly class LearningLineageService
 
     private function projectActiveNote(string $root, string $id, string $projectRoot): LearningNoteProjection
     {
-        $note = $this->noteRepository->findActive($root, $id);
-        if ($note === null) {
+        $projection = $this->noteService->activeProjection($root, $id, $projectRoot);
+        if ($projection === null) {
             throw new RuntimeException('Current Learning precedent query references unavailable active LearningNote: ' . $id);
         }
 
-        return new LearningNoteProjection(
-            id: $note->id,
-            patternKey: $note->patternKey,
-            status: $note->status,
-            scope: $note->scope,
-            tags: $note->tags,
-            sourceFindings: $note->sourceFindings,
-            sourceProposals: $note->sourceProposals,
-            validationCase: $note->validationCase,
-            content: $note->content,
-            digest: $note->digest(),
-            evidenceState: $this->noteService->evidenceState($note, $projectRoot),
-        );
+        return $projection;
     }
 
     /** @return list<string> */
