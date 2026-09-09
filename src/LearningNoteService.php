@@ -19,6 +19,93 @@ final readonly class LearningNoteService
     ) {
     }
 
+    /**
+     * Whether one Finding could source a LearningNote right now.
+     *
+     * Read-only: this is the same rule `prepare()` enforces, evaluated without
+     * writing anything and without stopping at the first problem, so a caller
+     * can ask "is any of this reusable yet" instead of only "promote this now".
+     */
+    public function promotionReadiness(string $root, string $findingId): LearningNotePromotionReadiness
+    {
+        $findingsById = $this->findingRepository->loadAll($root);
+
+        return $this->readinessFor($findingId, $findingsById[$findingId] ?? null);
+    }
+
+    /**
+     * Readiness for every Finding a note could conceivably come from.
+     *
+     * Findings the lifecycle has already closed out - invalidated, rejected,
+     * superseded, archived - are not candidates and are omitted rather than
+     * listed as blocked, because they are not waiting for anything.
+     *
+     * @return list<LearningNotePromotionReadiness> ordered by Finding id
+     */
+    public function candidatePromotionReadiness(string $root): array
+    {
+        $findings = $this->findingRepository->loadAll($root);
+        ksort($findings, SORT_STRING);
+
+        $readiness = [];
+        foreach ($findings as $findingId => $finding) {
+            if (!in_array($finding->status, [FindingStatus::VALIDATED, FindingStatus::CONSOLIDATED], true)) {
+                continue;
+            }
+            $readiness[] = $this->readinessFor((string) $findingId, $finding);
+        }
+
+        return $readiness;
+    }
+
+    private function readinessFor(string $findingId, ?Finding $finding): LearningNotePromotionReadiness
+    {
+        if ($finding === null) {
+            return new LearningNotePromotionReadiness(
+                $findingId,
+                false,
+                [LearningNotePromotionReadiness::BLOCKER_MISSING],
+            );
+        }
+
+        $blockers = [];
+        if (!in_array($finding->status, [FindingStatus::VALIDATED, FindingStatus::CONSOLIDATED], true)) {
+            $blockers[] = LearningNotePromotionReadiness::BLOCKER_STATUS;
+        }
+        if ($finding->classification !== LearningClassification::ADD_LEARNING_NOTE) {
+            $blockers[] = LearningNotePromotionReadiness::BLOCKER_CLASSIFICATION;
+        }
+        if ($finding->patternKey === null || trim($finding->patternKey) === '') {
+            $blockers[] = LearningNotePromotionReadiness::BLOCKER_PATTERN_KEY;
+        }
+        if ($finding->validationCase === null) {
+            $blockers[] = LearningNotePromotionReadiness::BLOCKER_VALIDATION_CASE;
+        }
+        if ($finding->validatedConclusion === null || trim($finding->validatedConclusion) === '') {
+            $blockers[] = LearningNotePromotionReadiness::BLOCKER_VALIDATED_CONCLUSION;
+        }
+
+        return new LearningNotePromotionReadiness(
+            $finding->id,
+            $blockers === [],
+            $blockers,
+            $finding->patternKey,
+        );
+    }
+
+    private function blockerMessage(string $blocker): string
+    {
+        return match ($blocker) {
+            LearningNotePromotionReadiness::BLOCKER_MISSING => 'LearningNote source Finding does not exist',
+            LearningNotePromotionReadiness::BLOCKER_STATUS => 'LearningNote source Finding must be validated or consolidated',
+            LearningNotePromotionReadiness::BLOCKER_CLASSIFICATION => 'LearningNote source Finding must be classified ADD_LEARNING_NOTE',
+            LearningNotePromotionReadiness::BLOCKER_PATTERN_KEY => 'LearningNote source Finding requires pattern_key',
+            LearningNotePromotionReadiness::BLOCKER_VALIDATION_CASE => 'LearningNote source Finding requires validation_case',
+            LearningNotePromotionReadiness::BLOCKER_VALIDATED_CONCLUSION => 'LearningNote source Finding requires validated_conclusion',
+            default => 'LearningNote source Finding cannot be promoted',
+        };
+    }
+
     /** @param list<string> $findingIds */
     public function prepare(string $root, array $findingIds, ?string $projectRoot = null): LearningNotePreparation
     {
@@ -31,24 +118,11 @@ final readonly class LearningNoteService
         $selected = [];
         foreach (array_values(array_unique($findingIds)) as $findingId) {
             $finding = $findingsById[$findingId] ?? null;
-            if ($finding === null) {
-                throw new ValidationException($root, null, $findingId, 'LearningNote source Finding does not exist');
+            $readiness = $this->readinessFor($findingId, $finding);
+            if (!$readiness->promotable) {
+                throw new ValidationException($root, null, $findingId, $this->blockerMessage($readiness->blockers[0]));
             }
-            if (!in_array($finding->status, [FindingStatus::VALIDATED, FindingStatus::CONSOLIDATED], true)) {
-                throw new ValidationException($root, null, $findingId, 'LearningNote source Finding must be validated or consolidated');
-            }
-            if ($finding->classification !== LearningClassification::ADD_LEARNING_NOTE) {
-                throw new ValidationException($root, null, $findingId, 'LearningNote source Finding must be classified ADD_LEARNING_NOTE');
-            }
-            if ($finding->patternKey === null || trim($finding->patternKey) === '') {
-                throw new ValidationException($root, null, $findingId, 'LearningNote source Finding requires pattern_key');
-            }
-            if ($finding->validationCase === null) {
-                throw new ValidationException($root, null, $findingId, 'LearningNote source Finding requires validation_case');
-            }
-            if ($finding->validatedConclusion === null || trim($finding->validatedConclusion) === '') {
-                throw new ValidationException($root, null, $findingId, 'LearningNote source Finding requires validated_conclusion');
-            }
+            /** @var Finding $finding */
             $selected[] = $finding;
         }
 
