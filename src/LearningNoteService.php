@@ -229,18 +229,6 @@ final readonly class LearningNoteService
         return $result;
     }
 
-    public function activeProjection(string $root, string $id, ?string $projectRoot = null): ?LearningNoteProjection
-    {
-        $note = $this->noteRepository->findActive($root, $id);
-        if ($note === null) {
-            return null;
-        }
-        $this->assertStoredLineage($root, $note);
-        $projectRoot ??= (new LearningProjectPaths())->projectRootForLearningRoot($root);
-
-        return $this->project($note, $projectRoot);
-    }
-
     public function evidenceState(LearningNote $note, string $projectRoot): LearningNoteEvidenceState
     {
         if ($note->repositoryEvidence === []) {
