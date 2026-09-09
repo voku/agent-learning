@@ -11,6 +11,7 @@ use SplFileInfo;
 use voku\AgentLearning\LearningLineageService;
 use voku\AgentLearning\LearningNote;
 use voku\AgentLearning\LearningNoteContent;
+use voku\AgentLearning\LearningNoteProjection;
 use voku\AgentLearning\LearningNoteRepository;
 use voku\AgentLearning\LearningNoteRepositoryEvidence;
 use voku\AgentLearning\LearningNoteStatus;
@@ -65,7 +66,7 @@ final class LearningLineageBoundedPrecedentTest extends TestCase
 
         self::assertSame(
             ['learning-note.2026-09-09.aaaaaa', 'learning-note.2026-09-09.bbbbbb'],
-            array_map(static fn ($precedent): string => $precedent->id, $limited->precedents),
+            array_map(static fn (LearningNoteProjection $precedent): string => $precedent->id, $limited->precedents),
         );
         self::assertTrue($limited->precedentsTruncated);
         self::assertFalse($limited->lineage->truncated);
@@ -83,7 +84,7 @@ final class LearningLineageBoundedPrecedentTest extends TestCase
                 'learning-note.2026-09-09.bbbbbb',
                 'learning-note.2026-09-09.cccccc',
             ],
-            array_map(static fn ($precedent): string => $precedent->id, $complete->precedents),
+            array_map(static fn (LearningNoteProjection $precedent): string => $precedent->id, $complete->precedents),
         );
         self::assertFalse($complete->precedentsTruncated);
     }
