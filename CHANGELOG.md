@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.18.3] - 2026-09-09
+
+### Fixed
+
+- `LearningLineageService::precedentsForTask()` now bounds active-note top-up work before projection: it deterministically enumerates active note identities, excludes lineage-selected notes, and decodes/evidence-checks only the remaining capacity instead of projecting the complete active-note corpus and discarding the excess afterwards.
+- `LearningTaskPrecedentResult` now exposes `precedents_truncated` separately from lineage traversal truncation, so a capped active-note top-up cannot be mistaken for a complete owner observation when `lineage.truncated` is false.
+
+### Validation
+
+- PR #85 passed exact-head PHP 8.3, 8.4 and 8.5 `composer ci` plus the clean installed-skill consumer.
+- Regression coverage proves a note beyond the requested cap is not projected even when projecting it would fail repository-evidence validation, while deterministic ordering, source-generation checks, and explicit truncation remain intact.
+
 ## [0.18.2] - 2026-09-07
 
 ### Fixed
@@ -671,4 +683,5 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 - Initial CLI for validating findings, proposals, and decision history.
 - Initial consolidation prompt generation for one task selector.
+- Append `templates/consolidation-prompt.md` from the learning root during `prepare`.
 - Finding, proposal, evidence, JSONL, redaction, and path validation primitives.
