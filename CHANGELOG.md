@@ -683,5 +683,4 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 - Initial CLI for validating findings, proposals, and decision history.
 - Initial consolidation prompt generation for one task selector.
-- Append `templates/consolidation-prompt.md` from the learning root during `prepare`.
 - Finding, proposal, evidence, JSONL, redaction, and path validation primitives.
