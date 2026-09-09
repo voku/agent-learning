@@ -162,33 +162,28 @@ final readonly class LearningLineageService
                 continue;
             }
 
-            $note = $this->noteRepository->findActive($root, $identityId);
-            if ($note === null) {
-                throw new RuntimeException('Current Learning lineage references unavailable active LearningNote: ' . $identityId);
-            }
-            $precedents[] = new LearningNoteProjection(
-                id: $note->id,
-                patternKey: $note->patternKey,
-                status: $note->status,
-                scope: $note->scope,
-                tags: $note->tags,
-                sourceFindings: $note->sourceFindings,
-                sourceProposals: $note->sourceProposals,
-                validationCase: $note->validationCase,
-                content: $note->content,
-                digest: $note->digest(),
-                evidenceState: $this->noteService->evidenceState($note, $projectRoot),
-            );
+            $precedents[] = $this->projectActiveNote($root, $identityId, $projectRoot);
         }
-        $existingIds = array_fill_keys(array_map(static fn (LearningNoteProjection $p): string => $p->id, $precedents), true);
-        foreach ($this->noteService->activeProjections($root, $projectRoot) as $activeNote) {
-            if (isset($existingIds[$activeNote->id])) {
+
+        $existingIds = array_fill_keys(
+            array_map(static fn (LearningNoteProjection $projection): string => $projection->id, $precedents),
+            true,
+        );
+        $remainingCapacity = $maximumRelatedIdentities - count($precedents);
+        $topUpIds = [];
+        $precedentsTruncated = false;
+        foreach ($this->activeNoteIds($root) as $activeNoteId) {
+            if (isset($existingIds[$activeNoteId])) {
                 continue;
             }
-            if (count($precedents) >= $maximumRelatedIdentities) {
+            if (count($topUpIds) >= $remainingCapacity) {
+                $precedentsTruncated = true;
                 break;
             }
-            $precedents[] = $activeNote;
+            $topUpIds[] = $activeNoteId;
+        }
+        foreach ($topUpIds as $activeNoteId) {
+            $precedents[] = $this->projectActiveNote($root, $activeNoteId, $projectRoot);
         }
 
         usort(
@@ -201,7 +196,12 @@ final readonly class LearningLineageService
             throw new RuntimeException('Learning state changed during task precedent query; retry from one owner generation.');
         }
 
-        return new LearningTaskPrecedentResult($taskId, $precedents, $lineage);
+        return new LearningTaskPrecedentResult(
+            taskId: $taskId,
+            precedents: $precedents,
+            lineage: $lineage,
+            precedentsTruncated: $precedentsTruncated,
+        );
     }
 
     public function verifyCurrent(string $root): void
@@ -218,6 +218,53 @@ final readonly class LearningLineageService
         if ($integrityFailures !== []) {
             throw new RuntimeException('Derived Learning lineage graph failed integrity checks: ' . implode(', ', $integrityFailures));
         }
+    }
+
+    private function projectActiveNote(string $root, string $id, string $projectRoot): LearningNoteProjection
+    {
+        $note = $this->noteRepository->findActive($root, $id);
+        if ($note === null) {
+            throw new RuntimeException('Current Learning precedent query references unavailable active LearningNote: ' . $id);
+        }
+
+        return new LearningNoteProjection(
+            id: $note->id,
+            patternKey: $note->patternKey,
+            status: $note->status,
+            scope: $note->scope,
+            tags: $note->tags,
+            sourceFindings: $note->sourceFindings,
+            sourceProposals: $note->sourceProposals,
+            validationCase: $note->validationCase,
+            content: $note->content,
+            digest: $note->digest(),
+            evidenceState: $this->noteService->evidenceState($note, $projectRoot),
+        );
+    }
+
+    /** @return list<string> */
+    private function activeNoteIds(string $root): array
+    {
+        $directory = $root . '/notes/' . LearningNoteStatus::ACTIVE->value;
+        if (!is_dir($directory)) {
+            return [];
+        }
+        $paths = glob($directory . '/*.json');
+        if ($paths === false) {
+            throw new RuntimeException('Unable to enumerate active LearningNotes.');
+        }
+        sort($paths, SORT_STRING);
+
+        $ids = [];
+        foreach ($paths as $path) {
+            $id = basename($path, '.json');
+            if (preg_match(RecordIdGenerator::pattern('learning-note'), $id) !== 1) {
+                throw new ValidationException($path, null, $id !== '' ? $id : null, 'LearningNote id must match learning-note.YYYY-MM-DD.<suffix>');
+            }
+            $ids[] = $id;
+        }
+
+        return $ids;
     }
 
     private function traverse(
