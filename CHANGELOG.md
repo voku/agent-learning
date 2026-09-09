@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `LearningNoteService::promotionReadiness()` and `candidatePromotionReadiness()` answer, read-only, whether a validated Finding could become a LearningNote and which required inputs are absent. `prepare()` already enforced the rule, but only by throwing on the first thing it disliked, which tells a caller that has decided to promote what to fix and tells a caller asking "is any of this reusable yet" nothing at all. A Learning root can accumulate validated Findings for months while every one of them is unpromotable; without a read-only answer that store looks like durable knowledge and behaves like a write-only log. Blockers are reported together rather than one at a time, because a Finding missing three fields is a different amount of work from one missing a classification. `prepare()` now derives its refusals from the same evaluator, so the two cannot drift, and its exception messages are unchanged.
+
 ## [0.18.3] - 2026-09-09
 
 ### Fixed
