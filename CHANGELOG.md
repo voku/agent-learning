@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.18.5] - 2026-09-10
+
+### Fixed
+
+- `LearningLineageResult::toArray()` now exposes lossless `identity_depths` entries with the identity carried as a string value instead of only as a PHP array key. Numeric-looking task identities such as `403` therefore remain strings across the public owner boundary instead of being coerced to integer keys by PHP. The existing `depth_by_identity_id` projection remains temporarily for released-consumer compatibility while consumers move to the lossless form.
+
+### Validation
+
+- PR #96 passed exact-head PHP 8.3, 8.4 and 8.5 `composer ci`, the numeric-task-id regression through `LearningLineageService::precedentsForTask()`, and the clean installed-skill consumer.
+
 ## [0.18.4] - 2026-09-09
 
 ### Added
