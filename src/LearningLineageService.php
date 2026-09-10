@@ -84,7 +84,7 @@ final readonly class LearningLineageService
         }
         $this->assertLimits($maximumDepth, $maximumResults);
 
-        $store = $this->openCurrent($this->normalizedRoot($root));
+        $store = $this->openForRead($this->normalizedRoot($root));
 
         return $this->traverse(
             $store,
@@ -146,7 +146,7 @@ final readonly class LearningLineageService
             );
         }
 
-        $store = $this->openCurrent($root);
+        $store = $this->openForRead($root, $projectRoot);
         $lineage = $this->traverse(
             $store,
             $taskId,
@@ -378,18 +378,58 @@ final readonly class LearningLineageService
         );
     }
 
+    /**
+     * Open the graph for an ordinary read, reconstructing it when that is deterministic.
+     *
+     * The lineage graph is a Learning-owned projection of durable Learning records: it
+     * holds no fact that cannot be recomputed from findings, proposals and active notes.
+     * Refusing a read because it is stale therefore asks a consumer to repair the owner's
+     * own cache, and every consumer then needs to know this class exists. Worse, the
+     * refusal surfaces far from its cause - `FindingCreator::createValidated()` publishes
+     * a Finding and returns, so the next unrelated Recall-consuming command is the one
+     * that fails, with a message about lineage it has no reason to understand.
+     *
+     * `LearningNoteService::publish()` and `retire()` already rebuild after changing
+     * durable state; this closes the same loop from the read side for the writers that
+     * do not.
+     *
+     * Only two states are repaired: an absent database, and one whose stored revision no
+     * longer matches current durable state. Both are recomputable by definition. A
+     * rebuild that cannot complete - unreadable records, invalid durable data, Learning
+     * state moving underneath the projection - still throws, and the second `openCurrent()`
+     * re-checks the revision rather than trusting that the rebuild produced a usable
+     * graph. A read never invents Learning state; it only recomputes what Learning
+     * already implies.
+     */
+    private function openForRead(string $root, ?string $projectRoot = null): GraphStore
+    {
+        try {
+            return $this->openCurrent($root);
+        } catch (LearningLineageProjectionUnavailable) {
+            // Recomputable. Fall through to one rebuild.
+        }
+
+        $this->rebuild($root, $projectRoot);
+
+        return $this->openCurrent($root);
+    }
+
     private function openCurrent(string $root): GraphStore
     {
         $database = $this->databasePath($root);
         if (!is_file($database)) {
-            throw new RuntimeException('Derived Learning lineage graph not found; rebuild it first.');
+            throw new LearningLineageProjectionUnavailable(
+                'Derived Learning lineage graph not found; rebuild it first.',
+            );
         }
 
         $store = new GraphStore($database);
         $actualRevision = $store->sourceRevision();
         $expectedRevision = $this->sourceRevision($root);
         if ($actualRevision === null || !hash_equals($expectedRevision, $actualRevision)) {
-            throw new RuntimeException('Derived Learning lineage graph is stale; rebuild it from current Learning state.');
+            throw new LearningLineageProjectionUnavailable(
+                'Derived Learning lineage graph is stale; rebuild it from current Learning state.',
+            );
         }
 
         return $store;
