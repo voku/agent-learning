@@ -48,6 +48,13 @@ final class LearningLineageServiceTest extends TestCase
             ],
             $first->depthByIdentityId,
         );
+        self::assertSame(
+            [
+                ['identity_id' => 'proposal.2026-06-08.001', 'depth' => 0],
+                ['identity_id' => 'finding.2026-06-08.001', 'depth' => 1],
+            ],
+            $first->identityDepths(),
+        );
         self::assertCount(1, $first->relations);
         self::assertSame(LearningLineageProjector::PROPOSAL_FROM_FINDING, $first->relations[0]->kind);
         self::assertSame('finding.2026-06-08.001', $first->relations[0]->sourceId);
@@ -185,6 +192,31 @@ final class LearningLineageServiceTest extends TestCase
         } finally {
             $this->removeDirectory($root);
         }
+    }
+
+    public function testNumericTaskIdHasLosslessIdentityDepthProjection(): void
+    {
+        $root = sys_get_temp_dir() . '/agent-learning-lineage-numeric-' . bin2hex(random_bytes(6));
+        self::assertDirectoryDoesNotExist($root);
+
+        $result = (new LearningLineageService())->precedentsForTask(
+            $root,
+            '403',
+            maximumRelatedIdentities: 10,
+        );
+
+        self::assertSame('403', $result->lineage->identityId);
+        self::assertSame(
+            [
+                ['identity_id' => '403', 'depth' => 0],
+            ],
+            $result->lineage->identityDepths(),
+        );
+        self::assertSame(
+            $result->lineage->identityDepths(),
+            $result->lineage->toArray()['identity_depths'],
+        );
+        self::assertDirectoryDoesNotExist($root);
     }
 
     public function testTaskPrecedentQueryReturnsBoundedEmptyObservationWhenRootDirectoryDoesNotExist(): void
