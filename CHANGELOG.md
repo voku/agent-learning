@@ -2,9 +2,15 @@
 
 ## [Unreleased]
 
+## [0.18.6] - 2026-09-10
+
 ### Changed
 
 - `lineage()` and `precedentsForTask()` reconstruct a missing or stale derived lineage graph instead of refusing. The graph is a Learning-owned projection of findings, proposals and active notes and holds no fact that cannot be recomputed, so refusing a read asked the caller to repair this package's own cache. The refusal also surfaced far from its cause: `FindingCreator::createValidated()` publishes a Finding and returns, so the command that failed was the next unrelated one that happened to consume lineage - in `voku/agent-loop` an edit-replay test that reports only `Failed asserting that 1 is identical to 0` and never mentions lineage. `LearningNoteService::publish()` and `retire()` already rebuilt after changing durable state; this closes the same loop for the writers that do not. Repair is confined to the two recomputable states, named by `LearningLineageProjectionUnavailable`: an absent database, and one whose stored revision no longer matches durable state. Unreadable records, invalid durable data, a corrupt projection file and Learning state moving mid-rebuild all still fail closed, and `verifyCurrent()` deliberately keeps refusing so the diagnostic that exists to detect staleness can still detect it. Reported as `voku/agent-loop#425`.
+
+### Validation
+
+- PR #100 passed exact-head CI for the owner-side self-healing read boundary. Dogfood against `voku/agent-loop` wrote a durable Finding and immediately ran the previously failing edit-replay and `enter` paths without a manual lineage rebuild.
 
 ## [0.18.5] - 2026-09-10
 
