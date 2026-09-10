@@ -210,15 +210,22 @@ final class LearningLineageServiceTest extends TestCase
         self::assertDirectoryDoesNotExist($root);
     }
 
-    public function testMissingGraphStillFailsWhenLineageSourcesExist(): void
+    /**
+     * Was: a missing graph failed the read.
+     *
+     * The graph is a projection of durable Learning records, so a read can rebuild it
+     * rather than asking the caller to repair this package's own cache.
+     * `verifyCurrent()` keeps refusing - see
+     * LearningLineageSelfHealingReadTest::testVerifyCurrentStillReportsStalenessInsteadOfRepairingIt.
+     */
+    public function testAMissingGraphIsRebuiltByTheReadThatNeedsIt(): void
     {
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Derived Learning lineage graph not found; rebuild it first.');
+        $result = (new LearningLineageService())->precedentsForTask($this->root, 'PROJECT-1234');
 
-        (new LearningLineageService())->precedentsForTask($this->root, 'PROJECT-1234');
+        self::assertSame('PROJECT-1234', $result->taskId);
     }
 
-    public function testChangedOwnerStateRejectsStaleDerivedGraph(): void
+    public function testChangedOwnerStateIsRebuiltByTheReadRatherThanRejected(): void
     {
         $service = new LearningLineageService();
         $service->rebuild($this->root);
@@ -228,9 +235,11 @@ final class LearningLineageServiceTest extends TestCase
         self::assertIsString($content);
         self::assertNotFalse(file_put_contents($path, $content . "\n"));
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Derived Learning lineage graph is stale');
-        $service->lineage($this->root, 'proposal.2026-06-08.001');
+        $result = $service->lineage($this->root, 'proposal.2026-06-08.001');
+
+        self::assertSame(['finding.2026-06-08.001'], $result->identityIds);
+        // The rebuild the read performed is a real one, not a revision stamp.
+        $service->verifyCurrent($this->root);
     }
 
     public function testCyclicOwnerRelationsRemainBoundedAndReportTruncation(): void
