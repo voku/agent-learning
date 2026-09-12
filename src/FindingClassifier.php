@@ -97,18 +97,37 @@ final readonly class FindingClassifier
             }
         } catch (Throwable $throwable) {
             fclose($handle);
-            @unlink($temporaryPath);
+            $this->removeTemporaryFile($temporaryPath, $findingId, $throwable);
             throw $throwable;
         }
 
         if (!fclose($handle)) {
-            @unlink($temporaryPath);
-            throw new ValidationException($temporaryPath, null, $findingId, 'cannot close temporary finding file');
+            $exception = new ValidationException($temporaryPath, null, $findingId, 'cannot close temporary finding file');
+            $this->removeTemporaryFile($temporaryPath, $findingId, $exception);
+            throw $exception;
         }
 
         if (!rename($temporaryPath, $path)) {
-            @unlink($temporaryPath);
-            throw new ValidationException($path, null, $findingId, 'cannot atomically replace finding file');
+            $exception = new ValidationException($path, null, $findingId, 'cannot atomically replace finding file');
+            $this->removeTemporaryFile($temporaryPath, $findingId, $exception);
+            throw $exception;
         }
+    }
+
+    private function removeTemporaryFile(string $path, string $findingId, Throwable $cause): void
+    {
+        if (!is_file($path)) {
+            return;
+        }
+        if (unlink($path)) {
+            return;
+        }
+
+        throw new ValidationException(
+            $path,
+            null,
+            $findingId,
+            'cannot remove temporary finding file after failure: ' . $cause->getMessage(),
+        );
     }
 }
