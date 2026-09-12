@@ -42,6 +42,7 @@ final class Cli
                 'lineage-rebuild' => $this->lineageRebuildCommand($tokens),
                 'backlog' => $this->backlogCommand($tokens),
                 'finding-create' => $this->findingCreateCommand($tokens),
+                'finding-classify' => $this->findingClassifyCommand($tokens),
                 'finding-id' => $this->findingIdCommand($tokens),
                 'finding-transition' => $this->findingTransitionCommand($tokens),
                 'proposal-approve' => $this->proposalApproveCommand($tokens),
@@ -662,6 +663,83 @@ final class Cli
     }
 
     /**
+     * Apply explicit reusable-learning triage after raw Finding capture.
+     *
+     * @param list<string> $tokens
+     */
+    private function findingClassifyCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $findingId = $parsed['arguments'][0] ?? null;
+        $classificationValue = $parsed['arguments'][1] ?? null;
+
+        if ($findingId === null || trim($findingId) === '') {
+            throw new ValidationException($root, null, null, 'finding-classify requires finding ID argument');
+        }
+        if ($classificationValue === null || trim($classificationValue) === '') {
+            throw new ValidationException($root, null, $findingId, 'finding-classify requires learning classification argument');
+        }
+        if (count($parsed['arguments']) > 2) {
+            throw new ValidationException($root, null, $findingId, 'finding-classify takes finding ID and learning classification arguments only');
+        }
+
+        $classification = LearningClassification::tryFrom($classificationValue);
+        if (!$classification instanceof LearningClassification) {
+            throw new ValidationException($root, null, $findingId, 'unsupported learning classification: ' . $classificationValue);
+        }
+
+        $patternKey = null;
+        $validationCase = null;
+        if ($classification !== LearningClassification::IGNORE) {
+            $patternKey = $this->stringOption($parsed['options'], 'pattern-key');
+            $given = $this->stringOption($parsed['options'], 'given');
+            $when = $this->stringOption($parsed['options'], 'when');
+            $then = $this->stringOption($parsed['options'], 'then');
+            $missingOptions = [];
+            foreach ([
+                '--pattern-key' => $patternKey,
+                '--given' => $given,
+                '--when' => $when,
+                '--then' => $then,
+            ] as $label => $value) {
+                if ($value === null) {
+                    $missingOptions[] = $label;
+                }
+            }
+            if ($missingOptions !== []) {
+                throw new ValidationException(
+                    $root,
+                    null,
+                    $findingId,
+                    'finding-classify missing required options: ' . implode(', ', $missingOptions),
+                );
+            }
+            if ($patternKey === null || $given === null || $when === null || $then === null) {
+                throw new ValidationException($root, null, $findingId, 'finding-classify promotion metadata is incomplete');
+            }
+
+            $validationCase = new ValidationCase($given, $when, $then);
+        }
+
+        $finding = (new FindingClassifier())->classify(
+            root: $root,
+            findingId: $findingId,
+            classification: $classification,
+            patternKey: $patternKey,
+            validationCase: $validationCase,
+            taskIdPattern: $this->stringOption($parsed['options'], 'task-id-pattern'),
+        );
+
+        $this->write(json_encode(
+            ['id' => $finding->id, 'classification' => $finding->classification?->value],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+        ) . "\n");
+
+        return 0;
+    }
+
+    /**
      * Allocate a fresh finding ID.
      *
      * Findings never had an allocator: every writer read the directory it could
@@ -902,6 +980,7 @@ final class Cli
             . "  history-status       Fail when compact history projections are missing, corrupt, or stale.\n"
             . "  backlog              List validated findings not yet consolidated; exits non-zero while any remain.\n"
             . "  finding-create       Create one validated Finding through the owner schema.\n"
+            . "  finding-classify     Classify a captured Finding for reusable-learning promotion.\n"
             . "  finding-id           Allocate a collision-resistant finding ID.\n"
             . "  finding-transition   Transition a finding to a new state.\n"
             . "  proposal-approve     Approve a candidate proposal.\n"
@@ -925,6 +1004,10 @@ final class Cli
             . "  --confidence LEVEL       low, medium, or high for finding-create.\n"
             . "  --sensitivity VALUE      Explicit sensitivity for finding-create.\n"
             . "  --evidence-json JSON     Evidence object for finding-create. Repeatable.\n"
+            . "  --pattern-key KEY        Reusable pattern identity for finding-classify.\n"
+            . "  --given TEXT             Validation precondition for finding-classify.\n"
+            . "  --when TEXT              Validation action for finding-classify.\n"
+            . "  --then TEXT              Validation expectation for finding-classify.\n"
             . "  --guidance PATH          Path to an active guidance file. Repeatable.\n"
             . "  --since YYYY-MM-DD       Include findings created on or after this date.\n"
             . "  --until YYYY-MM-DD       Include findings created on or before this date.\n"
