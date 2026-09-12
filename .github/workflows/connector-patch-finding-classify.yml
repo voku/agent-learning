@@ -1,0 +1,149 @@
+name: Connector patch finding-classify
+
+on:
+  push:
+    branches:
+      - chatgpt/92-finding-classify
+    paths:
+      - .github/workflows/connector-patch-finding-classify.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: chatgpt/92-finding-classify
+          fetch-depth: 0
+
+      - name: Wire finding-classify into the canonical CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('src/Cli.php')
+          source = path.read_text()
+
+          replacements = []
+
+          replacements.append((
+              "                'finding-create' => $this->findingCreateCommand($tokens),\n                'finding-id' => $this->findingIdCommand($tokens),",
+              "                'finding-create' => $this->findingCreateCommand($tokens),\n                'finding-classify' => $this->findingClassifyCommand($tokens),\n                'finding-id' => $this->findingIdCommand($tokens),",
+          ))
+
+          method = r'''    /**
+           * Apply explicit reusable-learning triage after raw Finding capture.
+           *
+           * @param list<string> $tokens
+           */
+          private function findingClassifyCommand(array $tokens): int
+          {
+              $parsed = $this->parseOptions($tokens);
+              $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+              $findingId = $parsed['arguments'][0] ?? null;
+              $classificationValue = $parsed['arguments'][1] ?? null;
+
+              if ($findingId === null || trim($findingId) === '') {
+                  throw new ValidationException($root, null, null, 'finding-classify requires finding ID argument');
+              }
+              if ($classificationValue === null || trim($classificationValue) === '') {
+                  throw new ValidationException($root, null, $findingId, 'finding-classify requires learning classification argument');
+              }
+              if (count($parsed['arguments']) > 2) {
+                  throw new ValidationException($root, null, $findingId, 'finding-classify takes finding ID and learning classification arguments only');
+              }
+
+              $classification = LearningClassification::tryFrom($classificationValue);
+              if (!$classification instanceof LearningClassification) {
+                  throw new ValidationException($root, null, $findingId, 'unsupported learning classification: ' . $classificationValue);
+              }
+
+              $patternKey = null;
+              $validationCase = null;
+              if ($classification !== LearningClassification::IGNORE) {
+                  $patternKey = $this->stringOption($parsed['options'], 'pattern-key');
+                  $given = $this->stringOption($parsed['options'], 'given');
+                  $when = $this->stringOption($parsed['options'], 'when');
+                  $then = $this->stringOption($parsed['options'], 'then');
+                  $missingOptions = [];
+                  foreach ([
+                      '--pattern-key' => $patternKey,
+                      '--given' => $given,
+                      '--when' => $when,
+                      '--then' => $then,
+                  ] as $label => $value) {
+                      if ($value === null) {
+                          $missingOptions[] = $label;
+                      }
+                  }
+                  if ($missingOptions !== []) {
+                      throw new ValidationException(
+                          $root,
+                          null,
+                          $findingId,
+                          'finding-classify missing required options: ' . implode(', ', $missingOptions),
+                      );
+                  }
+                  if ($patternKey === null || $given === null || $when === null || $then === null) {
+                      throw new ValidationException($root, null, $findingId, 'finding-classify promotion metadata is incomplete');
+                  }
+
+                  $validationCase = new ValidationCase($given, $when, $then);
+              }
+
+              $finding = (new FindingClassifier())->classify(
+                  root: $root,
+                  findingId: $findingId,
+                  classification: $classification,
+                  patternKey: $patternKey,
+                  validationCase: $validationCase,
+                  taskIdPattern: $this->stringOption($parsed['options'], 'task-id-pattern'),
+              );
+
+              $this->write(json_encode(
+                  ['id' => $finding->id, 'classification' => $finding->classification?->value],
+                  JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+              ) . "\n");
+
+              return 0;
+          }
+
+          '''
+          replacements.append((
+              "    /**\n     * Allocate a fresh finding ID.",
+              method + "    /**\n     * Allocate a fresh finding ID.",
+          ))
+
+          replacements.append((
+              '            . "  finding-create       Create one validated Finding through the owner schema.\\n"\n            . "  finding-id           Allocate a collision-resistant finding ID.\\n"',
+              '            . "  finding-create       Create one validated Finding through the owner schema.\\n"\n            . "  finding-classify     Classify a captured Finding for reusable-learning promotion.\\n"\n            . "  finding-id           Allocate a collision-resistant finding ID.\\n"',
+          ))
+
+          replacements.append((
+              '            . "  --evidence-json JSON     Evidence object for finding-create. Repeatable.\\n"\n            . "  --guidance PATH          Path to an active guidance file. Repeatable.\\n"',
+              '            . "  --evidence-json JSON     Evidence object for finding-create. Repeatable.\\n"\n            . "  --pattern-key KEY        Reusable pattern identity for finding-classify.\\n"\n            . "  --given TEXT             Validation precondition for finding-classify.\\n"\n            . "  --when TEXT              Validation action for finding-classify.\\n"\n            . "  --then TEXT              Validation expectation for finding-classify.\\n"\n            . "  --guidance PATH          Path to an active guidance file. Repeatable.\\n"',
+          ))
+
+          for old, new in replacements:
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one replacement target, got {count}: {old[:80]!r}')
+              source = source.replace(old, new, 1)
+
+          path.write_text(source)
+          PY
+
+          rm .github/workflows/connector-patch-finding-classify.yml
+          git diff --check
+          git diff -- src/Cli.php
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/Cli.php .github/workflows/connector-patch-finding-classify.yml
+          git commit -m 'feat(cli): expose finding classification path'
+          git push origin HEAD:chatgpt/92-finding-classify
