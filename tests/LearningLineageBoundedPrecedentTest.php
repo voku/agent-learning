@@ -89,15 +89,91 @@ final class LearningLineageBoundedPrecedentTest extends TestCase
         self::assertFalse($complete->precedentsTruncated);
     }
 
-    /** @param list<LearningNoteRepositoryEvidence> $repositoryEvidence */
-    private function note(string $id, string $patternKey, array $repositoryEvidence = []): LearningNote
+    public function testTaskContextFiltersTopUpBeforeApplyingTheBound(): void
     {
+        $repository = new LearningNoteRepository();
+        $repository->publish(
+            $this->root,
+            $this->note(
+                'learning-note.2026-09-09.aaaaaa',
+                'scope.irrelevant',
+                scope: ['docs/'],
+                tags: ['other'],
+            ),
+        );
+        $repository->publish(
+            $this->root,
+            $this->note(
+                'learning-note.2026-09-09.bbbbbb',
+                'scope.file_match',
+                scope: ['src/Target.php'],
+                tags: ['other'],
+            ),
+        );
+        $repository->publish(
+            $this->root,
+            $this->note(
+                'learning-note.2026-09-09.cccccc',
+                'scope.tag_match',
+                scope: ['docs/'],
+                tags: ['target'],
+            ),
+        );
+
+        $service = new LearningLineageService();
+        $service->rebuild($this->root, $this->root);
+
+        $limited = $service->precedentsForTask(
+            $this->root,
+            'NO-LINEAGE-87',
+            projectRoot: $this->root,
+            maximumRelatedIdentities: 1,
+            taskFiles: ['src/Target.php'],
+            taskTags: ['TARGET'],
+        );
+
+        self::assertSame(
+            ['learning-note.2026-09-09.bbbbbb'],
+            array_map(static fn (LearningNoteProjection $precedent): string => $precedent->id, $limited->precedents),
+        );
+        self::assertTrue($limited->precedentsTruncated);
+
+        $complete = $service->precedentsForTask(
+            $this->root,
+            'NO-LINEAGE-87',
+            projectRoot: $this->root,
+            maximumRelatedIdentities: 2,
+            taskFiles: ['src/Target.php'],
+            taskTags: ['target'],
+        );
+        self::assertSame(
+            [
+                'learning-note.2026-09-09.bbbbbb',
+                'learning-note.2026-09-09.cccccc',
+            ],
+            array_map(static fn (LearningNoteProjection $precedent): string => $precedent->id, $complete->precedents),
+        );
+        self::assertFalse($complete->precedentsTruncated);
+    }
+
+    /**
+     * @param list<LearningNoteRepositoryEvidence> $repositoryEvidence
+     * @param list<string> $scope
+     * @param list<string> $tags
+     */
+    private function note(
+        string $id,
+        string $patternKey,
+        array $repositoryEvidence = [],
+        array $scope = ['src/'],
+        array $tags = ['scale'],
+    ): LearningNote {
         return new LearningNote(
             id: $id,
             patternKey: $patternKey,
             status: LearningNoteStatus::ACTIVE,
-            scope: ['src/'],
-            tags: ['scale'],
+            scope: $scope,
+            tags: $tags,
             sourceFindings: ['finding.2026-06-08.001'],
             sourceProposals: [],
             validationCase: new ValidationCase('Given.', 'When.', 'Then.'),

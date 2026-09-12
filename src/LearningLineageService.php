@@ -95,11 +95,17 @@ final readonly class LearningLineageService
         );
     }
 
+    /**
+     * @param list<string> $taskFiles
+     * @param list<string> $taskTags
+     */
     public function precedentsForTask(
         string $root,
         string $taskId,
         ?string $projectRoot = null,
         int $maximumRelatedIdentities = 100,
+        array $taskFiles = [],
+        array $taskTags = [],
     ): LearningTaskPrecedentResult {
         $taskId = trim($taskId);
         if ($taskId === '') {
@@ -170,11 +176,23 @@ final readonly class LearningLineageService
             true,
         );
         $remainingCapacity = $maximumRelatedIdentities - count($precedents);
+        $taskFiles = $this->canonicalPaths($taskFiles);
+        $taskTags = $this->canonicalTags($taskTags);
+        $hasTaskContext = $taskFiles !== [] || $taskTags !== [];
         $topUpIds = [];
         $precedentsTruncated = false;
         foreach ($this->activeNoteIds($root) as $activeNoteId) {
             if (isset($existingIds[$activeNoteId])) {
                 continue;
+            }
+            if ($hasTaskContext) {
+                $activeNote = $this->noteRepository->findActive($root, $activeNoteId);
+                if (!$activeNote instanceof LearningNote) {
+                    throw new RuntimeException('Current Learning precedent query references unavailable active LearningNote: ' . $activeNoteId);
+                }
+                if (!$this->matchesTaskContext($activeNote, $taskFiles, $taskTags)) {
+                    continue;
+                }
             }
             if (count($topUpIds) >= $remainingCapacity) {
                 $precedentsTruncated = true;
@@ -240,6 +258,73 @@ final readonly class LearningLineageService
             digest: $note->digest(),
             evidenceState: $this->noteService->evidenceState($note, $projectRoot),
         );
+    }
+
+    /**
+     * @param list<string> $taskFiles
+     * @param list<string> $taskTags
+     */
+    private function matchesTaskContext(LearningNote $note, array $taskFiles, array $taskTags): bool
+    {
+        $scope = $this->canonicalPaths($note->scope);
+        if ($scope === [] || in_array('*', $scope, true) || in_array('/', $scope, true)) {
+            return true;
+        }
+
+        foreach ($taskFiles as $taskFile) {
+            foreach ($scope as $candidate) {
+                $prefix = rtrim($candidate, '/');
+                if ($prefix === '') {
+                    continue;
+                }
+                if ($taskFile === $prefix || str_starts_with($taskFile, $prefix . '/')) {
+                    return true;
+                }
+            }
+        }
+
+        return array_intersect($this->canonicalTags($note->tags), $taskTags) !== [];
+    }
+
+    /**
+     * @param list<string> $paths
+     * @return list<string>
+     */
+    private function canonicalPaths(array $paths): array
+    {
+        $result = [];
+        foreach ($paths as $path) {
+            $path = str_replace('\\', '/', trim($path));
+            if ($path !== '/' && $path !== '*') {
+                $path = ltrim(preg_replace('~/+~', '/', $path) ?? $path, './');
+            }
+            if ($path !== '') {
+                $result[] = $path;
+            }
+        }
+        $result = array_values(array_unique($result));
+        sort($result, SORT_STRING);
+
+        return $result;
+    }
+
+    /**
+     * @param list<string> $tags
+     * @return list<string>
+     */
+    private function canonicalTags(array $tags): array
+    {
+        $result = [];
+        foreach ($tags as $tag) {
+            $tag = strtolower(trim($tag));
+            if ($tag !== '') {
+                $result[] = $tag;
+            }
+        }
+        $result = array_values(array_unique($result));
+        sort($result, SORT_STRING);
+
+        return $result;
     }
 
     /** @return list<string> */
