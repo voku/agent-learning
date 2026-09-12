@@ -663,81 +663,81 @@ final class Cli
     }
 
     /**
- * Apply explicit reusable-learning triage after raw Finding capture.
- *
- * @param list<string> $tokens
- */
-private function findingClassifyCommand(array $tokens): int
-{
-    $parsed = $this->parseOptions($tokens);
-    $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
-    $findingId = $parsed['arguments'][0] ?? null;
-    $classificationValue = $parsed['arguments'][1] ?? null;
+     * Apply explicit reusable-learning triage after raw Finding capture.
+     *
+     * @param list<string> $tokens
+     */
+    private function findingClassifyCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $findingId = $parsed['arguments'][0] ?? null;
+        $classificationValue = $parsed['arguments'][1] ?? null;
 
-    if ($findingId === null || trim($findingId) === '') {
-        throw new ValidationException($root, null, null, 'finding-classify requires finding ID argument');
-    }
-    if ($classificationValue === null || trim($classificationValue) === '') {
-        throw new ValidationException($root, null, $findingId, 'finding-classify requires learning classification argument');
-    }
-    if (count($parsed['arguments']) > 2) {
-        throw new ValidationException($root, null, $findingId, 'finding-classify takes finding ID and learning classification arguments only');
-    }
+        if ($findingId === null || trim($findingId) === '') {
+            throw new ValidationException($root, null, null, 'finding-classify requires finding ID argument');
+        }
+        if ($classificationValue === null || trim($classificationValue) === '') {
+            throw new ValidationException($root, null, $findingId, 'finding-classify requires learning classification argument');
+        }
+        if (count($parsed['arguments']) > 2) {
+            throw new ValidationException($root, null, $findingId, 'finding-classify takes finding ID and learning classification arguments only');
+        }
 
-    $classification = LearningClassification::tryFrom($classificationValue);
-    if (!$classification instanceof LearningClassification) {
-        throw new ValidationException($root, null, $findingId, 'unsupported learning classification: ' . $classificationValue);
-    }
+        $classification = LearningClassification::tryFrom($classificationValue);
+        if (!$classification instanceof LearningClassification) {
+            throw new ValidationException($root, null, $findingId, 'unsupported learning classification: ' . $classificationValue);
+        }
 
-    $patternKey = null;
-    $validationCase = null;
-    if ($classification !== LearningClassification::IGNORE) {
-        $patternKey = $this->stringOption($parsed['options'], 'pattern-key');
-        $given = $this->stringOption($parsed['options'], 'given');
-        $when = $this->stringOption($parsed['options'], 'when');
-        $then = $this->stringOption($parsed['options'], 'then');
-        $missingOptions = [];
-        foreach ([
-            '--pattern-key' => $patternKey,
-            '--given' => $given,
-            '--when' => $when,
-            '--then' => $then,
-        ] as $label => $value) {
-            if ($value === null) {
-                $missingOptions[] = $label;
+        $patternKey = null;
+        $validationCase = null;
+        if ($classification !== LearningClassification::IGNORE) {
+            $patternKey = $this->stringOption($parsed['options'], 'pattern-key');
+            $given = $this->stringOption($parsed['options'], 'given');
+            $when = $this->stringOption($parsed['options'], 'when');
+            $then = $this->stringOption($parsed['options'], 'then');
+            $missingOptions = [];
+            foreach ([
+                '--pattern-key' => $patternKey,
+                '--given' => $given,
+                '--when' => $when,
+                '--then' => $then,
+            ] as $label => $value) {
+                if ($value === null) {
+                    $missingOptions[] = $label;
+                }
             }
-        }
-        if ($missingOptions !== []) {
-            throw new ValidationException(
-                $root,
-                null,
-                $findingId,
-                'finding-classify missing required options: ' . implode(', ', $missingOptions),
-            );
-        }
-        if ($patternKey === null || $given === null || $when === null || $then === null) {
-            throw new ValidationException($root, null, $findingId, 'finding-classify promotion metadata is incomplete');
+            if ($missingOptions !== []) {
+                throw new ValidationException(
+                    $root,
+                    null,
+                    $findingId,
+                    'finding-classify missing required options: ' . implode(', ', $missingOptions),
+                );
+            }
+            if ($patternKey === null || $given === null || $when === null || $then === null) {
+                throw new ValidationException($root, null, $findingId, 'finding-classify promotion metadata is incomplete');
+            }
+
+            $validationCase = new ValidationCase($given, $when, $then);
         }
 
-        $validationCase = new ValidationCase($given, $when, $then);
+        $finding = (new FindingClassifier())->classify(
+            root: $root,
+            findingId: $findingId,
+            classification: $classification,
+            patternKey: $patternKey,
+            validationCase: $validationCase,
+            taskIdPattern: $this->stringOption($parsed['options'], 'task-id-pattern'),
+        );
+
+        $this->write(json_encode(
+            ['id' => $finding->id, 'classification' => $finding->classification?->value],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+        ) . "\n");
+
+        return 0;
     }
-
-    $finding = (new FindingClassifier())->classify(
-        root: $root,
-        findingId: $findingId,
-        classification: $classification,
-        patternKey: $patternKey,
-        validationCase: $validationCase,
-        taskIdPattern: $this->stringOption($parsed['options'], 'task-id-pattern'),
-    );
-
-    $this->write(json_encode(
-        ['id' => $finding->id, 'classification' => $finding->classification?->value],
-        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
-    ) . "\n");
-
-    return 0;
-}
 
     /**
      * Allocate a fresh finding ID.
