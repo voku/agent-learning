@@ -1,0 +1,34 @@
+name: Connector release prep 0.18.7
+
+on:
+  push:
+    branches:
+      - release/0.18.7
+    paths:
+      - .github/workflows/connector-release-0187.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: release/0.18.7
+          fetch-depth: 0
+      - name: Apply changelog patch
+        run: python .github/scripts/connector-release-0187.py
+      - name: Commit release prep
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/connector-release-0187.yml
+          rm .github/scripts/connector-release-0187.py
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add CHANGELOG.md .github/workflows/connector-release-0187.yml .github/scripts/connector-release-0187.py
+          git commit -m 'chore(release): prepare 0.18.7'
+          git push origin HEAD:release/0.18.7
