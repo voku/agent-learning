@@ -252,7 +252,7 @@ final class LineageRebuildBenchmark
                 'active_note_count' => $scaleRecords,
                 'durable_documents' => $scaleRecords * 2,
                 'relation_count' => $relationCount,
-                'relation_digest' => $relationDigest ?? throw new RuntimeException('Missing relation digest.'),
+                'relation_digest' => $relationDigest,
                 'graph_size_bytes' => $graphSizeBytes,
                 'public_rebuild_anchor_ms' => $publicRebuildAnchorMs,
                 'public_rebuild_peak_memory_bytes' => $publicRebuildPeakMemoryBytes,
@@ -533,7 +533,7 @@ final class LineageRebuildBenchmark
         $lines[] = '|---:|---:|---:|---:|---:|---:|---:|';
 
         foreach ($results as $result) {
-            if (!is_array($result) || !is_array($result['summary'] ?? null)) {
+            if (!is_array($result['summary'] ?? null)) {
                 continue;
             }
             $phaseStats = $result['summary']['phases_ms'] ?? null;
