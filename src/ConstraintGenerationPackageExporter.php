@@ -125,6 +125,14 @@ final class ConstraintGenerationPackageExporter
         $constraint = $proposal->constraint;
         \assert($constraint instanceof ConstraintSpecification);
 
+        $engineInspectionPrecedent = match ($constraint->engine) {
+            ConstraintEngine::PHP_CS_FIXER => 'PHP-CS-Fixer token stream traversal, candidate detection (isCandidate), and safe token mutation',
+            ConstraintEngine::PHPCS => 'PHPCS token listener registration (register) and stack pointer navigation (process)',
+            ConstraintEngine::CI => 'CI validation logic, exit code semantics, and deterministic failure reporting',
+            ConstraintEngine::TEST => 'Test assertion structure, scenario setup, and fixture isolation',
+            default => 'PHPStan node selection (getNodeType), AST traversal, and type resolving',
+        };
+
         return sprintf(
             "# Constraint Generation Prompt\n\n"
             . "Generate a repository-local %s rule for `%s`.\n\n"
@@ -134,7 +142,19 @@ final class ConstraintGenerationPackageExporter
             . "Scope:\n%s\n\n"
             . "Allowed boundaries:\n%s\n\n"
             . "Validation commands:\n%s\n\n"
-            . "The candidate must include valid, invalid, boundary, and false-positive fixtures. Do not activate the rule without human approval.\n",
+            . "The candidate must include valid, invalid, boundary, and false-positive fixtures. Do not activate the rule without human approval.\n\n"
+            . "## Existing examples and precedent\n\n"
+            . "Before implementing the rule, inspect `examples.json`.\n\n"
+            . "Use the examples as structural precedent for:\n"
+            . "- %s\n"
+            . "- Rule/fixer interface, generics, and return types\n"
+            . "- Rule error identifiers, error builder usage, and clear violation messaging\n"
+            . "- Scope handling, AST inspection, and type resolving\n"
+            . "- False-positive avoidance and allowed boundary checks\n"
+            . "- Configuration and registration files\n"
+            . "- Fixture and test structure (valid, invalid, boundary, and false-positive)\n\n"
+            . "Reuse established repository patterns where applicable.\n\n"
+            . "Do not blindly copy behavior from an example: the approved ConstraintSpecification remains authoritative. Examples demonstrate implementation patterns, not requirements. Ensure fixtures prove that divergence from examples is intentional and properly tested.\n",
             $constraint->engine->value,
             $constraint->ruleId,
             $constraint->ruleClassName,
@@ -143,6 +163,7 @@ final class ConstraintGenerationPackageExporter
             $this->bulletList($constraint->scope),
             $this->bulletList($constraint->allowedBoundaries),
             $this->bulletList($constraint->validationCommands),
+            $engineInspectionPrecedent,
         );
     }
 

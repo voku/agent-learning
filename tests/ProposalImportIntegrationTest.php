@@ -70,7 +70,7 @@ final class ProposalImportIntegrationTest extends TestCase
                 'rule_id' => 'project.translation.parameters',
                 'engine' => 'phpstan',
                 'rule_class_name' => 'ProjectTranslationParametersRule',
-                'target_rule_path' => 'infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php',
+                'target_rule_path' => 'infra/githooks/StandardProject/PHPStan/ProjectTranslationParametersRule.php',
                 'registration_files' => ['infra/githooks/phpstan_bootstrap.php'],
                 'scope' => ['src/'],
                 'violation' => 'Translation placeholders and supplied parameter keys differ.',
@@ -78,7 +78,7 @@ final class ProposalImportIntegrationTest extends TestCase
                 'detectability' => 'static',
                 'false_positive_risk' => 'low',
                 'validation_commands' => ['vendor/bin/phpstan analyse'],
-                'example_rule_paths' => ['infra/githooks/StandardITPortal/PHPStan/ItPortalTranslationParametersRule.php'],
+                'example_rule_paths' => ['infra/githooks/StandardProject/PHPStan/AppTranslationParametersRule.php'],
             ],
         ];
 
@@ -107,7 +107,7 @@ final class ProposalImportIntegrationTest extends TestCase
                 'rule_id' => 'project.translation.parameters',
                 'engine' => 'phpstan',
                 'rule_class_name' => 'ProjectTranslationParametersRule',
-                'target_rule_path' => 'infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php',
+                'target_rule_path' => 'infra/githooks/StandardProject/PHPStan/ProjectTranslationParametersRule.php',
                 'registration_files' => ['infra/githooks/phpstan_bootstrap.php'],
                 'scope' => ['src/'],
                 'violation' => 'Translation placeholders and supplied parameter keys differ.',
@@ -115,7 +115,7 @@ final class ProposalImportIntegrationTest extends TestCase
                 'detectability' => 'static',
                 'false_positive_risk' => 'high',
                 'validation_commands' => ['vendor/bin/phpstan analyse'],
-                'example_rule_paths' => ['infra/githooks/StandardITPortal/PHPStan/ItPortalTranslationParametersRule.php'],
+                'example_rule_paths' => ['infra/githooks/StandardProject/PHPStan/AppTranslationParametersRule.php'],
             ],
         ];
 

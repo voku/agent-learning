@@ -34,7 +34,7 @@ final class ConstraintProposalValidationTest extends TestCase
         self::assertSame('project.translation.parameters', $proposal->constraint->ruleId);
         self::assertSame(ConstraintEngine::PHPSTAN, $proposal->constraint->engine);
         self::assertSame('ProjectTranslationParametersRule', $proposal->constraint->ruleClassName);
-        self::assertSame('infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php', $proposal->constraint->targetRulePath);
+        self::assertSame('infra/githooks/StandardProject/PHPStan/ProjectTranslationParametersRule.php', $proposal->constraint->targetRulePath);
         self::assertSame(['infra/githooks/phpstan_bootstrap.php'], $proposal->constraint->registrationFiles);
         self::assertSame(Detectability::STATIC, $proposal->constraint->detectability);
         self::assertSame(FalsePositiveRisk::LOW, $proposal->constraint->falsePositiveRisk);
@@ -50,7 +50,7 @@ final class ConstraintProposalValidationTest extends TestCase
                 'rule_id' => 'project.no.redirect.in.unit.cest',
                 'engine' => 'phpcs',
                 'rule_class_name' => 'NoRedirectInUnitCestSniff',
-                'target_rule_path' => 'infra/githooks/StandardITPortal/Sniffs/NoRedirectInUnitCestSniff.php',
+                'target_rule_path' => 'infra/githooks/StandardProject/Sniffs/NoRedirectInUnitCestSniff.php',
                 'registration_files' => ['infra/githooks/phpcs.xml'],
                 'scope' => ['src/'],
                 'violation' => 'A unit test calls a process-terminating redirect.',
@@ -58,7 +58,7 @@ final class ConstraintProposalValidationTest extends TestCase
                 'detectability' => 'static',
                 'false_positive_risk' => 'low',
                 'validation_commands' => ['make php_codesniffer'],
-                'example_rule_paths' => ['infra/githooks/StandardITPortal/Sniffs/ForbiddenPrintRSniff.php'],
+                'example_rule_paths' => ['infra/githooks/StandardProject/Sniffs/ForbiddenPrintRSniff.php'],
             ],
         ]);
 
@@ -72,6 +72,38 @@ final class ConstraintProposalValidationTest extends TestCase
 
         self::assertNotNull($proposal->constraint);
         self::assertSame(ConstraintEngine::PHPCS, $proposal->constraint->engine);
+    }
+
+    public function testAcceptsPhpCsFixerConstraintProposalWithFixerPathAndCommand(): void
+    {
+        $record = $this->proposalRecord([
+            'constraint' => [
+                'rule_id' => 'project.no.leading.slash.in.global.namespace',
+                'engine' => 'php_cs_fixer',
+                'rule_class_name' => 'NoLeadingSlashInGlobalNamespaceFixer',
+                'target_rule_path' => 'infra/githooks/StandardProject/fixer/NoLeadingSlashInGlobalNamespaceFixer.php',
+                'registration_files' => ['.php-cs-fixer.dist.php'],
+                'scope' => ['src/'],
+                'violation' => 'Classes in the global namespace contain leading slashes.',
+                'allowed_boundaries' => [],
+                'detectability' => 'static',
+                'false_positive_risk' => 'low',
+                'validation_commands' => ['vendor/bin/php-cs-fixer fix --dry-run'],
+                'example_rule_paths' => ['infra/githooks/StandardProject/fixer/ForbiddenNativeStringFunctionFixer.php'],
+            ],
+        ]);
+
+        $proposal = (new ProposalValidator())->validateFile(
+            $this->writeProposal($record),
+            [
+                'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
+                'finding.2026-06-13.002' => $this->finding('finding.2026-06-13.002'),
+            ],
+        );
+
+        self::assertNotNull($proposal->constraint);
+        self::assertSame(ConstraintEngine::PHP_CS_FIXER, $proposal->constraint->engine);
+        self::assertSame('NoLeadingSlashInGlobalNamespaceFixer', $proposal->constraint->ruleClassName);
     }
 
     /**
@@ -137,7 +169,7 @@ final class ConstraintProposalValidationTest extends TestCase
                 'rule_id' => 'project.no.redirect.in.unit.cest',
                 'engine' => 'phpcs',
                 'rule_class_name' => 'NoRedirectInUnitCestSniff',
-                'target_rule_path' => 'infra/githooks/StandardITPortal/PHPStan/NoRedirectInUnitCestRule.php',
+                'target_rule_path' => 'infra/githooks/StandardProject/PHPStan/NoRedirectInUnitCestRule.php',
                 'registration_files' => ['infra/githooks/phpcs.xml'],
                 'scope' => ['src/'],
                 'violation' => 'A unit test calls a process-terminating redirect.',
@@ -145,12 +177,72 @@ final class ConstraintProposalValidationTest extends TestCase
                 'detectability' => 'static',
                 'false_positive_risk' => 'low',
                 'validation_commands' => ['make php_codesniffer'],
-                'example_rule_paths' => ['infra/githooks/StandardITPortal/Sniffs/ForbiddenPrintRSniff.php'],
+                'example_rule_paths' => ['infra/githooks/StandardProject/Sniffs/ForbiddenPrintRSniff.php'],
             ],
         ]);
 
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('phpcs constraint target rule path must point to a Sniffs location');
+        (new ProposalValidator())->validateFile(
+            $this->writeProposal($record),
+            [
+                'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
+                'finding.2026-06-13.002' => $this->finding('finding.2026-06-13.002'),
+            ],
+        );
+    }
+
+    public function testRejectsPhpCsFixerConstraintProposalWithNonFixerTargetPath(): void
+    {
+        $record = $this->proposalRecord([
+            'constraint' => [
+                'rule_id' => 'project.no.leading.slash.in.global.namespace',
+                'engine' => 'php_cs_fixer',
+                'rule_class_name' => 'NoLeadingSlashInGlobalNamespaceFixer',
+                'target_rule_path' => 'infra/githooks/StandardProject/rules/NoLeadingSlashInGlobalNamespaceFixer.php',
+                'registration_files' => ['.php-cs-fixer.dist.php'],
+                'scope' => ['src/'],
+                'violation' => 'Classes in the global namespace contain leading slashes.',
+                'allowed_boundaries' => [],
+                'detectability' => 'static',
+                'false_positive_risk' => 'low',
+                'validation_commands' => ['vendor/bin/php-cs-fixer fix --dry-run'],
+                'example_rule_paths' => ['infra/githooks/StandardProject/fixer/ForbiddenNativeStringFunctionFixer.php'],
+            ],
+        ]);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('php_cs_fixer constraint target rule path must point to a fixer location');
+        (new ProposalValidator())->validateFile(
+            $this->writeProposal($record),
+            [
+                'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
+                'finding.2026-06-13.002' => $this->finding('finding.2026-06-13.002'),
+            ],
+        );
+    }
+
+    public function testRejectsPhpCsFixerConstraintProposalWithoutPhpCsFixerValidationCommand(): void
+    {
+        $record = $this->proposalRecord([
+            'constraint' => [
+                'rule_id' => 'project.no.leading.slash.in.global.namespace',
+                'engine' => 'php_cs_fixer',
+                'rule_class_name' => 'NoLeadingSlashInGlobalNamespaceFixer',
+                'target_rule_path' => 'infra/githooks/StandardProject/fixer/NoLeadingSlashInGlobalNamespaceFixer.php',
+                'registration_files' => ['.php-cs-fixer.dist.php'],
+                'scope' => ['src/'],
+                'violation' => 'Classes in the global namespace contain leading slashes.',
+                'allowed_boundaries' => [],
+                'detectability' => 'static',
+                'false_positive_risk' => 'low',
+                'validation_commands' => ['vendor/bin/phpunit'],
+                'example_rule_paths' => ['infra/githooks/StandardProject/fixer/ForbiddenNativeStringFunctionFixer.php'],
+            ],
+        ]);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('php_cs_fixer constraint requires a php-cs-fixer validation command');
         (new ProposalValidator())->validateFile(
             $this->writeProposal($record),
             [
@@ -264,10 +356,10 @@ final class ConstraintProposalValidationTest extends TestCase
         $output = $root . '/constraint-generation/proposal.2026-06-13.001';
         mkdir($root . '/findings/validated', 0777, true);
         mkdir($root . '/proposals/candidate', 0777, true);
-        mkdir($root . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
+        mkdir($root . '/infra/githooks/StandardProject/PHPStan', 0777, true);
         file_put_contents(
-            $root . '/infra/githooks/StandardITPortal/PHPStan/ItPortalTranslationParametersRule.php',
-            "<?php\nfinal class ItPortalTranslationParametersRule {}\n",
+            $root . '/infra/githooks/StandardProject/PHPStan/AppTranslationParametersRule.php',
+            "<?php\nfinal class AppTranslationParametersRule {}\n",
         );
 
         $findings = [
@@ -290,7 +382,13 @@ final class ConstraintProposalValidationTest extends TestCase
             $spec = json_decode((string) file_get_contents($output . '/specification.json'), true);
             self::assertSame('project.translation.parameters', $spec['constraint']['rule_id']);
             $examples = json_decode((string) file_get_contents($output . '/examples.json'), true);
-            self::assertStringContainsString('ItPortalTranslationParametersRule', $examples['examples'][0]['content']);
+            self::assertStringContainsString('AppTranslationParametersRule', $examples['examples'][0]['content']);
+
+            $prompt = (string) file_get_contents($output . '/generation-prompt.md');
+            self::assertStringContainsString('## Existing examples and precedent', $prompt);
+            self::assertStringContainsString('Before implementing the rule, inspect `examples.json`.', $prompt);
+            self::assertStringContainsString('the approved ConstraintSpecification remains authoritative', $prompt);
+            self::assertStringContainsString('PHPStan node selection (getNodeType)', $prompt);
         } finally {
             $this->removeDirectory($root);
         }
@@ -301,8 +399,8 @@ final class ConstraintProposalValidationTest extends TestCase
         $project = sys_get_temp_dir() . '/constraint_manifest_activate_' . bin2hex(random_bytes(8));
         $root = $project . '/.agent-loop/learning';
         mkdir($root . '/proposals/approved', 0777, true);
-        mkdir($project . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
-        file_put_contents($project . '/infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
+        mkdir($project . '/infra/githooks/StandardProject/PHPStan', 0777, true);
+        file_put_contents($project . '/infra/githooks/StandardProject/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
         file_put_contents($project . '/infra/githooks/phpstan_bootstrap.php', "<?php\n");
 
         $findings = [
@@ -343,8 +441,8 @@ final class ConstraintProposalValidationTest extends TestCase
         $root = $project . '/.agent-loop/learning';
         mkdir($root . '/proposals/approved', 0777, true);
         mkdir($root . '/findings/validated', 0777, true);
-        mkdir($project . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
-        file_put_contents($project . '/infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
+        mkdir($project . '/infra/githooks/StandardProject/PHPStan', 0777, true);
+        file_put_contents($project . '/infra/githooks/StandardProject/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
         file_put_contents($project . '/infra/githooks/phpstan_bootstrap.php', "<?php\n");
 
         foreach (['finding.2026-06-13.001', 'finding.2026-06-13.002'] as $findingId) {
@@ -389,8 +487,8 @@ final class ConstraintProposalValidationTest extends TestCase
         $project = sys_get_temp_dir() . '/constraint_manifest_candidate_' . bin2hex(random_bytes(8));
         $root = $project . '/.agent-loop/learning';
         mkdir($root . '/proposals/candidate', 0777, true);
-        mkdir($project . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
-        file_put_contents($project . '/infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
+        mkdir($project . '/infra/githooks/StandardProject/PHPStan', 0777, true);
+        file_put_contents($project . '/infra/githooks/StandardProject/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
         file_put_contents($project . '/infra/githooks/phpstan_bootstrap.php', "<?php\n");
 
         $proposalPath = $root . '/proposals/candidate/proposal.2026-06-13.001.json';
@@ -416,8 +514,8 @@ final class ConstraintProposalValidationTest extends TestCase
         mkdir($root . '/findings/validated', 0777, true);
         mkdir($root . '/proposals/candidate', 0777, true);
         mkdir($root . '/history', 0777, true);
-        mkdir($project . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
-        file_put_contents($project . '/infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
+        mkdir($project . '/infra/githooks/StandardProject/PHPStan', 0777, true);
+        file_put_contents($project . '/infra/githooks/StandardProject/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
         file_put_contents($project . '/infra/githooks/phpstan_bootstrap.php', "<?php\n");
         file_put_contents(
             $root . '/findings/validated/finding.2026-06-13.001.json',
@@ -468,11 +566,11 @@ final class ConstraintProposalValidationTest extends TestCase
         mkdir($root . '/findings/validated', 0777, true);
         mkdir($root . '/proposals/candidate', 0777, true);
         mkdir($root . '/history', 0777, true);
-        mkdir($project . '/infra/githooks/StandardITPortal/PHPStan', 0777, true);
-        file_put_contents($project . '/infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
+        mkdir($project . '/infra/githooks/StandardProject/PHPStan', 0777, true);
+        file_put_contents($project . '/infra/githooks/StandardProject/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
         file_put_contents(
-            $project . '/infra/githooks/StandardITPortal/PHPStan/ItPortalTranslationParametersRule.php',
-            "<?php\nfinal class ItPortalTranslationParametersRule {}\n",
+            $project . '/infra/githooks/StandardProject/PHPStan/AppTranslationParametersRule.php',
+            "<?php\nfinal class AppTranslationParametersRule {}\n",
         );
         file_put_contents($project . '/infra/githooks/phpstan_bootstrap.php', "<?php\n");
         file_put_contents($root . '/config.json', json_encode([
@@ -516,7 +614,7 @@ final class ConstraintProposalValidationTest extends TestCase
             self::assertFileExists($result->generationPackageDir . '/examples.json');
             self::assertFileExists($result->manifestPath);
             $examples = json_decode((string) file_get_contents($result->generationPackageDir . '/examples.json'), true);
-            self::assertStringContainsString('ItPortalTranslationParametersRule', $examples['examples'][0]['content']);
+            self::assertStringContainsString('AppTranslationParametersRule', $examples['examples'][0]['content']);
         } finally {
             $this->removeDirectory($workspace);
         }
@@ -577,7 +675,7 @@ final class ConstraintProposalValidationTest extends TestCase
             'rule_id' => 'project.translation.parameters',
             'engine' => 'phpstan',
             'rule_class_name' => 'ProjectTranslationParametersRule',
-            'target_rule_path' => 'infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php',
+            'target_rule_path' => 'infra/githooks/StandardProject/PHPStan/ProjectTranslationParametersRule.php',
             'registration_files' => ['infra/githooks/phpstan_bootstrap.php'],
             'scope' => ['src/'],
             'violation' => 'Translation placeholders and supplied parameter keys differ.',
@@ -585,7 +683,7 @@ final class ConstraintProposalValidationTest extends TestCase
             'detectability' => 'static',
             'false_positive_risk' => 'low',
             'validation_commands' => ['vendor/bin/phpstan analyse'],
-            'example_rule_paths' => ['infra/githooks/StandardITPortal/PHPStan/ItPortalTranslationParametersRule.php'],
+            'example_rule_paths' => ['infra/githooks/StandardProject/PHPStan/AppTranslationParametersRule.php'],
         ];
     }
 
@@ -647,13 +745,13 @@ final class ConstraintProposalValidationTest extends TestCase
     private function constraintValidationRecord(): array
     {
         return [
-            'generated_files' => ['infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php'],
+            'generated_files' => ['infra/githooks/StandardProject/PHPStan/ProjectTranslationParametersRule.php'],
             'registration_file' => 'infra/githooks/phpstan_bootstrap.php',
             'commit' => 'working-tree',
             'tests' => ['vendor/bin/phpstan analyse'],
             'validation_result' => ['phpstan' => 'passed'],
             'content_hashes' => [
-                'infra/githooks/StandardITPortal/PHPStan/ProjectTranslationParametersRule.php' => 'hash',
+                'infra/githooks/StandardProject/PHPStan/ProjectTranslationParametersRule.php' => 'hash',
             ],
         ];
     }

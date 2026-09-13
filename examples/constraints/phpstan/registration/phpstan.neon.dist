@@ -1,0 +1,42 @@
+# Example PHPStan configuration registering custom rules and services
+
+parameters:
+    level: max
+    paths:
+        - ../fixtures
+
+services:
+    -
+        class: App\PHPStan\Rules\AppTranslationParametersRule
+        tags:
+            - phpstan.rules.rule
+
+    -
+        class: App\PHPStan\Rules\NoHardcodedHostPathRule
+        tags:
+            - phpstan.rules.rule
+
+    -
+        class: App\PHPStan\Rules\SwitchMustContainDefaultRule
+        tags:
+            - phpstan.rules.rule
+
+    -
+        class: App\PHPStan\Rules\WrongCastRule
+        arguments:
+            classesForCheckStringToIntCast:
+                - App\Domain\Money\Amount
+        tags:
+            - phpstan.rules.rule
+
+    # Dynamic return type extensions for precision inference
+    -
+        class: App\PHPStan\Extensions\ArrayLastDynamicReturnTypeExtension
+        tags:
+            - phpstan.broker.dynamicFunctionReturnTypeExtension
+
+    # Type specifying extensions for conditional narrowing
+    -
+        class: App\PHPStan\Extensions\StrContainingTypeSpecifyingExtension
+        tags:
+            - phpstan.typeSpecifier.functionTypeSpecifyingExtension

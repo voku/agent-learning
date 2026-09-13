@@ -1,0 +1,13 @@
+{
+    "schema_version": "1.0",
+    "mode": "generate",
+    "commands": [
+        "vendor/bin/phpstan analyse"
+    ],
+    "expected_fixtures": [
+        "valid.php",
+        "invalid.php",
+        "boundary.php",
+        "false-positive.php"
+    ]
+}

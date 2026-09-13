@@ -1,0 +1,9 @@
+{
+    "schema_version": "1.0",
+    "examples": [
+        {
+            "path": "examples/constraints/phpstan/rules/AppTranslationParametersRule.php",
+            "content": "<?php\n\ndeclare(strict_types=1);\n\nnamespace App\\PHPStan\\Rules;\n\nuse PhpParser\\Node;\nuse PhpParser\\Node\\Expr\\StaticCall;\nuse PHPStan\\Analyser\\Scope;\nuse PHPStan\\Rules\\Rule;\nuse PHPStan\\Rules\\RuleError;\nuse PHPStan\\Rules\\RuleErrorBuilder;\n\nfinal class AppTranslationParametersRule implements Rule\n{\n    public function getNodeType(): string\n    {\n        return StaticCall::class;\n    }\n\n    public function processNode(Node $node, Scope $scope): array\n    {\n        // Reference structural pattern for static call argument validation\n        return [];\n    }\n}\n"
+        }
+    ]
+}

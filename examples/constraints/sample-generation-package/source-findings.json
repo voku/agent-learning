@@ -1,0 +1,53 @@
+{
+    "schema_version": "1.0",
+    "findings": [
+        {
+            "id": "finding.2026-06-13.001",
+            "task_id": "PROJECT-1234",
+            "session": "session_abc123",
+            "created_at": "2026-06-13T09:00:00+00:00",
+            "created_by": "agent",
+            "scope": [
+                "src/"
+            ],
+            "observation": "Translation parameter mismatch was found in review when calling AppI18n::_().",
+            "evidence": [
+                {
+                    "type": "file_reference",
+                    "path": "src/Controller/UserController.php",
+                    "line": 42
+                }
+            ],
+            "hypothesis": "A static PHPStan rule can detect the recurring placeholder mismatch.",
+            "validated_conclusion": "Translation parameters can be checked statically by comparing format specifiers against argument count.",
+            "confidence": "high",
+            "validation_status": "validated",
+            "status": "validated",
+            "sensitivity": "public"
+        },
+        {
+            "id": "finding.2026-06-13.002",
+            "task_id": "PROJECT-1235",
+            "session": "session_def456",
+            "created_at": "2026-06-13T09:30:00+00:00",
+            "created_by": "agent",
+            "scope": [
+                "src/"
+            ],
+            "observation": "A second translation placeholder mismatch was discovered in order processing notifications.",
+            "evidence": [
+                {
+                    "type": "file_reference",
+                    "path": "src/Service/OrderNotificationService.php",
+                    "line": 88
+                }
+            ],
+            "hypothesis": "A static PHPStan rule can detect repeated occurrences across controllers and services.",
+            "validated_conclusion": "Both cases violate the same translation placeholder invariant and are statically detectable.",
+            "confidence": "high",
+            "validation_status": "validated",
+            "status": "validated",
+            "sensitivity": "public"
+        }
+    ]
+}

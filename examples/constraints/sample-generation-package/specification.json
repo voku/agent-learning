@@ -1,0 +1,31 @@
+{
+    "schema_version": "1.0",
+    "mode": "generate",
+    "proposal_id": "proposal.2026-06-13.001",
+    "constraint": {
+        "rule_id": "project.translation.parameters",
+        "engine": "phpstan",
+        "rule_class_name": "AppTranslationParametersRule",
+        "target_rule_path": "infra/githooks/StandardProject/PHPStan/AppTranslationParametersRule.php",
+        "registration_files": [
+            "infra/githooks/phpstan_bootstrap.php",
+            "phpstan.neon.dist"
+        ],
+        "scope": [
+            "src/"
+        ],
+        "violation": "Translation placeholders and supplied parameter keys differ.",
+        "allowed_boundaries": [
+            "unpacked_arguments",
+            "dynamic_format_strings"
+        ],
+        "detectability": "static",
+        "false_positive_risk": "low",
+        "validation_commands": [
+            "vendor/bin/phpstan analyse"
+        ],
+        "example_rule_paths": [
+            "examples/constraints/phpstan/rules/AppTranslationParametersRule.php"
+        ]
+    }
+}

@@ -13,7 +13,7 @@ use voku\AgentLearning\ValidationException;
 
 final class AgentLearningProjectTest extends TestCase
 {
-    public function testResolverAcceptsProjectRootWithItPortalLayout(): void
+    public function testResolverAcceptsProjectRootWithStandardLayout(): void
     {
         $root = $this->createLearningRoot();
         $projectRoot = dirname($root, 2);

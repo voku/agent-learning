@@ -48,7 +48,7 @@ final class ConstraintPromotionValidator
             throw new ValidationException($file, $line, $proposal->id, 'phpcs constraint requires a phpcs validation command');
         }
 
-        if ($constraint->engine === ConstraintEngine::PHPCS && !str_contains($constraint->targetRulePath, '/Sniffs/')) {
+        if ($constraint->engine === ConstraintEngine::PHPCS && !$this->hasPathSegment($constraint->targetRulePath, 'sniffs')) {
             throw new ValidationException($file, $line, $proposal->id, 'phpcs constraint target rule path must point to a Sniffs location');
         }
 
@@ -56,7 +56,7 @@ final class ConstraintPromotionValidator
             throw new ValidationException($file, $line, $proposal->id, 'php_cs_fixer constraint requires a php-cs-fixer validation command');
         }
 
-        if ($constraint->engine === ConstraintEngine::PHP_CS_FIXER && !str_contains($constraint->targetRulePath, '/fixer/')) {
+        if ($constraint->engine === ConstraintEngine::PHP_CS_FIXER && !$this->hasPathSegment($constraint->targetRulePath, 'fixer')) {
             throw new ValidationException($file, $line, $proposal->id, 'php_cs_fixer constraint target rule path must point to a fixer location');
         }
     }
