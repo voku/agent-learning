@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.18.8] - 2026-09-13
+
+### Added
+
+- `proposal-retire --superseded-by <proposal-id>` can retire an approved
+  memory/skill guidance record only when the named replacement is an applied
+  constraint with an active manifest and covers every source Finding from the
+  guidance it replaces. The retirement retains both approvals and adds exact
+  supersession lineage, so mechanically enforced rules can leave Recall's
+  prompt pool without an unreviewed deletion or a fabricated legacy proof.
+
+### Validation
+
+- `composer ci` passed with regression coverage for successful constrained
+  supersession and refusal without the required active applied constraint.
+
 ## [0.18.7] - 2026-09-12
 
 ### Added

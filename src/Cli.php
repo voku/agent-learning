@@ -914,6 +914,7 @@ final class Cli
         $proposalId = $parsed['arguments'][0] ?? null;
         $actor = $this->stringOption($parsed['options'], 'by');
         $reason = $this->stringOption($parsed['options'], 'reason');
+        $supersededBy = $this->stringOption($parsed['options'], 'superseded-by');
 
         if ($proposalId === null || trim($proposalId) === '') {
             throw new ValidationException($root, null, null, 'proposal-retire requires proposal ID argument');
@@ -925,7 +926,7 @@ final class Cli
             throw new ValidationException($root, null, null, 'proposal-retire requires --reason option');
         }
 
-        (new ProposalTransitionManager())->retire($root, $proposalId, $actor, $reason);
+        (new ProposalTransitionManager())->retire($root, $proposalId, $actor, $reason, $supersededBy);
         $this->write(sprintf("Retired proposal: %s\n", $proposalId));
 
         return 0;
@@ -1034,6 +1035,7 @@ final class Cli
             . "  --manifest PATH          Manifest output path for constraint-loop or constraint-activate.\n"
             . "  --by ACTOR               Actor performing the operation.\n"
             . "  --reason REASON          Reason for proposal rejection, retirement, or acknowledgement.\n"
+            . "  --superseded-by ID       Applied active constraint that can retire approved duplicate guidance.\n"
             . "  --commit COMMIT          Commit hash or pull request reference.\n"
             . "  --validation PATH        Path to validation evidence JSON file.\n"
         );
