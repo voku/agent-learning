@@ -299,13 +299,13 @@ final readonly class LearningNoteService
         }
 
         $findingsById = $this->findingRepository->loadAll($root);
-        foreach ($notes as $note) {
-            $this->assertStoredFindingLineage($root, $note, $findingsById);
-        }
-
-        $proposalsById = $this->proposalRepository->loadAll($root, $findingsById);
+        $proposalsById = null;
         $result = [];
         foreach ($notes as $note) {
+            $this->assertStoredFindingLineage($root, $note, $findingsById);
+            if ($proposalsById === null) {
+                $proposalsById = $this->proposalRepository->loadAll($root, $findingsById);
+            }
             $this->assertStoredProposalLineage($root, $note, $proposalsById);
             $result[] = $this->project($note, $projectRoot);
         }
