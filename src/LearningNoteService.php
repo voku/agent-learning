@@ -293,9 +293,20 @@ final readonly class LearningNoteService
     public function activeProjections(string $root, ?string $projectRoot = null): array
     {
         $projectRoot ??= (new LearningProjectPaths())->projectRootForLearningRoot($root);
+        $notes = $this->noteRepository->loadActive($root);
+        if ($notes === []) {
+            return [];
+        }
+
+        $findingsById = $this->findingRepository->loadAll($root);
+        $proposalsById = null;
         $result = [];
-        foreach ($this->noteRepository->loadActive($root) as $note) {
-            $this->assertStoredLineage($root, $note);
+        foreach ($notes as $note) {
+            $this->assertStoredFindingLineage($root, $note, $findingsById);
+            if ($proposalsById === null) {
+                $proposalsById = $this->proposalRepository->loadAll($root, $findingsById);
+            }
+            $this->assertStoredProposalLineage($root, $note, $proposalsById);
             $result[] = $this->project($note, $projectRoot);
         }
         usort($result, static fn (LearningNoteProjection $left, LearningNoteProjection $right): int => $left->id <=> $right->id);
@@ -372,12 +383,25 @@ final readonly class LearningNoteService
     private function assertStoredLineage(string $root, LearningNote $note): void
     {
         $findingsById = $this->findingRepository->loadAll($root);
+        $this->assertStoredFindingLineage($root, $note, $findingsById);
+
+        $proposalsById = $this->proposalRepository->loadAll($root, $findingsById);
+        $this->assertStoredProposalLineage($root, $note, $proposalsById);
+    }
+
+    /** @param array<string, Finding> $findingsById */
+    private function assertStoredFindingLineage(string $root, LearningNote $note, array $findingsById): void
+    {
         foreach ($note->sourceFindings as $findingId) {
             if (!isset($findingsById[$findingId])) {
                 throw new ValidationException($root, null, $note->id, 'LearningNote source Finding is missing: ' . $findingId);
             }
         }
-        $proposalsById = $this->proposalRepository->loadAll($root, $findingsById);
+    }
+
+    /** @param array<string, Proposal> $proposalsById */
+    private function assertStoredProposalLineage(string $root, LearningNote $note, array $proposalsById): void
+    {
         foreach ($note->sourceProposals as $proposalId) {
             if (!isset($proposalsById[$proposalId])) {
                 throw new ValidationException($root, null, $note->id, 'LearningNote source Proposal is missing: ' . $proposalId);

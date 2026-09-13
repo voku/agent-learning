@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/lineage-rebuild-benchmark.yml'
+      - 'src/LearningNoteService.php'
       - 'tests/Benchmark/LineageRebuildBenchmark.php'
 
 jobs:
