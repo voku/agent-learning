@@ -2,7 +2,12 @@
 
 ## [Unreleased]
 
-## [0.18.8] - 2026-09-13
+## [0.18.9] - 2026-09-13
+
+### Added
+
+- Typed consumer and maintainer resource scoping in `PackageResources`: `consumerSkills()` exposes consumer-facing skills (`agent-learning-consumer`, `agent-learning-note`, `agent-hard-constraint-author`, `agent-learning-ctx-evidence`), `maintainerSkills()` exposes `agent-learning-maintainer`, and `consumerInstructionFragment()` provides a concise AGENTS.md instruction fragment for consumer repositories.
+
 
 ### Added
 
