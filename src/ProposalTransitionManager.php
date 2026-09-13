@@ -247,7 +247,13 @@ final class ProposalTransitionManager
      * @param string $reason
      * @throws ValidationException
      */
-    public function retire(string $root, string $proposalId, string $actor, string $reason): void
+    public function retire(
+        string $root,
+        string $proposalId,
+        string $actor,
+        string $reason,
+        ?string $supersededByProposalId = null,
+    ): void
     {
         if (trim($actor) === '') {
             throw new ValidationException('', null, $proposalId, 'actor name must be explicit');
@@ -260,7 +266,16 @@ final class ProposalTransitionManager
         $proposal = (new ProposalParser())->parseFile($proposalPath);
 
         if ($proposal->status !== ProposalStatus::APPLIED) {
-            throw new ValidationException($proposalPath, null, $proposalId, 'proposal is not applied');
+            if ($proposal->status !== ProposalStatus::APPROVED) {
+                throw new ValidationException($proposalPath, null, $proposalId, 'proposal is not applied');
+            }
+
+            $this->assertApprovedProposalIsSupersededByActiveConstraint(
+                $root,
+                $proposal,
+                $proposalPath,
+                $supersededByProposalId,
+            );
         }
 
         $now = new DateTimeImmutable('now');
@@ -273,6 +288,9 @@ final class ProposalTransitionManager
         $data['reason'] = $reason;
         $data['retired_by'] = $actor;
         $data['retired_at'] = $nowStr;
+        if ($supersededByProposalId !== null && trim($supersededByProposalId) !== '') {
+            $data['superseded_by'] = trim($supersededByProposalId);
+        }
 
         $updatedContent = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
@@ -288,9 +306,97 @@ final class ProposalTransitionManager
             'retired_by' => $actor,
             'retired_at' => $nowStr,
             'reason' => $reason,
+            'superseded_by' => $data['superseded_by'] ?? null,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
         $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $retiredPath, $retirementLine, 'retirement');
+    }
+
+    /**
+     * An approved prompt item is normally still active guidance. It can leave that
+     * pool without first becoming a physical memory/skill only when an already
+     * applied, active constraint demonstrably supersedes the same source evidence.
+     * This preserves the original approval and makes the smaller prompt surface an
+     * auditable enforcement decision rather than an unreviewed deletion.
+     *
+     * @throws ValidationException
+     */
+    private function assertApprovedProposalIsSupersededByActiveConstraint(
+        string $root,
+        Proposal $proposal,
+        string $proposalPath,
+        ?string $supersededByProposalId,
+    ): void {
+        $supersededByProposalId = $supersededByProposalId === null ? '' : trim($supersededByProposalId);
+        if ($supersededByProposalId === '') {
+            throw new ValidationException(
+                $proposalPath,
+                null,
+                $proposal->id,
+                'approved proposal retirement requires an explicit applied constraint superseder',
+            );
+        }
+
+        $supersederPath = $this->resolveProposalPath($supersededByProposalId, $root);
+        $superseder = (new ProposalParser())->parseFile($supersederPath);
+        if (
+            $superseder->status !== ProposalStatus::APPLIED
+            || $superseder->targetType !== GuidanceType::CONSTRAINT->value
+            || $superseder->constraint === null
+        ) {
+            throw new ValidationException(
+                $supersederPath,
+                null,
+                $supersededByProposalId,
+                'approved proposal retirement superseder must be an applied constraint',
+            );
+        }
+
+        foreach ($proposal->sourceFindings as $findingId) {
+            if (!in_array($findingId, $superseder->sourceFindings, true)) {
+                throw new ValidationException(
+                    $supersederPath,
+                    null,
+                    $supersededByProposalId,
+                    'approved proposal retirement superseder does not cover source finding: ' . $findingId,
+                );
+            }
+        }
+
+        $manifestPath = $root . '/constraints/active/constraint.' . $superseder->constraint->ruleId . '.json';
+        $manifestContent = is_file($manifestPath) ? file_get_contents($manifestPath) : false;
+        if ($manifestContent === false) {
+            throw new ValidationException(
+                $manifestPath,
+                null,
+                $supersededByProposalId,
+                'approved proposal retirement superseder does not have an active constraint manifest',
+            );
+        }
+
+        try {
+            $manifest = json_decode($manifestContent, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw new ValidationException(
+                $manifestPath,
+                null,
+                $supersededByProposalId,
+                'approved proposal retirement superseder has invalid active constraint manifest: ' . $exception->getMessage(),
+            );
+        }
+
+        if (
+            !is_array($manifest)
+            || ($manifest['status'] ?? null) !== 'active'
+            || ($manifest['source_proposal'] ?? null) !== $superseder->id
+        ) {
+            throw new ValidationException(
+                $manifestPath,
+                null,
+                $supersededByProposalId,
+                'approved proposal retirement superseder manifest does not prove active constraint lineage',
+            );
+        }
     }
 
     /**
