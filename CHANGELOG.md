@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.18.10] - 2026-09-13
+
+### Added
+
+- Constraint generation now falls back to a bounded, engine-specific package
+  precedent bundle only when a consuming project has no readable local example.
+  PHPStan bundles a rule, registration, and valid/invalid/boundary/false-positive
+  fixtures; PHP-CS-Fixer bundles a fixer, registration, before/after/boundary/
+  false-positive fixtures, and a test shape. Project-local examples remain the
+  first choice, and engines without shipped precedents receive none rather than
+  unrelated generated guidance.
+
+### Validation
+
+- `composer ci` passed with regressions proving PHPStan and PHP-CS-Fixer fallback
+  exports, local-example preservation, and the typed package resource boundary.
+
 ## [0.18.9] - 2026-09-13
 
 ### Added
