@@ -7,6 +7,33 @@ namespace voku\AgentLearning;
 final class ConstraintGenerationPackageExporter
 {
     /**
+     * Bounded package examples used only when the consuming project has no
+     * readable rule/fixer precedent of its own. They are implementation aids,
+     * not additional constraint semantics.
+     *
+     * @var array<string, list<string>>
+     */
+    private const array SHIPPED_PRECEDENT_PATHS = [
+        ConstraintEngine::PHPSTAN->value => [
+            'phpstan/rules/NoHardcodedHostPathRule.php',
+            'phpstan/registration/phpstan.neon.dist',
+            'phpstan/fixtures/valid.php',
+            'phpstan/fixtures/invalid.php',
+            'phpstan/fixtures/boundary.php',
+            'phpstan/fixtures/false-positive.php',
+        ],
+        ConstraintEngine::PHP_CS_FIXER->value => [
+            'php-cs-fixer/fixers/ForbiddenNativeStringFunctionFixer.php',
+            'php-cs-fixer/registration/.php-cs-fixer.dist.php',
+            'php-cs-fixer/fixtures/before.php',
+            'php-cs-fixer/fixtures/after.php',
+            'php-cs-fixer/fixtures/boundary.php',
+            'php-cs-fixer/fixtures/false-positive.php',
+            'php-cs-fixer/tests/FixerTestCase.php',
+        ],
+    ];
+
+    /**
      * @param array<string, Finding> $findingsById
      */
     public function export(string $root, string $proposalPath, string $outputDir, array $findingsById, ?string $projectRoot = null): void
@@ -50,7 +77,12 @@ final class ConstraintGenerationPackageExporter
         ]);
         $this->writeJson($outputDir . '/examples.json', [
             'schema_version' => '1.0',
-            'examples' => $this->loadExamples($root, $proposal->constraint->exampleRulePaths, $projectRoot),
+            'examples' => $this->loadExamples(
+                $root,
+                $proposal->constraint->exampleRulePaths,
+                $proposal->constraint->engine,
+                $projectRoot,
+            ),
         ]);
         $this->writeJson($outputDir . '/validation-plan.json', [
             'schema_version' => '1.0',
@@ -83,7 +115,12 @@ final class ConstraintGenerationPackageExporter
      * @param list<string> $examplePaths
      * @return list<array{path: string, content: string}>
      */
-    private function loadExamples(string $root, array $examplePaths, ?string $configuredProjectRoot): array
+    private function loadExamples(
+        string $root,
+        array $examplePaths,
+        ConstraintEngine $engine,
+        ?string $configuredProjectRoot,
+    ): array
     {
         $examples = [];
         $projectRoot = (new LearningProjectPaths())->projectRootForLearningRoot($root, $configuredProjectRoot);
@@ -95,6 +132,44 @@ final class ConstraintGenerationPackageExporter
             }
             $content = file_get_contents($absolute);
             $examples[] = ['path' => $path, 'content' => $content === false ? '' : $content];
+        }
+
+        foreach ($examples as $example) {
+            if ($example['content'] !== '') {
+                return $examples;
+            }
+        }
+
+        return $this->loadShippedExamples($engine);
+    }
+
+    /**
+     * @return list<array{path: string, content: string}>
+     */
+    private function loadShippedExamples(ConstraintEngine $engine): array
+    {
+        $relativePaths = self::SHIPPED_PRECEDENT_PATHS[$engine->value] ?? [];
+        if ($relativePaths === []) {
+            return [];
+        }
+
+        $root = PackageResources::constraintPrecedentsRoot();
+        $examples = [];
+        foreach ($relativePaths as $relativePath) {
+            $absolutePath = $root . '/' . $relativePath;
+            $content = file_get_contents($absolutePath);
+            if ($content === false || $content === '') {
+                throw new ValidationException(
+                    $absolutePath,
+                    null,
+                    null,
+                    'shipped constraint precedent is missing or unreadable: ' . $relativePath,
+                );
+            }
+            $examples[] = [
+                'path' => 'voku/agent-learning/' . PackageResources::CONSTRAINT_PRECEDENTS . '/' . $relativePath,
+                'content' => $content,
+            ];
         }
 
         return $examples;

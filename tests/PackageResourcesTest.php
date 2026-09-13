@@ -52,4 +52,12 @@ final class PackageResourcesTest extends TestCase
         self::assertIsString($content);
         self::assertStringContainsString('Agent Learning', $content);
     }
+
+    public function testConstraintPrecedentsRootExists(): void
+    {
+        self::assertSame('examples/constraints', PackageResources::CONSTRAINT_PRECEDENTS);
+        self::assertDirectoryExists(PackageResources::constraintPrecedentsRoot());
+        self::assertFileExists(PackageResources::constraintPrecedentsRoot() . '/phpstan/rules/NoHardcodedHostPathRule.php');
+        self::assertFileExists(PackageResources::constraintPrecedentsRoot() . '/php-cs-fixer/fixers/ForbiddenNativeStringFunctionFixer.php');
+    }
 }

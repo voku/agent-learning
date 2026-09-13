@@ -13,6 +13,8 @@ final class PackageResources
 
     public const string CONSUMER_INSTRUCTIONS = 'resources/instructions/consumer.md';
 
+    public const string CONSTRAINT_PRECEDENTS = 'examples/constraints';
+
     public static function skillsRoot(): string
     {
         return dirname(__DIR__) . '/' . self::SKILLS;
@@ -50,5 +52,10 @@ final class PackageResources
         $path = dirname(__DIR__) . '/' . self::CONSUMER_INSTRUCTIONS;
 
         return is_file($path) ? $path : null;
+    }
+
+    public static function constraintPrecedentsRoot(): string
+    {
+        return dirname(__DIR__) . '/' . self::CONSTRAINT_PRECEDENTS;
     }
 }

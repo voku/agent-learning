@@ -394,6 +394,73 @@ final class ConstraintProposalValidationTest extends TestCase
         }
     }
 
+    public function testExportsShippedPhpstanPrecedentsWhenTheProjectHasNoReadableExample(): void
+    {
+        $root = sys_get_temp_dir() . '/constraint_generation_shipped_phpstan_' . bin2hex(random_bytes(8));
+        $output = $root . '/constraint-generation/proposal.2026-06-13.001';
+        mkdir($root . '/findings/validated', 0777, true);
+        mkdir($root . '/proposals/candidate', 0777, true);
+
+        $findings = [
+            'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
+            'finding.2026-06-13.002' => $this->finding('finding.2026-06-13.002'),
+        ];
+        $proposalPath = $root . '/proposals/candidate/proposal.2026-06-13.001.json';
+        file_put_contents($proposalPath, json_encode($this->proposalRecord(), JSON_THROW_ON_ERROR));
+
+        try {
+            (new ConstraintGenerationPackageExporter())->export($root, $proposalPath, $output, $findings);
+
+            $examples = json_decode((string) file_get_contents($output . '/examples.json'), true, 512, JSON_THROW_ON_ERROR);
+            self::assertSame(
+                'voku/agent-learning/examples/constraints/phpstan/rules/NoHardcodedHostPathRule.php',
+                $examples['examples'][0]['path'],
+            );
+            self::assertStringContainsString('RuleErrorBuilder', $examples['examples'][0]['content']);
+            self::assertCount(6, $examples['examples']);
+        } finally {
+            $this->removeDirectory($root);
+        }
+    }
+
+    public function testExportsShippedPhpCsFixerPrecedentsWhenTheProjectHasNoReadableExample(): void
+    {
+        $root = sys_get_temp_dir() . '/constraint_generation_shipped_fixer_' . bin2hex(random_bytes(8));
+        $output = $root . '/constraint-generation/proposal.2026-06-13.001';
+        mkdir($root . '/findings/validated', 0777, true);
+        mkdir($root . '/proposals/candidate', 0777, true);
+
+        $findings = [
+            'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
+            'finding.2026-06-13.002' => $this->finding('finding.2026-06-13.002'),
+        ];
+        $proposalPath = $root . '/proposals/candidate/proposal.2026-06-13.001.json';
+        file_put_contents($proposalPath, json_encode($this->proposalRecord([
+            'constraint' => [
+                'engine' => 'php_cs_fixer',
+                'rule_class_name' => 'NoLeadingSlashInGlobalNamespaceFixer',
+                'target_rule_path' => 'infra/githooks/StandardProject/fixer/NoLeadingSlashInGlobalNamespaceFixer.php',
+                'registration_files' => ['.php-cs-fixer.dist.php'],
+                'validation_commands' => ['vendor/bin/php-cs-fixer fix --dry-run'],
+                'example_rule_paths' => ['infra/githooks/StandardProject/fixer/ForbiddenNativeStringFunctionFixer.php'],
+            ],
+        ]), JSON_THROW_ON_ERROR));
+
+        try {
+            (new ConstraintGenerationPackageExporter())->export($root, $proposalPath, $output, $findings);
+
+            $examples = json_decode((string) file_get_contents($output . '/examples.json'), true, 512, JSON_THROW_ON_ERROR);
+            self::assertSame(
+                'voku/agent-learning/examples/constraints/php-cs-fixer/fixers/ForbiddenNativeStringFunctionFixer.php',
+                $examples['examples'][0]['path'],
+            );
+            self::assertStringContainsString('AbstractFixer', $examples['examples'][0]['content']);
+            self::assertCount(7, $examples['examples']);
+        } finally {
+            $this->removeDirectory($root);
+        }
+    }
+
     public function testActivatesConstraintManifestFromApprovedProposal(): void
     {
         $project = sys_get_temp_dir() . '/constraint_manifest_activate_' . bin2hex(random_bytes(8));
