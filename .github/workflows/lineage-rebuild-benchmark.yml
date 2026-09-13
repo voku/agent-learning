@@ -29,7 +29,7 @@ jobs:
           php tests/Benchmark/LineageRebuildBenchmark.php | tee /tmp/lineage-rebuild-summary.md
           cat /tmp/lineage-rebuild-summary.md >> "$GITHUB_STEP_SUMMARY"
       - name: Upload raw and summary evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lineage-rebuild-benchmark-${{ github.sha }}
           path: build/lineage-rebuild-benchmark/
