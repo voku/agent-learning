@@ -1,0 +1,36 @@
+name: Lineage rebuild benchmark
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/lineage-rebuild-benchmark.yml'
+      - 'tests/Benchmark/LineageRebuildBenchmark.php'
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+      - run: composer install --no-interaction --prefer-dist
+      - name: Measure 100 / 500 / 1000 owner rebuild phases
+        env:
+          LINEAGE_BENCHMARK_REPETITIONS: '3'
+          LINEAGE_BENCHMARK_OUTPUT: '${{ github.workspace }}/build/lineage-rebuild-benchmark'
+        run: |
+          set -euo pipefail
+          php tests/Benchmark/LineageRebuildBenchmark.php | tee /tmp/lineage-rebuild-summary.md
+          cat /tmp/lineage-rebuild-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload raw and summary evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: lineage-rebuild-benchmark-${{ github.sha }}
+          path: build/lineage-rebuild-benchmark/
+          if-no-files-found: error
+          retention-days: 90
