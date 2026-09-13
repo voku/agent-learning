@@ -12,11 +12,28 @@
   guidance it replaces. The retirement retains both approvals and adds exact
   supersession lineage, so mechanically enforced rules can leave Recall's
   prompt pool without an unreviewed deletion or a fabricated legacy proof.
+- Provide a comprehensive constraint precedent suite under `examples/constraints/`
+  covering real-world PHPStan rules (custom rules, dynamic return type extensions,
+  type specifying extensions) and PHP-CS-Fixer fixers, complete with configuration
+  examples, test cases, and fixture structures (valid, invalid, boundary, and false-positive).
+- Add `examples.json` few-shot usage and structural precedent guidance to
+  `ConstraintGenerationPackageExporter`: constraint generation packages now
+  instruct models to inspect structural precedents (rule/fixer interfaces, error builder
+  usage, AST traversal, type resolving, false-positive avoidance, registration, and fixture
+  isolation) tailored to the target constraint engine.
+- Add `project-phpstan-precision` skill and update `agent-hard-constraint-author` to
+  guide deterministic AST/type analysis and robust rule authoring.
+
+### Changed
+
+- `ConstraintPromotionValidator` now uses case-insensitive path segment matching for
+  `sniffs` and `fixer` target rule paths.
 
 ### Validation
 
 - `composer ci` passed with regression coverage for successful constrained
-  supersession and refusal without the required active applied constraint.
+  supersession, refusal without the required active applied constraint, generation
+  package prompt export with precedent guidance, and path segment validation.
 
 ## [0.18.7] - 2026-09-12
 
