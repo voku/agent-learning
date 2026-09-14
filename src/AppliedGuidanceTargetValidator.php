@@ -87,40 +87,44 @@ final readonly class AppliedGuidanceTargetValidator
             throw new ValidationException($proposalFile, null, $proposal->id, 'applied guidance target resolves outside configured project root: ' . $sourceRef);
         }
 
-        $actualHash = hash_file('sha256', $realTargetPath);
-        if ($actualHash === false || !hash_equals($expectedHash, strtolower($actualHash))) {
-            throw new ValidationException($proposalFile, null, $proposal->id, 'applied guidance target_content_hash does not match target file: ' . $sourceRef);
-        }
-
         $content = file_get_contents($realTargetPath);
         if ($content === false) {
             throw new ValidationException($proposalFile, null, $proposal->id, 'cannot read applied guidance target: ' . $sourceRef);
         }
 
+        // Prove the semantic handoff before treating a whole-file hash mismatch as
+        // proof drift. If the reviewed guidance itself changed or disappeared, that
+        // is a real semantic mismatch and re-anchoring must not be advertised as the
+        // recovery.
         if ($proposal->action === Action::ADD) {
             $this->assertContains($proposal, $proposalFile, $sourceRef, $content, $proposal->new, 'added guidance wording is not present');
-
-            return;
-        }
-
-        if ($proposal->action === Action::REPLACE) {
+        } elseif ($proposal->action === Action::REPLACE) {
             $this->assertContains($proposal, $proposalFile, $sourceRef, $content, $proposal->new, 'replacement guidance wording is not present');
             if ($proposal->old !== null && str_contains($content, $proposal->old)) {
                 throw new ValidationException($proposalFile, null, $proposal->id, 'replaced guidance wording is still present in target: ' . $sourceRef);
             }
-
-            return;
-        }
-
-        if ($proposal->action === Action::DELETE) {
+        } elseif ($proposal->action === Action::DELETE) {
             if ($proposal->old !== null && str_contains($content, $proposal->old)) {
                 throw new ValidationException($proposalFile, null, $proposal->id, 'deleted guidance wording is still present in target: ' . $sourceRef);
             }
-
-            return;
+        } else {
+            throw new ValidationException($proposalFile, null, $proposal->id, 'unsupported applied guidance action: ' . $proposal->action->value);
         }
 
-        throw new ValidationException($proposalFile, null, $proposal->id, 'unsupported applied guidance action: ' . $proposal->action->value);
+        $actualHash = hash_file('sha256', $realTargetPath);
+        if ($actualHash === false) {
+            throw new ValidationException($proposalFile, null, $proposal->id, 'cannot hash applied guidance target: ' . $sourceRef);
+        }
+        if (!hash_equals($expectedHash, strtolower($actualHash))) {
+            throw new ValidationException(
+                $proposalFile,
+                null,
+                $proposal->id,
+                'applied guidance target_content_hash does not match target file: ' . $sourceRef
+                . '; the target still satisfies this proposal\'s applied guidance. If the file changed legitimately, repair the stale target proof with '
+                . 'proposal-reanchor ' . $sourceRef . ' --by ACTOR --reason TEXT. The target-scoped repair fails closed if any applied guidance on that file is missing.',
+            );
+        }
     }
 
     private function isPreProofPolicyRecord(Proposal $proposal): bool
