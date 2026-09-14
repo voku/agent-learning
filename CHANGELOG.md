@@ -2,9 +2,16 @@
 
 ## [Unreleased]
 
+## [0.18.11] - 2026-09-14
+
 ### Added
 
 - Add `LearningClassification::NO_DURABLE_LEARNING` to preserve pattern key and validation case lineage for validated Findings without creating promotion-ready soft guidance or Dream memory candidates when deterministic enforcement already owns the pattern (#112).
+- Align package-owned consumer skills (`agent-learning-consumer`) and guidance tests with the `NO_DURABLE_LEARNING` classification (#114).
+
+### Validation
+
+- `composer ci` passed with 372 tests, 1303 assertions, and PHPStan clean level max.
 
 ## [0.18.10] - 2026-09-13
 
