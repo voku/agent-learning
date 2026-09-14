@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.18.14] - 2026-09-14
+
+### Fixed
+
+- Distinguish semantic guidance drift from stale shared-target proof drift for applied memory/skill guidance: validate the reviewed `ADD`/`REPLACE`/`DELETE` effect before treating a whole-file hash mismatch as repairable, and surface the existing target-scoped `proposal-reanchor <target> --by ACTOR --reason TEXT` recovery only when the guidance still matches (#118, #119).
+- Align the packaged `agent-learning-consumer` skill and applied-guidance proof documentation with that owner recovery, while keeping re-anchoring explicit, attributed, transactional, and fail-closed when semantic guidance is missing or changed.
+
+### Validation
+
+- PR #119 passed exact-head CI on PHP 8.3, 8.4 and 8.5 plus the clean installed-skill consumer; post-merge `main` CI passed on the merged commit.
+
 ## [0.18.13] - 2026-09-14
 
 ### Fixed
@@ -336,6 +347,7 @@
 
 - PR #28 passed CI on its exact head before merge for the owner-level Finding creation path.
 - PR #29 passed CI run #240 for the PHP embedding and consumer-skill documentation.
+
 ## [0.13.0] - 2026-08-16
 
 ### Added
@@ -812,4 +824,5 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 - Initial CLI for validating findings, proposals, and decision history.
 - Initial consolidation prompt generation for one task selector.
+- Append `templates/consolidation-prompt.md` from the learning root during `prepare`.
 - Finding, proposal, evidence, JSONL, redaction, and path validation primitives.
