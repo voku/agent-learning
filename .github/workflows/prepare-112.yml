@@ -1,0 +1,33 @@
+name: Prepare issue 112 fix
+
+on:
+  push:
+    branches:
+      - fix/112-ignore-pattern-lineage
+    paths:
+      - '.github/workflows/prepare-112.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/112-ignore-pattern-lineage
+          fetch-depth: 0
+      - name: Apply prepared source transformation
+        run: python3 .github/prepare-112.py
+      - name: Commit final product diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD~2)" = '0f693c32a8eb1eeea88890d9e47fda399160439e'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src tests resources CHANGELOG.md
+          git rm .github/prepare-112.py .github/workflows/prepare-112.yml
+          git commit -m 'fix: retain enforced Finding lineage without soft promotion'
+          git push origin HEAD:fix/112-ignore-pattern-lineage
