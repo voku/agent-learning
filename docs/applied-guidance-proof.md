@@ -27,10 +27,24 @@ checks all of the following:
 
 1. the path remains inside the project root;
 2. the target file exists and can be read;
-3. its SHA-256 digest matches `target_content_hash`;
-4. `ADD`: the proposed new wording is present;
-5. `REPLACE`: the new wording is present and the old wording is absent;
-6. `DELETE`: the old wording is absent.
+3. `ADD`: the proposed new wording is present;
+4. `REPLACE`: the new wording is present and the old wording is absent;
+5. `DELETE`: the old wording is absent;
+6. its SHA-256 digest matches `target_content_hash`.
+
+The semantic effect is checked before the whole-file hash so a shared target such
+as `MEMORY.md` can distinguish two different failures:
+
+- when the reviewed wording/effect itself no longer matches, validation reports
+  semantic drift and re-anchoring is not a valid repair;
+- when the reviewed effect still matches but the whole-file digest changed,
+  validation reports stale physical proof and points to the existing
+  target-scoped `proposal-reanchor` owner transition.
+
+`proposal-reanchor` does not weaken validation or silently follow a changed file.
+It requires an explicit actor and reason, re-pins every applied memory/skill proof
+for that target in one transaction, and refuses the repair when any applied
+proposal's own guidance is no longer present. Do not hand-edit proposal hashes.
 
 If any check fails, repository validation fails. During
 `ProposalTransitionManager::apply()` that failure rolls the transition back to

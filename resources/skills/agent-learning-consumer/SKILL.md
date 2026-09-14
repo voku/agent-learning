@@ -66,6 +66,21 @@ vendor/bin/agent-learning proposal-validate --root infra/doc/agent-learning --pr
 vendor/bin/agent-learning guidance-evaluate --root infra/doc/agent-learning --selection-history history/recall-selections.jsonl --outcome-history history/outcomes.jsonl
 ```
 
+## Applied guidance proof recovery
+
+An applied `memory` or `skill` proposal pins its canonical target file. If validation reports a stale `target_content_hash`, do not edit the Proposal JSON or hash by hand and do not retire/re-apply the guidance merely to clear the error.
+
+Follow the owner diagnostic. When the target still satisfies the proposal's reviewed ADD/REPLACE/DELETE effect and the file changed legitimately, repair the target-scoped proof through the supported owner transition:
+
+```bash
+vendor/bin/agent-learning proposal-reanchor MEMORY.md \
+  --root infra/doc/agent-learning \
+  --by maintainer \
+  --reason 'The shared guidance file changed legitimately outside this proposal.'
+```
+
+`proposal-reanchor` repairs every applied `memory`/`skill` proof resolving to that target in one transaction and fails closed if any applied guidance on the file is missing. It preserves approval/application evidence and records the repair provenance. If the reviewed guidance itself changed or disappeared, do **not** re-anchor it; treat that as semantic drift and use the normal reviewed replace/retire path.
+
 For a Finding already classified `ADD_LEARNING_NOTE`, the deterministic LearningNote boundary is separate:
 
 ```bash
