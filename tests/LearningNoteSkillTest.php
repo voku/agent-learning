@@ -75,4 +75,15 @@ final class LearningNoteSkillTest extends TestCase
         self::assertStringContainsString('finding-classify', $consumer);
         self::assertStringContainsString('Preserve lineage without creating new soft guidance.', $consumer);
     }
+
+    public function testConsumerSkillRoutesStaleAppliedProofsToTheOwnerRecovery(): void
+    {
+        $consumer = (string) file_get_contents(__DIR__ . '/../resources/skills/agent-learning-consumer/SKILL.md');
+
+        self::assertStringContainsString('Applied guidance proof recovery', $consumer);
+        self::assertStringContainsString('proposal-reanchor MEMORY.md', $consumer);
+        self::assertStringContainsString('do not edit the Proposal JSON or hash by hand', $consumer);
+        self::assertStringContainsString('fails closed if any applied guidance on the file is missing', $consumer);
+        self::assertStringContainsString('If the reviewed guidance itself changed or disappeared, do **not** re-anchor it', $consumer);
+    }
 }
