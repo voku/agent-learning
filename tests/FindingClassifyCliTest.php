@@ -39,6 +39,34 @@ final class FindingClassifyCliTest extends TestCase
         self::assertTrue((new LearningNoteService())->promotionReadiness($root, $findingId)->promotable);
     }
 
+    public function testClassifyNoDurableLearningPreservesPatternLineageViaCli(): void
+    {
+        $root = $this->createLearningRoot();
+        $findingId = $this->createFinding($root, 'finding.2026-09-14.481001');
+
+        [$exitCode, $output] = $this->runCli($root, [
+            'finding-classify',
+            $findingId,
+            LearningClassification::NO_DURABLE_LEARNING->value,
+            '--pattern-key', 'phpstan.in_process_rule_test_case',
+            '--given', 'A rule test case requires in-process isolation.',
+            '--when', 'The test runs without callback state encapsulation.',
+            '--then', 'Shared state is constant-folded by the analyzer.',
+        ]);
+
+        self::assertSame(0, $exitCode, $output);
+        /** @var array{id: string, classification: string} $result */
+        $result = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame($findingId, $result['id']);
+        self::assertSame(LearningClassification::NO_DURABLE_LEARNING->value, $result['classification']);
+
+        $finding = (new FindingValidator())->validateFile($root . '/findings/validated/' . $findingId . '.json');
+        self::assertSame(LearningClassification::NO_DURABLE_LEARNING, $finding->classification);
+        self::assertSame('phpstan.in_process_rule_test_case', $finding->patternKey);
+        self::assertNotNull($finding->validationCase);
+        self::assertFalse((new LearningNoteService())->promotionReadiness($root, $findingId)->promotable);
+    }
+
     public function testInvalidClassificationDoesNotChangeFinding(): void
     {
         $root = $this->createLearningRoot();

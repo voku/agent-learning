@@ -92,6 +92,53 @@ final class FindingClassifierTest extends TestCase
         self::assertArrayNotHasKey('validation_case', $ignored->raw);
     }
 
+    public function testNoDurableLearningPreservesPatternLineageWithoutPromotionReadiness(): void
+    {
+        $root = $this->createLearningRoot();
+        $created = $this->createFinding($root, 'finding.2026-09-14.481001');
+
+        $classified = (new FindingClassifier())->classify(
+            root: $root,
+            findingId: $created->finding->id,
+            classification: LearningClassification::NO_DURABLE_LEARNING,
+            patternKey: 'phpstan.in_process_rule_test_case',
+            validationCase: new ValidationCase(
+                'PHPStan test cases require in-process isolation when mocking callbacks.',
+                'A rule test case executes without callback state isolation.',
+                'The analyzer constant-folds shared by-reference state unless encapsulated.',
+            ),
+        );
+
+        // 1. Pattern key and validation case survive
+        self::assertSame(LearningClassification::NO_DURABLE_LEARNING, $classified->classification);
+        self::assertSame('phpstan.in_process_rule_test_case', $classified->patternKey);
+        self::assertInstanceOf(ValidationCase::class, $classified->validationCase);
+        self::assertSame('phpstan.in_process_rule_test_case', $classified->raw['pattern_key'] ?? null);
+        self::assertIsArray($classified->raw['validation_case'] ?? null);
+
+        // 2. Finding remains valid through normal owner validation
+        $validated = (new \voku\AgentLearning\FindingValidator())->validateFile($root . '/findings/validated/' . $created->finding->id . '.json');
+        self::assertSame(LearningClassification::NO_DURABLE_LEARNING, $validated->classification);
+
+        // 3. No LearningNote becomes promotion-ready merely from this classification
+        $readiness = (new LearningNoteService())->promotionReadiness($root, $created->finding->id);
+        self::assertFalse($readiness->promotable);
+        self::assertContains(\voku\AgentLearning\LearningNotePromotionReadiness::BLOCKER_CLASSIFICATION, $readiness->blockers);
+
+        // 4. LearningNote prepare rejects this finding
+        try {
+            (new LearningNoteService())->prepare($root, [$created->finding->id]);
+            self::fail('LearningNote prepare should fail for NO_DURABLE_LEARNING finding');
+        } catch (ValidationException $exception) {
+            self::assertStringContainsString('LearningNote source Finding must be classified ADD_LEARNING_NOTE', $exception->getMessage());
+        }
+
+        // 5. Memory promotion policy does not resurrect soft guidance for this finding
+        $policy = new \voku\AgentLearning\FindingToMemoryPromotionPolicy();
+        $decisions = $policy->evaluate([$validated->id => $validated]);
+        self::assertSame([], $decisions);
+    }
+
     private function createLearningRoot(): string
     {
         $root = sys_get_temp_dir() . '/agent-learning-classifier-' . bin2hex(random_bytes(8)) . '/.agent-loop/learning';

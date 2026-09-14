@@ -243,6 +243,48 @@ final class ProposalValidatorTest extends TestCase
         (new ProposalValidator())->validate($proposal, 'proposal.json');
     }
 
+    public function testNoDurableLearningProposalWithPatternKeyAndValidationCase(): void
+    {
+        $proposal = $this->createProposal(
+            action: Action::NO_DURABLE_LEARNING,
+            status: ProposalStatus::ACKNOWLEDGED,
+            extraRaw: [
+                'learning_decision' => 'NO_DURABLE_LEARNING',
+                'pattern_key' => 'phpstan.in_process_rule_test_case',
+                'validation_case' => [
+                    'given' => 'given',
+                    'when' => 'when',
+                    'then' => 'then',
+                ],
+            ],
+        );
+
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+        self::assertSame(LearningClassification::NO_DURABLE_LEARNING, $proposal->learningDecision);
+        self::assertSame('phpstan.in_process_rule_test_case', $proposal->patternKey);
+    }
+
+    public function testNoDurableLearningDecisionRejectsDurableAction(): void
+    {
+        $proposal = $this->createProposal(
+            action: Action::ADD,
+            status: ProposalStatus::APPROVED,
+            extraRaw: [
+                'learning_decision' => 'NO_DURABLE_LEARNING',
+                'pattern_key' => 'phpstan.in_process_rule_test_case',
+                'validation_case' => [
+                    'given' => 'given',
+                    'when' => 'when',
+                    'then' => 'then',
+                ],
+            ],
+        );
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('NO_DURABLE_LEARNING learning_decision requires NO_DURABLE_LEARNING action');
+        (new ProposalValidator())->validate($proposal, 'proposal.json');
+    }
+
     /**
      * @param list<string> $scope
      * @param list<string> $sourceFindings

@@ -124,9 +124,11 @@ final class ConsolidationResultValidator
                 &&
                 $learningDecision !== LearningClassification::IGNORE
                 &&
+                $learningDecision !== LearningClassification::NO_DURABLE_LEARNING
+                &&
                 $learningDecision !== LearningClassification::ADD_LEARNING_NOTE
             ) {
-                throw new ValidationException('', null, null, 'NO_DURABLE_LEARNING allows only IGNORE or ADD_LEARNING_NOTE learning_decision');
+                throw new ValidationException('', null, null, 'NO_DURABLE_LEARNING allows only IGNORE, NO_DURABLE_LEARNING or ADD_LEARNING_NOTE learning_decision');
             }
 
             $existingGuidanceId = $data['existing_guidance_id'] ?? null;
@@ -354,8 +356,8 @@ final class ConsolidationResultValidator
         if ($learningDecision === null) {
             return;
         }
-        if ($learningDecision === LearningClassification::IGNORE) {
-            throw new ValidationException('', null, null, 'IGNORE learning_decision requires NO_DURABLE_LEARNING action');
+        if ($learningDecision === LearningClassification::IGNORE || $learningDecision === LearningClassification::NO_DURABLE_LEARNING) {
+            throw new ValidationException('', null, null, $learningDecision->value . ' learning_decision requires NO_DURABLE_LEARNING action');
         }
         if ($learningDecision === LearningClassification::CREATE_SKILL) {
             if ($action !== Action::ADD || $targetType !== GuidanceType::SKILL->value) {

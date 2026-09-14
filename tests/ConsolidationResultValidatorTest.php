@@ -237,6 +237,60 @@ final class ConsolidationResultValidatorTest extends TestCase
         self::assertSame('skills.distill_learning', $res->patternKey);
     }
 
+    public function testValidatesNoDurableLearningDecisionWithoutDurableMutation(): void
+    {
+        $validator = new ConsolidationResultValidator();
+        $data = [
+            'action' => 'NO_DURABLE_LEARNING',
+            'source_findings' => ['f-1'],
+            'reason' => 'The pattern is already deterministically enforced; preserve lineage without new durable guidance.',
+            'learning_decision' => 'NO_DURABLE_LEARNING',
+            'pattern_key' => 'phpstan.in_process_rule_test_case',
+            'validation_case' => [
+                'given' => 'a test case needs in-process isolation',
+                'when' => 'static analysis verifies the constraint',
+                'then' => 'no soft guidance is promoted',
+            ],
+        ];
+
+        $res = $validator->validate($data, $this->findings);
+
+        self::assertInstanceOf(NoDurableLearningResult::class, $res);
+        self::assertSame('NO_DURABLE_LEARNING', $res->learningDecision?->value);
+        self::assertSame('phpstan.in_process_rule_test_case', $res->patternKey);
+    }
+
+    public function testRejectsNoDurableLearningDecisionOnDurableAction(): void
+    {
+        $validator = new ConsolidationResultValidator();
+        $data = [
+            'action' => 'ADD',
+            'target_type' => 'skill',
+            'target' => 'skills/my-skill',
+            'scope' => ['/'],
+            'old' => '',
+            'new' => 'new skill content',
+            'source_findings' => ['f-1'],
+            'reason' => 'Attempting durable add with NO_DURABLE_LEARNING decision.',
+            'learning_decision' => 'NO_DURABLE_LEARNING',
+            'pattern_key' => 'skills.distill_learning',
+            'validation_case' => [
+                'given' => 'given',
+                'when' => 'when',
+                'then' => 'then',
+            ],
+            'overlap_check' => [
+                'inspected' => ['skill-1'],
+                'max_overlap_percent' => 20,
+                'decision' => 'proceed',
+            ],
+        ];
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('NO_DURABLE_LEARNING learning_decision requires NO_DURABLE_LEARNING action');
+        $validator->validate($data, $this->findings);
+    }
+
     public function testValidatesCreateSkillWithOverlapGate(): void
     {
         $validator = new ConsolidationResultValidator();

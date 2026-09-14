@@ -250,8 +250,11 @@ final class ProposalValidator
             }
         }
 
-        if ($proposal->learningDecision === LearningClassification::IGNORE && $proposal->action !== Action::NO_DURABLE_LEARNING) {
-            throw new ValidationException($file, $line, $proposal->id, 'IGNORE learning_decision requires NO_DURABLE_LEARNING action');
+        if (
+            ($proposal->learningDecision === LearningClassification::IGNORE || $proposal->learningDecision === LearningClassification::NO_DURABLE_LEARNING)
+            && $proposal->action !== Action::NO_DURABLE_LEARNING
+        ) {
+            throw new ValidationException($file, $line, $proposal->id, $proposal->learningDecision->value . ' learning_decision requires NO_DURABLE_LEARNING action');
         }
 
         if ($proposal->learningDecision === LearningClassification::CREATE_SKILL) {

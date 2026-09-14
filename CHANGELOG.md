@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Add `LearningClassification::NO_DURABLE_LEARNING` to preserve pattern key and validation case lineage for validated Findings without creating promotion-ready soft guidance or Dream memory candidates when deterministic enforcement already owns the pattern (#112).
+
 ## [0.18.10] - 2026-09-13
 
 ### Added

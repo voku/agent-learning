@@ -19,6 +19,9 @@ final class FindingToMemoryPromotionPolicy
     {
         $groups = [];
         foreach ($findingsById as $finding) {
+            if ($finding->classification === LearningClassification::NO_DURABLE_LEARNING || $finding->classification === LearningClassification::IGNORE) {
+                continue;
+            }
             $key = $finding->patternKey ?? implode('|', $finding->scope);
             if ($key === '') {
                 continue;
