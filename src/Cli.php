@@ -689,20 +689,21 @@ final class Cli
             throw new ValidationException($root, null, $findingId, 'unsupported learning classification: ' . $classificationValue);
         }
 
-        $patternKey = null;
+        $patternKey = $this->stringOption($parsed['options'], 'pattern-key');
+        $given = $this->stringOption($parsed['options'], 'given');
+        $when = $this->stringOption($parsed['options'], 'when');
+        $then = $this->stringOption($parsed['options'], 'then');
+        $lineageOptions = [
+            '--pattern-key' => $patternKey,
+            '--given' => $given,
+            '--when' => $when,
+            '--then' => $then,
+        ];
+        $hasLineageMetadata = array_filter($lineageOptions, static fn(?string $value): bool => $value !== null) !== [];
         $validationCase = null;
-        if ($classification !== LearningClassification::IGNORE) {
-            $patternKey = $this->stringOption($parsed['options'], 'pattern-key');
-            $given = $this->stringOption($parsed['options'], 'given');
-            $when = $this->stringOption($parsed['options'], 'when');
-            $then = $this->stringOption($parsed['options'], 'then');
+        if ($classification !== LearningClassification::IGNORE || $hasLineageMetadata) {
             $missingOptions = [];
-            foreach ([
-                '--pattern-key' => $patternKey,
-                '--given' => $given,
-                '--when' => $when,
-                '--then' => $then,
-            ] as $label => $value) {
+            foreach ($lineageOptions as $label => $value) {
                 if ($value === null) {
                     $missingOptions[] = $label;
                 }
@@ -716,7 +717,7 @@ final class Cli
                 );
             }
             if ($patternKey === null || $given === null || $when === null || $then === null) {
-                throw new ValidationException($root, null, $findingId, 'finding-classify promotion metadata is incomplete');
+                throw new ValidationException($root, null, $findingId, 'finding-classify lineage metadata is incomplete');
             }
 
             $validationCase = new ValidationCase($given, $when, $then);

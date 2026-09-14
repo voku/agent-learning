@@ -43,6 +43,29 @@ final class FindingClassifierTest extends TestCase
         self::assertSame([], $after->blockers);
     }
 
+    public function testIgnoreMayRetainPatternLineageWithoutLearningNotePromotion(): void
+    {
+        $root = $this->createLearningRoot();
+        $created = $this->createFinding($root, 'finding.2026-09-12.92a004');
+
+        $ignored = (new FindingClassifier())->classify(
+            root: $root,
+            findingId: $created->finding->id,
+            classification: LearningClassification::IGNORE,
+            patternKey: 'finding.already.enforced',
+            validationCase: new ValidationCase(
+                'A recurring Finding belongs to a pattern already enforced by a deterministic constraint.',
+                'The Finding is classified as requiring no new durable guidance.',
+                'Pattern lineage remains reviewable without making a LearningNote promotable.',
+            ),
+        );
+
+        self::assertSame(LearningClassification::IGNORE, $ignored->classification);
+        self::assertSame('finding.already.enforced', $ignored->patternKey);
+        self::assertInstanceOf(ValidationCase::class, $ignored->validationCase);
+        self::assertFalse((new LearningNoteService())->promotionReadiness($root, $created->finding->id)->promotable);
+    }
+
     public function testInvalidTriageLeavesFindingByteForByteUnchanged(): void
     {
         $root = $this->createLearningRoot();

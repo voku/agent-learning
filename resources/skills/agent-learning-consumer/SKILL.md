@@ -26,7 +26,7 @@ Use this skill when a project wants to run `voku/agent-learning` locally. The go
    - `ADD_LEARNING_NOTE` is the default for a useful solved case that should remain precedent rather than active guidance. Author it through the package-owned `agent-learning-note` skill and `agent-learning-note prepare/publish` owner boundary; never write `notes/**` directly.
    - `UPDATE_SKILL` is preferred when an existing skill owns the behavior.
    - `CREATE_SKILL` is rare and requires existing-skill overlap evidence.
-   - `IGNORE` is valid for praise, vague reflection, and one-off noise.
+   - `IGNORE` means no new durable guidance. With no pattern metadata it remains suitable for praise, vague reflection, and one-off noise. When real recurring evidence is already structurally enforced, it may retain a complete `pattern_key` + `validation_case` pair for lineage without making a LearningNote promotable.
 5. Every non-`IGNORE` classification needs `pattern_key` and a concrete `validation_case` with `given`, `when`, and `then`.
 6. Prefer `NO_DURABLE_LEARNING` when the evidence does not support a bounded reusable change. A LearningNote is optional downstream knowledge capture and is never required proof that the software task itself is complete.
 7. Use proposals for reviewable mutations to skills, docs, memory, constraints, or other active durable guidance. LearningNotes do not bypass Proposal approval.

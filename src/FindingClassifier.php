@@ -30,7 +30,8 @@ final readonly class FindingClassifier
         $raw = $finding->raw;
         $raw['classification'] = $classification->value;
 
-        if ($classification === LearningClassification::IGNORE) {
+        $hasLineageMetadata = $patternKey !== null || $validationCase instanceof ValidationCase;
+        if ($classification === LearningClassification::IGNORE && !$hasLineageMetadata) {
             unset($raw['pattern_key'], $raw['validation_case']);
         } else {
             if ($patternKey === null || trim($patternKey) === '') {

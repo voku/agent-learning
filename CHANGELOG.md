@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Allow `IGNORE` Finding triage to retain an optional complete `pattern_key` + `validation_case` lineage pair when recurring evidence is already structurally enforced, while keeping bare `IGNORE` behavior unchanged and excluding ignored Findings from Finding-to-Memory promotion so hard enforcement does not resurrect superseded soft guidance.
+
 ## [0.18.10] - 2026-09-13
 
 ### Added

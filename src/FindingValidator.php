@@ -117,6 +117,17 @@ final class FindingValidator
         }
 
         if ($finding->classification === LearningClassification::IGNORE) {
+            $hasPatternKey = $finding->patternKey !== null && trim($finding->patternKey) !== '';
+            $hasValidationCase = $finding->validationCase instanceof ValidationCase;
+            if ($hasPatternKey !== $hasValidationCase) {
+                throw new ValidationException(
+                    $file,
+                    $line,
+                    $finding->id,
+                    'IGNORE lineage requires pattern_key and validation_case together',
+                );
+            }
+
             return;
         }
 

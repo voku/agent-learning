@@ -39,6 +39,29 @@ final class FindingClassifyCliTest extends TestCase
         self::assertTrue((new LearningNoteService())->promotionReadiness($root, $findingId)->promotable);
     }
 
+    public function testIgnoreMayRetainCompletePatternLineage(): void
+    {
+        $root = $this->createLearningRoot();
+        $findingId = $this->createFinding($root, 'finding.2026-09-12.92c004');
+
+        [$exitCode, $output] = $this->runCli($root, [
+            'finding-classify',
+            $findingId,
+            LearningClassification::IGNORE->value,
+            '--pattern-key', 'finding.already.enforced',
+            '--given', 'A recurring Finding belongs to a pattern already enforced deterministically.',
+            '--when', 'No new soft durable guidance should be created.',
+            '--then', 'Pattern lineage remains while LearningNote promotion stays blocked.',
+        ]);
+
+        self::assertSame(0, $exitCode, $output);
+        $finding = (new FindingValidator())->validateFile($root . '/findings/validated/' . $findingId . '.json');
+        self::assertSame(LearningClassification::IGNORE, $finding->classification);
+        self::assertSame('finding.already.enforced', $finding->patternKey);
+        self::assertInstanceOf(\voku\AgentLearning\ValidationCase::class, $finding->validationCase);
+        self::assertFalse((new LearningNoteService())->promotionReadiness($root, $findingId)->promotable);
+    }
+
     public function testInvalidClassificationDoesNotChangeFinding(): void
     {
         $root = $this->createLearningRoot();
