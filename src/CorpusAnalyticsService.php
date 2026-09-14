@@ -213,8 +213,8 @@ final class CorpusAnalyticsService
                 foreach ($p['source_findings'] as $fid) {
                     if (isset($findings[$fid]) && $findings[$fid]['created_at']) {
                         $diff = $p['created_at']->getTimestamp() - $findings[$fid]['created_at']->getTimestamp();
-                        if ($diff >= 0) {
-                            $fToPDurations[] = $diff / 3600.0;
+                        if ($diff >= -86400) {
+                            $fToPDurations[] = max(0.0, $diff / 3600.0);
                         }
                     }
                 }
@@ -245,14 +245,14 @@ final class CorpusAnalyticsService
                 'proposal_count' => $pCount,
                 'findings_per_proposal' => [
                     'avg' => $pCount > 0 ? round(array_sum($findingsPerP) / $pCount, 2) : 0.0,
-                    'median' => self::median($findingsPerP),
+                    'median' => self::median($findingsPerP) ?? 0.0,
                     'single_finding_count' => $pSingleFinding,
                     'multi_finding_count' => $pMultiFinding,
                     'single_finding_pct' => $pCount > 0 ? round($pSingleFinding / $pCount * 100, 1) : 0.0,
                 ],
                 'tasks_per_proposal' => [
                     'avg' => $pCount > 0 ? round(array_sum($tasksPerP) / $pCount, 2) : 0.0,
-                    'median' => self::median($tasksPerP),
+                    'median' => self::median($tasksPerP) ?? 0.0,
                     'single_task_count' => $pSingleTask,
                     'multi_task_count' => $pMultiTask,
                     'single_task_pct' => $pCount > 0 ? round($pSingleTask / $pCount * 100, 1) : 0.0,
@@ -262,12 +262,12 @@ final class CorpusAnalyticsService
                 'pure_1_to_1_pct' => $pCount > 0 ? round($pSingleFindingSingleTask / $pCount * 100, 1) : 0.0,
                 'proposal_outcomes' => $outcomes,
                 'finding_to_proposal_hours' => [
-                    'median' => round(self::median($fToPDurations), 1),
-                    'p90' => round(self::p90($fToPDurations), 1),
+                    'median' => self::median($fToPDurations) !== null ? round((float)self::median($fToPDurations), 1) : null,
+                    'p90' => self::p90($fToPDurations) !== null ? round((float)self::p90($fToPDurations), 1) : null,
                 ],
                 'proposal_to_terminal_days' => [
-                    'median' => round(self::median($pToTerminalDays), 1),
-                    'p90' => round(self::p90($pToTerminalDays), 1),
+                    'median' => self::median($pToTerminalDays) !== null ? round((float)self::median($pToTerminalDays), 1) : null,
+                    'p90' => self::p90($pToTerminalDays) !== null ? round((float)self::p90($pToTerminalDays), 1) : null,
                 ],
             ];
         }
@@ -393,12 +393,12 @@ final class CorpusAnalyticsService
     /**
      * @param list<int|float> $arr
      */
-    private static function median(array $arr): float
+    private static function median(array $arr): ?float
     {
         sort($arr);
         $n = count($arr);
         if ($n === 0) {
-            return 0.0;
+            return null;
         }
         $mid = intdiv($n, 2);
 
@@ -408,12 +408,12 @@ final class CorpusAnalyticsService
     /**
      * @param list<int|float> $arr
      */
-    private static function p90(array $arr): float
+    private static function p90(array $arr): ?float
     {
         sort($arr);
         $n = count($arr);
         if ($n === 0) {
-            return 0.0;
+            return null;
         }
         $idx = (int)ceil($n * 0.90) - 1;
 

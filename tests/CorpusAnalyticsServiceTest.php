@@ -31,6 +31,8 @@ final class CorpusAnalyticsServiceTest extends TestCase
         self::assertSame(1, $result->cohorts['2026-07']['finding_count']);
         self::assertSame(1, $result->cohorts['2026-06']['proposal_count']);
         self::assertSame(1, $result->cohorts['2026-07']['proposal_count']);
+        self::assertSame(5.0, $result->cohorts['2026-06']['proposal_to_terminal_days']['median']);
+        self::assertNull($result->cohorts['2026-07']['proposal_to_terminal_days']['median']);
 
         // Lifecycle breakdown
         self::assertSame(1, $result->lifecycleBreakdown['active_or_pending']['applied']);

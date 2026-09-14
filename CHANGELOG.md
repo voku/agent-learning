@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.18.15] - 2026-09-14
+
+### Fixed
+
+- Report `null` / `N/A` for cohort latencies when no terminal transitions exist, rather than emitting a misleading `0.0d` (#115).
+- Tolerate sub-day clock skew or timezone offsets when calculating finding-to-proposal durations.
+
+### Validation
+
+- `composer ci` passed with 374 tests, 1332 assertions, and PHPStan clean level max.
+
 ## [0.18.14] - 2026-09-14
 
 ### Fixed

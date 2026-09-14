@@ -27,8 +27,8 @@ final readonly class CorpusAnalysisResult
      *     pure_1_to_1_count: int,
      *     pure_1_to_1_pct: float,
      *     proposal_outcomes: array<string, int>,
-     *     finding_to_proposal_hours: array{median: float, p90: float},
-     *     proposal_to_terminal_days: array{median: float, p90: float},
+     *     finding_to_proposal_hours: array{median: ?float, p90: ?float},
+     *     proposal_to_terminal_days: array{median: ?float, p90: ?float},
      * }> $cohorts
      * @param array{
      *     total_proposals: int,
@@ -74,9 +74,14 @@ final readonly class CorpusAnalysisResult
 
     public function toText(): string
     {
-        $out = "=== Learning Corpus Analytics ===\n\n";
+        return $this->__toString();
+    }
+
+    public function __toString(): string
+    {
+        $out = "=== Learning Corpus Analytics ===\n";
         $out .= sprintf(
-            "Summary: %d Findings, %d Proposals (%d with proposals, %.1f%% rate), %d Active Notes, %d Active Constraints\n\n",
+            "Total Findings: %d | Total Proposals: %d (%d with proposals, %.1f%%)\nActive LearningNotes: %d | Active Constraints: %d\n\n",
             $this->summary['total_findings'],
             $this->summary['total_proposals'],
             $this->summary['findings_with_proposals'],
@@ -86,18 +91,21 @@ final readonly class CorpusAnalysisResult
         );
 
         $out .= "--- Cohort Evolution ---\n";
-        $out .= sprintf("%-10s | %8s | %8s | %10s | %9s | %12s | %11s\n", 'Cohort', 'Findings', 'Tasks', 'F->P Rate', 'Proposals', 'Pure 1:1 (%)', 'Latency (h)');
-        $out .= str_repeat('-', 80) . "\n";
+        $out .= sprintf("%-10s | %8s | %8s | %10s | %9s | %12s | %12s | %15s\n", 'Cohort', 'Findings', 'Tasks', 'F->P Rate', 'Proposals', 'Pure 1:1 (%)', 'F->P Latency', 'P->Term Latency');
+        $out .= str_repeat('-', 100) . "\n";
         foreach ($this->cohorts as $cohort => $data) {
+            $fToPMed = $data['finding_to_proposal_hours']['median'];
+            $pToTermMed = $data['proposal_to_terminal_days']['median'];
             $out .= sprintf(
-                "%-10s | %8d | %8d | %9.1f%% | %9d | %11.1f%% | %11.1f\n",
+                "%-10s | %8d | %8d | %9.1f%% | %9d | %11.1f%% | %12s | %15s\n",
                 $cohort,
                 $data['finding_count'],
                 $data['distinct_tasks'],
                 $data['finding_to_proposal_rate'],
                 $data['proposal_count'],
                 $data['pure_1_to_1_pct'],
-                $data['finding_to_proposal_hours']['median'],
+                $fToPMed !== null ? sprintf('%.1fh', $fToPMed) : 'N/A',
+                $pToTermMed !== null ? sprintf('%.1fd', $pToTermMed) : 'N/A',
             );
         }
         $out .= "\n";
