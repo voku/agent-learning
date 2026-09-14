@@ -47,7 +47,7 @@ final class CorpusAnalyticsServiceTest extends TestCase
         [$exitCodeText, $outputText] = $this->runCli($root, ['corpus-analyze']);
         self::assertSame(0, $exitCodeText, $outputText);
         self::assertStringContainsString('=== Learning Corpus Analytics ===', $outputText);
-        self::assertStringContainsString('Compiled Down to Constraint: 1', $outputText);
+        self::assertStringContainsString('Compiled Down to Active Constraint: 1', $outputText);
     }
 
     private function createFixtureLearningRoot(): string

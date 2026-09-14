@@ -1,6 +1,16 @@
 # Changelog
 
-## [Unreleased]
+## [0.18.13] - 2026-09-14
+
+### Fixed
+
+- Restore `0.18.8` changelog entry so release marker validation passes in release-tag workflow.
+- Replace substring heuristics in `CorpusAnalyticsService` with strict owner-evidence (active constraint manifests in `constraints/active/`, structural `superseded_by`, canonical phrases) and expose explicit `RATIONALE_CORRECTED`, `OTHER_AUDITED_REASON`, and `UNKNOWN_LEGACY_REASON` buckets (#116).
+- Remove invented 35% cohort threshold and arbitrary `HISTORICAL_ONLY`/`CURRENT_EVALUATION` classification from consolidation analysis (#117).
+
+### Validation
+
+- `composer ci` passed with 374 tests, 1330 assertions, and PHPStan clean level max.
 
 ## [0.18.12] - 2026-09-14
 
@@ -47,6 +57,7 @@
 
 - Typed consumer and maintainer resource scoping in `PackageResources`: `consumerSkills()` exposes consumer-facing skills (`agent-learning-consumer`, `agent-learning-note`, `agent-hard-constraint-author`, `agent-learning-ctx-evidence`), `maintainerSkills()` exposes `agent-learning-maintainer`, and `consumerInstructionFragment()` provides a concise AGENTS.md instruction fragment for consumer repositories.
 
+## [0.18.8] - 2026-09-13
 
 ### Added
 

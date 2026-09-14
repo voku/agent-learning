@@ -39,15 +39,16 @@ final readonly class CorpusAnalysisResult
      *         COMPILED_DOWN_TO_CONSTRAINT: int,
      *         SUPERSEDED_BY_PROPOSAL: int,
      *         DUPLICATE_CONSOLIDATION: int,
-     *         STALE_OR_DEFUNCT_TARGET: int,
-     *         OTHER_EXPLICIT_REASON: int,
+     *         RATIONALE_CORRECTED: int,
+     *         OTHER_AUDITED_REASON: int,
+     *         UNKNOWN_LEGACY_REASON: int,
      *     },
      * } $lifecycleBreakdown
      * @param array{
      *     proposals_per_finding_distribution: array<int, int>,
      *     findings_per_proposal_distribution: array<int, int>,
      *     distinct_tasks_per_proposal_distribution: array<int, int>,
-     *     classification: string,
+     *     classification?: string,
      * } $consolidation
      */
     public function __construct(
@@ -116,14 +117,17 @@ final readonly class CorpusAnalysisResult
             $terminal['acknowledged_no_durable_learning'],
         );
         $out .= "  - Captured in Target Canonical Guidance: " . $retiredBuckets['CAPTURED_IN_TARGET_HOME'] . "\n";
-        $out .= "  - Compiled Down to Constraint: " . $retiredBuckets['COMPILED_DOWN_TO_CONSTRAINT'] . "\n";
+        $out .= "  - Compiled Down to Active Constraint: " . $retiredBuckets['COMPILED_DOWN_TO_CONSTRAINT'] . "\n";
         $out .= "  - Superseded by Proposal: " . $retiredBuckets['SUPERSEDED_BY_PROPOSAL'] . "\n";
         $out .= "  - Duplicate Consolidation: " . $retiredBuckets['DUPLICATE_CONSOLIDATION'] . "\n";
-        $out .= "  - Stale / Defunct Target: " . $retiredBuckets['STALE_OR_DEFUNCT_TARGET'] . "\n";
-        $out .= "  - Other Explicit Reason: " . $retiredBuckets['OTHER_EXPLICIT_REASON'] . "\n\n";
+        $out .= "  - Rationale Corrected: " . $retiredBuckets['RATIONALE_CORRECTED'] . "\n";
+        $out .= "  - Other Audited Reason: " . $retiredBuckets['OTHER_AUDITED_REASON'] . "\n";
+        $out .= "  - Unknown Legacy Reason: " . $retiredBuckets['UNKNOWN_LEGACY_REASON'] . "\n\n";
 
-        $out .= "--- Consolidation & Dream Diagnostics ---\n";
-        $out .= "Classification: " . $this->consolidation['classification'] . "\n";
+        $out .= "--- Consolidation Distributions ---\n";
+        if (isset($this->consolidation['classification']) && $this->consolidation['classification'] !== '') {
+            $out .= "Classification: " . $this->consolidation['classification'] . "\n";
+        }
         $out .= "Findings per Proposal distribution: " . json_encode($this->consolidation['findings_per_proposal_distribution']) . "\n";
         $out .= "Tasks per Proposal distribution: " . json_encode($this->consolidation['distinct_tasks_per_proposal_distribution']) . "\n";
         $out .= "Proposals per Finding distribution: " . json_encode($this->consolidation['proposals_per_finding_distribution']) . "\n";

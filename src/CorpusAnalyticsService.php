@@ -277,30 +277,44 @@ final class CorpusAnalyticsService
         $supersededCount = 0;
         $capturedInTargetCount = 0;
         $duplicateCount = 0;
-        $staleOrDefunctCount = 0;
-        $otherExplicitCount = 0;
+        $rationaleCorrectedCount = 0;
+        $otherAuditedCount = 0;
+        $unknownLegacyCount = 0;
 
         foreach ($proposals as $p) {
             if ($p['status'] !== 'retired') {
                 continue;
             }
+            if ($p['terminal_info'] === null) {
+                // Missing audit trail in retired-proposals.jsonl
+                ++$unknownLegacyCount;
+                continue;
+            }
+
             $r = is_string($p['terminal_info']['reason'] ?? null)
                 ? (string)$p['terminal_info']['reason']
                 : $p['reason'];
-            $lower = strtolower($r);
+            $lower = strtolower(trim($r));
 
-            if (isset($proposalsWithConstraints[$p['id']]) || str_contains($lower, 'constraint') || str_contains($lower, 'phpstan') || str_contains($lower, 'project rule') || str_contains($lower, 'compile-down')) {
+            // 1. Structurally verified constraint compile-down (active constraint manifest exists in constraints/active/)
+            if (isset($proposalsWithConstraints[$p['id']])) {
                 ++$compileDownCount;
-            } elseif (str_contains($lower, 'duplicate')) {
-                ++$duplicateCount;
-            } elseif (str_contains($lower, 'superseded') || str_contains($lower, 'superseded_by') || !empty($p['superseded_by']) || str_contains($lower, 'rationale corrected') || str_contains($lower, 'wrong abstraction')) {
+            // 2. Structurally verified supersession
+            } elseif (!empty($p['superseded_by']) || !empty($p['terminal_info']['superseded_by'])) {
                 ++$supersededCount;
-            } elseif (str_contains($lower, 'fully captured') || str_contains($lower, 'captured in') || str_contains($lower, 'target skill') || str_contains($lower, 'live file')) {
+            // 3. Explicit canonical graduation into target home
+            } elseif (str_starts_with($lower, 'fully captured')) {
                 ++$capturedInTargetCount;
-            } elseif (str_contains($lower, 'no longer present') || str_contains($lower, 'stale') || str_contains($lower, 'renamed') || str_contains($lower, 'obsolete')) {
-                ++$staleOrDefunctCount;
+            // 4. Explicit duplicate consolidation
+            } elseif (str_starts_with($lower, 'duplicate')) {
+                ++$duplicateCount;
+            // 5. Explicit rationale correction
+            } elseif (str_starts_with($lower, 'retirement rationale corrected') || str_starts_with($lower, 'retired after review')) {
+                ++$rationaleCorrectedCount;
+            } elseif ($lower !== '') {
+                ++$otherAuditedCount;
             } else {
-                ++$otherExplicitCount;
+                ++$unknownLegacyCount;
             }
         }
 
@@ -321,8 +335,9 @@ final class CorpusAnalyticsService
                 'COMPILED_DOWN_TO_CONSTRAINT' => $compileDownCount,
                 'SUPERSEDED_BY_PROPOSAL' => $supersededCount,
                 'DUPLICATE_CONSOLIDATION' => $duplicateCount,
-                'STALE_OR_DEFUNCT_TARGET' => $staleOrDefunctCount,
-                'OTHER_EXPLICIT_REASON' => $otherExplicitCount,
+                'RATIONALE_CORRECTED' => $rationaleCorrectedCount,
+                'OTHER_AUDITED_REASON' => $otherAuditedCount,
+                'UNKNOWN_LEGACY_REASON' => $unknownLegacyCount,
             ],
         ];
 
@@ -354,18 +369,10 @@ final class CorpusAnalyticsService
         }
         ksort($pToTCounts);
 
-        // Classification
-        $lastCohortKey = !empty($cohortKeys) ? end($cohortKeys) : null;
-        $lastRate = $lastCohortKey && isset($cohorts[$lastCohortKey]) ? $cohorts[$lastCohortKey]['finding_to_proposal_rate'] : 100.0;
-        $classification = ($lastRate < 35.0 && count($cohorts) > 1)
-            ? 'HISTORICAL_ONLY'
-            : 'CURRENT_EVALUATION';
-
         $consolidation = [
             'proposals_per_finding_distribution' => $fToPCounts,
             'findings_per_proposal_distribution' => $pToFCounts,
             'distinct_tasks_per_proposal_distribution' => $pToTCounts,
-            'classification' => $classification,
         ];
 
         return new CorpusAnalysisResult(

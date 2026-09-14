@@ -175,7 +175,7 @@ final class LearningCatalogTest extends TestCase
         self::assertGreaterThanOrEqual(2, $analytics->summary['total_proposals']);
         self::assertNotEmpty($analytics->cohorts);
         self::assertArrayHasKey('terminal_proposals', $analytics->lifecycleBreakdown);
-        self::assertArrayHasKey('classification', $analytics->consolidation);
+        self::assertArrayHasKey('findings_per_proposal_distribution', $analytics->consolidation);
     }
 
     /** @return array<string, string> */
