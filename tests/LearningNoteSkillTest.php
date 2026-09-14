@@ -65,4 +65,14 @@ final class LearningNoteSkillTest extends TestCase
         self::assertStringContainsString('never write `notes/**` directly', $consumer);
         self::assertStringContainsString('never required proof that the software task itself is complete', $consumer);
     }
+
+    public function testConsumerSkillExplainsNoDurableLearningLineageSemantics(): void
+    {
+        $consumer = (string) file_get_contents(__DIR__ . '/../resources/skills/agent-learning-consumer/SKILL.md');
+
+        self::assertStringContainsString('`NO_DURABLE_LEARNING` preserves a real reusable `pattern_key` + `validation_case` lineage', $consumer);
+        self::assertStringContainsString('`IGNORE` remains for praise, vague reflection, and one-off noise', $consumer);
+        self::assertStringContainsString('finding-classify', $consumer);
+        self::assertStringContainsString('Preserve lineage without creating new soft guidance.', $consumer);
+    }
 }
