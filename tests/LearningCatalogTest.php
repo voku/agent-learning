@@ -166,6 +166,18 @@ final class LearningCatalogTest extends TestCase
         self::assertSame($before, $this->snapshot($this->root));
     }
 
+    public function testCorpusAnalyticsReturnsAggregatedResult(): void
+    {
+        $catalog = new LearningCatalog($this->root);
+        $analytics = $catalog->corpusAnalytics();
+
+        self::assertGreaterThanOrEqual(2, $analytics->summary['total_findings']);
+        self::assertGreaterThanOrEqual(2, $analytics->summary['total_proposals']);
+        self::assertNotEmpty($analytics->cohorts);
+        self::assertArrayHasKey('terminal_proposals', $analytics->lifecycleBreakdown);
+        self::assertArrayHasKey('classification', $analytics->consolidation);
+    }
+
     /** @return array<string, string> */
     private function snapshot(string $root): array
     {

@@ -51,6 +51,7 @@ final class Cli
                 'proposal-mark-applied' => $this->proposalMarkAppliedCommand($tokens),
                 'proposal-retire' => $this->proposalRetireCommand($tokens),
                 'proposal-reanchor' => $this->proposalReanchorCommand($tokens),
+                'corpus-analyze' => $this->corpusAnalyzeCommand($tokens),
                 'help', '--help', '-h' => $this->helpCommand(),
                 default => $this->unknownCommand($command),
             };
@@ -963,6 +964,28 @@ final class Cli
         return 0;
     }
 
+    /**
+     * Analyze workflow evolution, proposal lifecycle outcomes, and consolidation metrics.
+     *
+     * @param list<string> $tokens
+     */
+    private function corpusAnalyzeCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $format = $this->stringOption($parsed['options'], 'format') ?? 'text';
+
+        $result = (new CorpusAnalyticsService())->analyze($root);
+
+        if ($format === 'json') {
+            $this->write(json_encode($result->toArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
+        } else {
+            $this->write($result->toText() . "\n");
+        }
+
+        return 0;
+    }
+
     private function helpCommand(): int
     {
         $this->write(
@@ -989,7 +1012,8 @@ final class Cli
             . "  proposal-acknowledge Formally close a candidate NO_DURABLE_LEARNING proposal without approving or rejecting it.\n"
             . "  proposal-mark-applied Mark an approved proposal as applied externally.\n"
             . "  proposal-retire      Retire an applied proposal once its target fully captures the change.\n"
-            . "  proposal-reanchor    Re-pin every applied memory/skill proof on one target file after it legitimately changed.\n\n"
+            . "  proposal-reanchor    Re-pin every applied memory/skill proof on one target file after it legitimately changed.\n"
+            . "  corpus-analyze       Analyze workflow evolution, proposal lifecycle outcomes, and consolidation metrics.\n\n"
             . "Options:\n"
             . "  --root PATH              Learning root or project root. Defaults to auto-discovery.\n"
             . "  --task-id-pattern REGEX  Override finding task id validation.\n"

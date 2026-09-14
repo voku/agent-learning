@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.18.12] - 2026-09-14
+
+### Added
+
+- Add `CorpusAnalyticsService` and `bin/agent-learning corpus-analyze` command to compute workflow evolution by monthly cohorts (#115), proposal terminal lifecycle breakdown (#116), and consolidation distributions (#117).
+- Expose `corpusAnalytics(): CorpusAnalysisResult` on `LearningCatalog` for typed, read-only UI and agent integration.
+
+### Validation
+
+- `composer ci` passed with 374 tests, 1330 assertions, and PHPStan clean level max.
+
 ## [0.18.11] - 2026-09-14
 
 ### Added

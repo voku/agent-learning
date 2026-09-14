@@ -228,6 +228,11 @@ final readonly class LearningCatalog
         );
     }
 
+    public function corpusAnalytics(): CorpusAnalysisResult
+    {
+        return (new CorpusAnalyticsService())->analyze($this->root);
+    }
+
     private function state(): LearningRepositoryValidationResult
     {
         return $this->validator->validate($this->root);
