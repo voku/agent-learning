@@ -18,7 +18,9 @@ final class AppliedGuidanceRecoveryDiagnosticTest extends TestCase
     protected function setUp(): void
     {
         $this->root = sys_get_temp_dir() . '/applied-guidance-recovery-' . bin2hex(random_bytes(8));
-        mkdir($this->root, 0777, true);
+        mkdir($this->root . '/findings/validated', 0777, true);
+        mkdir($this->root . '/proposals/applied', 0777, true);
+        mkdir($this->root . '/history', 0777, true);
     }
 
     protected function tearDown(): void
