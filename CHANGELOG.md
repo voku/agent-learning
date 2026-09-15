@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [0.18.16] - 2026-09-15
+
+### Validation
+
+- `composer ci` passed with 380 tests, 1360 assertions, and PHPStan clean level max.
 
 ### Fixed
 
