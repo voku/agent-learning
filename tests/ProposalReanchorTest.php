@@ -306,6 +306,141 @@ final class ProposalReanchorTest extends TestCase
         (new ProposalTransitionManager())->reanchorTarget($this->root, 'docs/gone.md', 'lars', 'A reason.');
     }
 
+    public function testASupersededProofIsRetiredWhileTheRestOfTheTargetIsReanchoredInOneTransaction(): void
+    {
+        $deepened = 'Keep the packaged entrypoint callable and covered by a smoke test.';
+        $replacementId = 'proposal.2026-06-09.001';
+        $this->writeMemory($deepened, self::SECOND_RULE);
+        $this->writeCandidateReplacement($replacementId, self::FIRST_RULE, self::FIRST_RULE, $deepened);
+
+        try {
+            (new ProposalTransitionManager())->reanchorTarget($this->root, 'MEMORY.md', 'lars', 'Deepened row.');
+            self::fail('a drifted proof must keep blocking a plain re-anchor.');
+        } catch (ValidationException $exception) {
+            self::assertStringContainsString('guidance wording is not present', $exception->getMessage());
+        }
+
+        $repaired = (new ProposalTransitionManager())->reanchorTarget(
+            $this->root,
+            'MEMORY.md',
+            'lars',
+            'The first row was deepened; its replacement is under review.',
+            [self::FIRST_ID => $replacementId],
+        );
+
+        self::assertSame([self::SECOND_ID], $repaired);
+        self::assertFileDoesNotExist($this->root . '/proposals/applied/' . self::FIRST_ID . '.json');
+
+        /** @var array<string, mixed> $retired */
+        $retired = json_decode(
+            (string) file_get_contents($this->root . '/proposals/retired/' . self::FIRST_ID . '.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame('retired', $retired['status']);
+        self::assertSame($replacementId, $retired['superseded_by']);
+        self::assertSame('lars', $retired['retired_by']);
+        self::assertSame('maintainer', $retired['approved_by'], 'retirement keeps the original decision evidence.');
+
+        /** @var array<string, mixed> $second */
+        $second = json_decode(
+            (string) file_get_contents($this->root . '/proposals/applied/' . self::SECOND_ID . '.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        /** @var array<string, mixed> $secondValidation */
+        $secondValidation = $second['applied_validation'];
+        self::assertSame($this->hashMemory(), $secondValidation['target_content_hash']);
+
+        $retiredHistory = array_values(array_filter(explode(
+            "\n",
+            (string) file_get_contents($this->root . '/history/retired-proposals.jsonl'),
+        )));
+        self::assertCount(1, $retiredHistory);
+        /** @var array<string, mixed> $retirementRecord */
+        $retirementRecord = json_decode($retiredHistory[0], true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(self::FIRST_ID, $retirementRecord['proposal_id']);
+        self::assertSame($replacementId, $retirementRecord['superseded_by']);
+
+        (new DecisionHistoryValidator())->validateHistory(
+            $this->root,
+            (new ProposalRepository())->loadAll($this->root, []),
+        );
+    }
+
+    public function testASupersessionMustNameAnAppliedProofOnTheTarget(): void
+    {
+        $this->writeMemory(self::FIRST_RULE, self::SECOND_RULE, 'An unrelated row moved home.');
+        $this->writeCandidateReplacement('proposal.2026-06-09.001', self::FIRST_RULE, self::FIRST_RULE, 'Other wording.');
+        $before = (string) file_get_contents($this->root . '/proposals/applied/' . self::FIRST_ID . '.json');
+
+        try {
+            (new ProposalTransitionManager())->reanchorTarget(
+                $this->root,
+                'MEMORY.md',
+                'lars',
+                'A reason.',
+                ['proposal.2026-01-01.999' => 'proposal.2026-06-09.001'],
+            );
+            self::fail('a supersession naming no applied proof on the target must be refused.');
+        } catch (ValidationException $exception) {
+            self::assertStringContainsString('is not an applied memory/skill proof on target', $exception->getMessage());
+        }
+
+        self::assertSame($before, (string) file_get_contents($this->root . '/proposals/applied/' . self::FIRST_ID . '.json'));
+        self::assertFileDoesNotExist($this->root . '/history/reanchored-proposals.jsonl');
+        self::assertFileDoesNotExist($this->root . '/history/retired-proposals.jsonl');
+    }
+
+    public function testTheReplacementMustNameTheSupersededTarget(): void
+    {
+        $deepened = 'Keep the packaged entrypoint callable and covered by a smoke test.';
+        $this->writeMemory($deepened, self::SECOND_RULE);
+        $this->writeCandidateReplacement('proposal.2026-06-09.001', 'An unrelated target', self::FIRST_RULE, $deepened);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessageMatches('/must be active and name the same target/');
+
+        (new ProposalTransitionManager())->reanchorTarget(
+            $this->root,
+            'MEMORY.md',
+            'lars',
+            'A reason.',
+            [self::FIRST_ID => 'proposal.2026-06-09.001'],
+        );
+    }
+
+    private function writeCandidateReplacement(string $proposalId, string $target, string $old, string $new): void
+    {
+        /** @var array<string, mixed> $proposal */
+        $proposal = json_decode(
+            (string) file_get_contents(__DIR__ . '/fixtures/proposals/' . self::FIRST_ID . '.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        foreach (['approved_by', 'approved_at', 'applied_by', 'applied_at', 'commit', 'applied_validation'] as $field) {
+            unset($proposal[$field]);
+        }
+        $proposal['id'] = $proposalId;
+        $proposal['status'] = 'candidate';
+        $proposal['action'] = 'REPLACE';
+        $proposal['target_type'] = 'memory';
+        $proposal['target'] = $target;
+        $proposal['old'] = $old;
+        $proposal['new'] = $new;
+
+        if (!is_dir($this->root . '/proposals/candidate')) {
+            mkdir($this->root . '/proposals/candidate', 0777, true);
+        }
+        file_put_contents(
+            $this->root . '/proposals/candidate/' . $proposalId . '.json',
+            json_encode($proposal, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR),
+        );
+    }
+
     private function hashMemory(): string
     {
         return (string) hash_file('sha256', $this->root . '/MEMORY.md');

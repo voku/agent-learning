@@ -46,6 +46,14 @@ It requires an explicit actor and reason, re-pins every applied memory/skill pro
 for that target in one transaction, and refuses the repair when any applied
 proposal's own guidance is no longer present. Do not hand-edit proposal hashes.
 
+A semantically drifted proof can block the repair of every stale proof on the
+same target, because each transition validates the whole root. For that case
+`proposal-reanchor --supersede <drifted-id>=<replacement-id>` retires the named
+proof in the same transaction - the replacement must exist, be active, and name
+the same target - while the remaining proofs are re-pinned under the usual
+wording assertion. The replacement itself still needs its own approval and
+application.
+
 If any check fails, repository validation fails. During
 `ProposalTransitionManager::apply()` that failure rolls the transition back to
 `approved` and no successful application decision is appended.

@@ -155,6 +155,17 @@ Every transition - `approve`, `reject`, `retire`, `acknowledge`, `apply` and `re
 
 Re-anchoring is a proof repair, not a decision. It never makes a target that lost the rule look applied, and it is not a substitute for `proposal-retire` when the guidance itself should leave the active pool.
 
+When one proof on a shared target drifted semantically - its reviewed wording was later refined - while the others only went stale, neither `proposal-retire` nor a plain `proposal-reanchor` can commit: each transition validates the whole root, so the drifted proof and the stale ones block each other. Name the drifted proof and the reviewed proposal that replaces it:
+
+```bash
+vendor/bin/agent-learning proposal-reanchor MEMORY.md \
+  --supersede proposal.2026-06-08.001=proposal.2026-06-09.001 \
+  --by maintainer \
+  --reason 'The first row was refined; its REPLACE proposal is under review.'
+```
+
+The superseded proof is retired in the same transaction (with `superseded_by`, an explicit actor and reason, and a `history/retired-proposals.jsonl` record) instead of being re-pinned; every other proof on the target is re-pinned under the usual wording assertion, and the root is validated once. The replacement must exist, must not be retired or rejected, and must name the same `target`. It is not approved or applied by this command.
+
 ```bash
 vendor/bin/agent-learning dream \
   --root infra/doc/agent-learning \

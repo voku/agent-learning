@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Let `proposal-reanchor` repair a shared target whose proofs block each other: `--supersede <drifted-id>=<replacement-id>` retires a semantically drifted applied proof (with `superseded_by`, actor, reason and a retirement history record) in the same transaction that re-pins the remaining proofs, and validates the root once. The replacement must exist, be active and name the same target; it is not approved or applied. Previously a drifted proof and a stale proof on one file made every transition roll back.
+
 ## [0.18.15] - 2026-09-14
 
 ### Fixed

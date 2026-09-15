@@ -418,13 +418,28 @@ final class ProposalTransitionManager
      * approval, application and validation evidence stay exactly as they were.
      * Only the hash, an explicit actor and an explicit reason are added.
      *
+     * A proof whose reviewed wording itself changed is semantic drift, not a
+     * stale hash, and re-anchoring must never cover it. It still blocks every
+     * other proof on the same file, because each transition validates the whole
+     * root. `$supersessions` names such proofs explicitly, each with the proposal
+     * that replaces it: they are retired in the same transaction instead of being
+     * re-pinned, so the file's remaining proofs can commit. Nothing is approved
+     * or applied here; the replacement still goes through its own transitions.
+     *
+     * @param array<string, string> $supersessions superseded applied proposal id => replacement proposal id
      * @return list<string> the repaired proposal ids, in stable order
      * @throws ValidationException when no applied proof names the target, the
-     *                             target is missing, or one of them no longer
-     *                             carries the guidance it claims
+     *                             target is missing, one of them no longer
+     *                             carries the guidance it claims, or a
+     *                             supersession is not provable
      */
-    public function reanchorTarget(string $root, string $sourceRef, string $actor, string $reason): array
+    public function reanchorTarget(string $root, string $sourceRef, string $actor, string $reason, array $supersessions = []): array
     {
+        foreach ($supersessions as $supersededId => $replacementId) {
+            if (trim($supersededId) === '' || trim($replacementId) === '' || trim($supersededId) === trim($replacementId)) {
+                throw new ValidationException($root, null, null, 'a supersession must name two different proposal ids');
+            }
+        }
         $sourceRef = trim(str_replace('\\', '/', $sourceRef));
         if ($sourceRef === '') {
             throw new ValidationException($root, null, null, 'target source ref must be explicit');
@@ -454,6 +469,7 @@ final class ProposalTransitionManager
 
         $writes = [];
         $repaired = [];
+        $retirements = [];
         foreach ($this->appliedGuidanceFiles($root) as $proposalPath) {
             $record = $parser->parseFile($proposalPath);
             if (!in_array($record->targetType, [GuidanceType::MEMORY->value, GuidanceType::SKILL->value], true)) {
@@ -478,6 +494,46 @@ final class ProposalTransitionManager
                 continue;
             }
 
+            if (array_key_exists($record->id, $supersessions)) {
+                // A superseded proof is retired, never re-pinned: its wording is
+                // not asserted because the caller already declared it drifted.
+                $replacementId = trim($supersessions[$record->id]);
+                $replacement = $parser->parseFile($this->resolveProposalPath($replacementId, $root));
+                if (
+                    $replacement->status === ProposalStatus::RETIRED
+                    || $replacement->status->value === 'rejected'
+                    || $replacement->target !== $record->target
+                ) {
+                    throw new ValidationException($proposalPath, null, $record->id, 'superseding proposal must be active and name the same target: ' . $replacementId);
+                }
+
+                $retiredId = $record->id;
+                $retiredData = $record->raw;
+                $retiredData['status'] = ProposalStatus::RETIRED->value;
+                $retiredData['reason'] = $reason;
+                $retiredData['retired_by'] = $actor;
+                $retiredData['retired_at'] = $nowStr;
+                $retiredData['superseded_by'] = $replacementId;
+                $retirements[] = [
+                    'id' => $retiredId,
+                    'from' => $proposalPath,
+                    'to' => $root . '/proposals/retired/' . $retiredId . '.json',
+                    'content' => json_encode($retiredData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                    // Allocated inside the lock, after the previous retirement
+                    // line was appended, so ids in one transaction never collide.
+                    'line' => fn (): string => json_encode([
+                        'id' => $this->generateRetirementId($root, $now),
+                        'proposal_id' => $retiredId,
+                        'retired_by' => $actor,
+                        'retired_at' => $nowStr,
+                        'reason' => $reason,
+                        'superseded_by' => $replacementId,
+                    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n",
+                ];
+
+                continue;
+            }
+
             $validation['target_content_hash'] = $hash;
             $validation['reanchored_by'] = $actor;
             $validation['reanchored_at'] = $nowStr;
@@ -493,7 +549,14 @@ final class ProposalTransitionManager
             $repaired[] = $record->id;
         }
 
-        if ($repaired === []) {
+        $retiredIds = array_column($retirements, 'id');
+        foreach (array_keys($supersessions) as $supersededId) {
+            if (!in_array($supersededId, $retiredIds, true)) {
+                throw new ValidationException($root, null, $supersededId, 'superseded proposal is not an applied memory/skill proof on target: ' . $sourceRef);
+            }
+        }
+
+        if ($repaired === [] && $retirements === []) {
             throw new ValidationException($root, null, null, 'no applied memory/skill proof names target: ' . $sourceRef);
         }
 
@@ -518,32 +581,36 @@ final class ProposalTransitionManager
             return $lines;
         };
 
-        $this->persistReanchor($root, $writes, $historyLines);
+        $this->persistReanchor($root, $writes, $repaired === [] ? null : $historyLines, $retirements);
 
         return $repaired;
     }
 
     /**
      * @param array<string, string> $writes proposal path => repaired content
+     * @param (Closure(): string)|null $historyLines
+     * @param list<array{id: string, from: string, to: string, content: string, line: Closure(): string}> $retirements
      * @throws ValidationException when the repaired root does not validate
      */
-    private function persistReanchor(string $root, array $writes, Closure $historyLines): void
+    private function persistReanchor(string $root, array $writes, ?Closure $historyLines, array $retirements): void
     {
-        $this->withRootLock($root, function () use ($root, $writes, $historyLines): void {
-            $this->persistReanchorLocked($root, $writes, $historyLines);
+        $this->withRootLock($root, function () use ($root, $writes, $historyLines, $retirements): void {
+            $this->persistReanchorLocked($root, $writes, $historyLines, $retirements);
         });
     }
 
     /**
      * @param array<string, string> $writes proposal path => repaired content
-     * @param Closure(): string     $historyLines
+     * @param (Closure(): string)|null $historyLines
+     * @param list<array{id: string, from: string, to: string, content: string, line: Closure(): string}> $retirements
      * @throws ValidationException when the repaired root does not validate
      */
-    private function persistReanchorLocked(string $root, array $writes, Closure $historyLines): void
+    private function persistReanchorLocked(string $root, array $writes, ?Closure $historyLines, array $retirements): void
     {
         $historyPath = $root . '/history/reanchored-proposals.jsonl';
+        $retiredHistoryPath = $root . '/history/retired-proposals.jsonl';
         $originalProposals = [];
-        foreach (array_keys($writes) as $path) {
+        foreach ([...array_keys($writes), ...array_column($retirements, 'from')] as $path) {
             $original = file_get_contents($path);
             if ($original === false) {
                 throw new ValidationException($path, null, null, 'cannot read proposal file');
@@ -554,7 +621,12 @@ final class ProposalTransitionManager
         if ($originalHistory === false) {
             throw new ValidationException($historyPath, null, null, 'cannot read proposal history file');
         }
+        $originalRetiredHistory = is_file($retiredHistoryPath) ? file_get_contents($retiredHistoryPath) : null;
+        if ($originalRetiredHistory === false) {
+            throw new ValidationException($retiredHistoryPath, null, null, 'cannot read proposal history file');
+        }
 
+        $moved = [];
         try {
             foreach ($writes as $path => $content) {
                 if (file_put_contents($path, $content) === false) {
@@ -565,25 +637,59 @@ final class ProposalTransitionManager
             if (!is_dir($historyDir) && !mkdir($historyDir, 0777, true) && !is_dir($historyDir)) {
                 throw new ValidationException($historyPath, null, null, 'failed to create proposal history directory');
             }
-            if (file_put_contents($historyPath, $historyLines(), FILE_APPEND) === false) {
+
+            foreach ($retirements as $retirement) {
+                if (is_file($retirement['to'])) {
+                    throw new ValidationException($retirement['to'], null, $retirement['id'], 'target file already exists');
+                }
+                $retiredDir = dirname($retirement['to']);
+                if (!is_dir($retiredDir) && !mkdir($retiredDir, 0777, true) && !is_dir($retiredDir)) {
+                    throw new ValidationException($retiredDir, null, $retirement['id'], 'failed to create retired proposal directory');
+                }
+                if (file_put_contents($retirement['from'], $retirement['content']) === false) {
+                    throw new ValidationException($retirement['from'], null, $retirement['id'], 'failed to write proposal file');
+                }
+                if (!rename($retirement['from'], $retirement['to'])) {
+                    throw new ValidationException($retirement['from'], null, $retirement['id'], 'failed to move proposal file');
+                }
+                $moved[$retirement['to']] = $retirement['from'];
+                if (file_put_contents($retiredHistoryPath, ($retirement['line'])(), FILE_APPEND) === false) {
+                    throw new ValidationException($retiredHistoryPath, null, $retirement['id'], 'failed to append proposal history');
+                }
+            }
+
+            if ($historyLines !== null && file_put_contents($historyPath, $historyLines(), FILE_APPEND) === false) {
                 throw new ValidationException($historyPath, null, null, 'failed to append proposal history');
             }
 
             $this->validateRepository($root);
         } catch (\Throwable $exception) {
+            foreach ($moved as $retiredPath => $appliedPath) {
+                if (is_file($retiredPath)) {
+                    rename($retiredPath, $appliedPath);
+                }
+            }
             foreach ($originalProposals as $path => $content) {
                 file_put_contents($path, $content);
             }
-            if ($originalHistory === null) {
-                if (is_file($historyPath)) {
-                    unlink($historyPath);
-                }
-            } else {
-                file_put_contents($historyPath, $originalHistory);
-            }
+            $this->restoreHistory($historyPath, $originalHistory);
+            $this->restoreHistory($retiredHistoryPath, $originalRetiredHistory);
 
             throw new ValidationException($root, null, null, 'proposal re-anchor failed and was rolled back: ' . $exception->getMessage());
         }
+    }
+
+    private function restoreHistory(string $path, ?string $original): void
+    {
+        if ($original === null) {
+            if (is_file($path)) {
+                unlink($path);
+            }
+
+            return;
+        }
+
+        file_put_contents($path, $original);
     }
 
     /**

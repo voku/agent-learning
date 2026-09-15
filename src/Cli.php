@@ -954,12 +954,24 @@ final class Cli
             throw new ValidationException($root, null, null, 'proposal-reanchor requires --reason option');
         }
 
-        $repaired = (new ProposalTransitionManager())->reanchorTarget($root, $sourceRef, $actor, $reason);
+        $supersessions = [];
+        foreach ($this->stringOptions($parsed['options'], 'supersede') as $pair) {
+            $parts = explode('=', $pair, 2);
+            if (count($parts) !== 2 || trim($parts[0]) === '' || trim($parts[1]) === '') {
+                throw new ValidationException($root, null, null, 'proposal-reanchor --supersede expects <superseded-proposal-id>=<replacement-proposal-id>');
+            }
+            $supersessions[trim($parts[0])] = trim($parts[1]);
+        }
+
+        $repaired = (new ProposalTransitionManager())->reanchorTarget($root, $sourceRef, $actor, $reason, $supersessions);
         $this->write(sprintf(
             "Re-anchored applied guidance proofs for %s: %s\n",
             $sourceRef,
-            implode(', ', $repaired),
+            $repaired === [] ? 'none' : implode(', ', $repaired),
         ));
+        foreach ($supersessions as $supersededId => $replacementId) {
+            $this->write(sprintf("Retired superseded proof %s in favour of %s\n", $supersededId, $replacementId));
+        }
 
         return 0;
     }

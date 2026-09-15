@@ -79,7 +79,7 @@ vendor/bin/agent-learning proposal-reanchor MEMORY.md \
   --reason 'The shared guidance file changed legitimately outside this proposal.'
 ```
 
-`proposal-reanchor` repairs every applied `memory`/`skill` proof resolving to that target in one transaction and fails closed if any applied guidance on the file is missing. It preserves approval/application evidence and records the repair provenance. If the reviewed guidance itself changed or disappeared, do **not** re-anchor it; treat that as semantic drift and use the normal reviewed replace/retire path.
+`proposal-reanchor` repairs every applied `memory`/`skill` proof resolving to that target in one transaction and fails closed if any applied guidance on the file is missing. It preserves approval/application evidence and records the repair provenance. If the reviewed guidance itself changed or disappeared, do **not** re-anchor it; treat that as semantic drift and use the normal reviewed replace/retire path. When that drifted proof and stale proofs share one target and block each other, create the reviewed REPLACE proposal first, then run `proposal-reanchor <target> --supersede <drifted-id>=<replacement-id>` so the drifted proof is retired in the same transaction; approve and apply the replacement afterwards.
 
 For a Finding already classified `ADD_LEARNING_NOTE`, the deterministic LearningNote boundary is separate:
 
