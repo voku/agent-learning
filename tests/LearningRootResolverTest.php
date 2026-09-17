@@ -37,6 +37,25 @@ final class LearningRootResolverTest extends TestCase
         (new LearningRootResolver())->resolve(startDirectory: $project);
     }
 
+    public function testDiscoversConfiguredLearningRootFromInitJson(): void
+    {
+        $project = $this->tempDir('init-json-root');
+        $root = $project . '/infra/doc/agent-learning';
+        mkdir($root . '/history', 0777, true);
+        mkdir($project . '/.agent-loop', 0777, true);
+        file_put_contents($project . '/.agent-loop/init.json', json_encode([
+            'version' => 1,
+            'paths' => [
+                'learning_root' => 'infra/doc/agent-learning',
+            ],
+        ], JSON_THROW_ON_ERROR));
+
+        $config = (new LearningRootResolver())->resolve(startDirectory: $project);
+
+        self::assertSame($root, $config->root);
+        self::assertSame($root, (new PathResolver())->resolve(startDirectory: $project));
+    }
+
     public function testExplicitHistoricalRootRemainsAValidExplicitPath(): void
     {
         $project = $this->tempDir('explicit-root');

@@ -38,6 +38,11 @@ final class LearningRootResolver
         }
         $directory = $this->normalizeExistingDirectory($start);
         while (true) {
+            $candidatePath = $this->configuredLearningRootFromInitJson($directory);
+            if ($candidatePath !== null && is_dir($candidatePath) && $this->isLearningRoot($candidatePath)) {
+                return $this->normalizeExistingDirectory($candidatePath);
+            }
+
             $candidatePath = $directory . '/' . self::DEFAULT_LEARNING_ROOT;
             if (is_dir($candidatePath) && $this->isLearningRoot($candidatePath)) {
                 return $this->normalizeExistingDirectory($candidatePath);
@@ -58,12 +63,42 @@ final class LearningRootResolver
             return $directory;
         }
 
+        $candidatePath = $this->configuredLearningRootFromInitJson($directory);
+        if ($candidatePath !== null && is_dir($candidatePath) && $this->isLearningRoot($candidatePath)) {
+            return $this->normalizeExistingDirectory($candidatePath);
+        }
+
         $candidatePath = $directory . '/' . self::DEFAULT_LEARNING_ROOT;
         if (is_dir($candidatePath) && $this->isLearningRoot($candidatePath)) {
             return $this->normalizeExistingDirectory($candidatePath);
         }
 
         throw new ValidationException($root, null, null, 'directory is not an agent-learning root');
+    }
+
+    private function configuredLearningRootFromInitJson(string $projectDirectory): ?string
+    {
+        $initJsonPath = $projectDirectory . '/.agent-loop/init.json';
+        if (!is_file($initJsonPath)) {
+            return null;
+        }
+
+        $content = @file_get_contents($initJsonPath);
+        if (!is_string($content)) {
+            return null;
+        }
+
+        $decoded = json_decode($content, true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        $configured = $decoded['paths']['learning_root'] ?? null;
+        if (!is_string($configured) || trim($configured) === '') {
+            return null;
+        }
+
+        return $this->resolvePath($projectDirectory, $configured);
     }
 
     /** @param array<string, mixed> $config */
