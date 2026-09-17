@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.18.17] - 2026-09-17
+
+### Fixed
+
+- Discover configured `learning_root` from `.agent-loop/init.json` in `LearningRootResolver::discover()` and `resolveExplicit()`. When a consumer project configures a custom learning root in `.agent-loop/init.json` (such as `infra/doc/agent-learning`), CLI commands without an explicit `--root` automatically resolve that location instead of falling back to default `.agent-loop/learning`.
+
+### Validation
+
+- `composer ci` passed with 381 tests, 1362 assertions, and PHPStan clean level 8.
+
 ## [0.18.16] - 2026-09-15
 
 ### Validation
