@@ -187,7 +187,15 @@ After success, inspect the returned projection. Preserve its exact note ID, `pat
 
 ## Drift handling
 
-If the owner reports `review_needed` or `source_missing` for an existing/current candidate:
+If the owner reports `review_needed` or `source_missing` for an existing/current candidate, first inspect the exact owner-backed drift:
+
+```bash
+vendor/bin/agent-learning-note review \
+  --root <learning-root> \
+  <learning-note-id>
+```
+
+The review is read-only and reports each evidence `source_ref`, recorded SHA-256, current SHA-256 when present, and per-source state. Then:
 
 - never silently present the stale repository claim as current;
 - re-ground the specific material claim when possible;
@@ -195,7 +203,7 @@ If the owner reports `review_needed` or `source_missing` for an existing/current
 - keep historical context clearly historical;
 - block when the changed/missing source makes the proposed lesson materially ambiguous.
 
-Do not auto-retire a note merely because evidence drifted.
+Do not auto-re-anchor or auto-retire a note merely because evidence drifted. A changed hash proves changed bytes, not that the precedent is still semantically valid.
 
 ## Promotion boundary
 
