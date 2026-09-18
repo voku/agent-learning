@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Add typed, read-only LearningNote repository-evidence review plus `agent-learning-note review`, exposing exact recorded/current hashes and per-source current/review-needed/source-missing state without re-anchoring or mutating the note (#121).
+
 ## [0.18.17] - 2026-09-17
 
 ### Fixed
