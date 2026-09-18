@@ -26,6 +26,7 @@ final readonly class LearningNoteCli
                 'prepare' => $this->prepare($argv),
                 'publish' => $this->publish($argv),
                 'status' => $this->status($argv),
+                'review' => $this->review($argv),
                 'retire' => $this->retire($argv),
                 'help', '--help', '-h' => $this->help(),
                 default => throw new InvalidArgumentException('Unknown LearningNote command: ' . $command),
@@ -101,6 +102,28 @@ final readonly class LearningNoteCli
     }
 
     /** @param list<string> $tokens */
+    private function review(array $tokens): int
+    {
+        [$options, $arguments] = $this->parseOptions($tokens);
+        $id = $arguments[0] ?? null;
+        if (!is_string($id) || trim($id) === '') {
+            throw new InvalidArgumentException('review requires a LearningNote ID');
+        }
+        if (count($arguments) !== 1) {
+            throw new InvalidArgumentException('review accepts exactly one LearningNote ID');
+        }
+        $root = $this->pathResolver->resolve($this->single($options, 'root'));
+        $review = $this->service->reviewEvidence(
+            $root,
+            trim($id),
+            $this->single($options, 'project-root'),
+        );
+        $this->writeJson($review->toArray());
+
+        return 0;
+    }
+
+    /** @param list<string> $tokens */
     private function retire(array $tokens): int
     {
         [$options, $arguments] = $this->parseOptions($tokens);
@@ -124,10 +147,11 @@ final readonly class LearningNoteCli
 
     private function help(): int
     {
-        fwrite(STDOUT, "Usage: agent-learning-note <prepare|publish|status|retire> [options]\n\n");
+        fwrite(STDOUT, "Usage: agent-learning-note <prepare|publish|status|review|retire> [options]\n\n");
         fwrite(STDOUT, "  prepare --root PATH --finding ID [--finding ID] [--project-root PATH]\n");
         fwrite(STDOUT, "  publish --root PATH --input candidate.json [--project-root PATH]\n");
         fwrite(STDOUT, "  status --root PATH [--project-root PATH]\n");
+        fwrite(STDOUT, "  review --root PATH LEARNING_NOTE_ID [--project-root PATH]\n");
         fwrite(STDOUT, "  retire --root PATH LEARNING_NOTE_ID --reason TEXT\n");
 
         return 0;
