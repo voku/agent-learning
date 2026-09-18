@@ -33,6 +33,7 @@ The supported owner operations are:
 - `publish()` — validate lineage/redaction/pattern ownership and atomically publish or update one active note;
 - `activeProjections()` — return compact typed read projections for sibling consumers;
 - `evidenceState()` — distinguish current evidence, changed evidence, missing sources, and notes without hashable repository evidence;
+- `reviewEvidence()` — return exact recorded/current repository-evidence hashes for a drifted active note without mutating it;
 - `retire()` — explicitly retire a note while preserving lineage and reason.
 
 One active `LearningNote` owns one stable `pattern_key`. Later validated Findings with the same pattern update that note and accumulate source lineage, scope, tags, and repository evidence rather than creating competing active precedents.
@@ -53,6 +54,10 @@ vendor/bin/agent-learning-note publish \
 vendor/bin/agent-learning-note status \
   --root .agent-loop/learning
 
+vendor/bin/agent-learning-note review \
+  --root .agent-loop/learning \
+  learning-note.2026-08-31.abcdef
+
 vendor/bin/agent-learning-note retire \
   --root .agent-loop/learning \
   learning-note.2026-08-31.abcdef \
@@ -64,6 +69,8 @@ vendor/bin/agent-learning-note retire \
 ## Repository evidence and drift
 
 Repository evidence is project-relative and SHA-256 bound. Absolute paths and `..` traversal are rejected. When a referenced source changes, the note remains durable historical precedent but is reported as `review_needed`; drift alone never silently rewrites or retires the note.
+
+Use `agent-learning-note review` (or `LearningNoteService::reviewEvidence()`) to inspect each evidence source's recorded hash, current hash when present, and current/review-needed/source-missing state. The review is read-only. A changed hash still requires semantic inspection before the existing explicit `publish` or `retire` path is used; byte drift is never automatic permission to re-anchor.
 
 Configured durable state with an unsupported LearningNote schema fails explicitly. Derived consumers may rebuild their own context, but they must not reinterpret Learning-private storage.
 
