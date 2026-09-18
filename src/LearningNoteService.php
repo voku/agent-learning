@@ -314,10 +314,31 @@ final readonly class LearningNoteService
         return $result;
     }
 
+    public function reviewEvidence(string $root, string $id, ?string $projectRoot = null): LearningNoteEvidenceReview
+    {
+        $note = $this->noteRepository->find($root, $id);
+        if ($note === null || $note->status !== LearningNoteStatus::ACTIVE) {
+            throw new ValidationException($root, null, $id, 'active LearningNote not found');
+        }
+        $this->assertStoredLineage($root, $note);
+        $projectRoot ??= (new LearningProjectPaths())->projectRootForLearningRoot($root);
+
+        return $this->reviewEvidenceForNote($note, $projectRoot);
+    }
+
     public function evidenceState(LearningNote $note, string $projectRoot): LearningNoteEvidenceState
     {
+        return $this->reviewEvidenceForNote($note, $projectRoot)->evidenceState;
+    }
+
+    private function reviewEvidenceForNote(LearningNote $note, string $projectRoot): LearningNoteEvidenceReview
+    {
         if ($note->repositoryEvidence === []) {
-            return LearningNoteEvidenceState::NO_HASHABLE_REPOSITORY_EVIDENCE;
+            return new LearningNoteEvidenceReview(
+                noteId: $note->id,
+                evidenceState: LearningNoteEvidenceState::NO_HASHABLE_REPOSITORY_EVIDENCE,
+                repositoryEvidence: [],
+            );
         }
 
         $realProjectRoot = realpath($projectRoot);
@@ -325,30 +346,75 @@ final readonly class LearningNoteService
             throw new ValidationException($projectRoot, null, $note->id, 'LearningNote project root does not exist');
         }
         $projectPrefix = rtrim(str_replace('\\', '/', $realProjectRoot), '/') . '/';
-        $changed = false;
+        $overallState = LearningNoteEvidenceState::CURRENT;
+        $review = [];
+
         foreach ($note->repositoryEvidence as $evidence) {
             $path = rtrim($projectRoot, '/\\') . '/' . $evidence->sourceRef;
             if (!is_file($path)) {
-                return LearningNoteEvidenceState::SOURCE_MISSING;
+                $overallState = LearningNoteEvidenceState::SOURCE_MISSING;
+                $review[] = new LearningNoteRepositoryEvidenceReview(
+                    sourceRef: $evidence->sourceRef,
+                    recordedSha256: $evidence->sha256,
+                    currentSha256: null,
+                    state: LearningNoteEvidenceState::SOURCE_MISSING,
+                );
+                continue;
             }
+
             $realSource = realpath($path);
             if ($realSource === false) {
-                return LearningNoteEvidenceState::SOURCE_MISSING;
+                $overallState = LearningNoteEvidenceState::SOURCE_MISSING;
+                $review[] = new LearningNoteRepositoryEvidenceReview(
+                    sourceRef: $evidence->sourceRef,
+                    recordedSha256: $evidence->sha256,
+                    currentSha256: null,
+                    state: LearningNoteEvidenceState::SOURCE_MISSING,
+                );
+                continue;
             }
+
             $normalizedSource = str_replace('\\', '/', $realSource);
             if (!str_starts_with($normalizedSource, $projectPrefix)) {
                 throw new ValidationException($path, null, $note->id, 'LearningNote repository evidence resolves outside project root');
             }
+
             $hash = hash_file('sha256', $realSource);
             if (!is_string($hash)) {
-                return LearningNoteEvidenceState::SOURCE_MISSING;
+                $overallState = LearningNoteEvidenceState::SOURCE_MISSING;
+                $review[] = new LearningNoteRepositoryEvidenceReview(
+                    sourceRef: $evidence->sourceRef,
+                    recordedSha256: $evidence->sha256,
+                    currentSha256: null,
+                    state: LearningNoteEvidenceState::SOURCE_MISSING,
+                );
+                continue;
             }
-            if (!hash_equals($evidence->sha256, $hash)) {
-                $changed = true;
+
+            $state = hash_equals($evidence->sha256, $hash)
+                ? LearningNoteEvidenceState::CURRENT
+                : LearningNoteEvidenceState::REVIEW_NEEDED;
+            if ($state === LearningNoteEvidenceState::REVIEW_NEEDED && $overallState === LearningNoteEvidenceState::CURRENT) {
+                $overallState = LearningNoteEvidenceState::REVIEW_NEEDED;
             }
+            $review[] = new LearningNoteRepositoryEvidenceReview(
+                sourceRef: $evidence->sourceRef,
+                recordedSha256: $evidence->sha256,
+                currentSha256: $hash,
+                state: $state,
+            );
         }
 
-        return $changed ? LearningNoteEvidenceState::REVIEW_NEEDED : LearningNoteEvidenceState::CURRENT;
+        usort(
+            $review,
+            static fn (LearningNoteRepositoryEvidenceReview $left, LearningNoteRepositoryEvidenceReview $right): int => $left->sourceRef <=> $right->sourceRef,
+        );
+
+        return new LearningNoteEvidenceReview(
+            noteId: $note->id,
+            evidenceState: $overallState,
+            repositoryEvidence: $review,
+        );
     }
 
     /**
