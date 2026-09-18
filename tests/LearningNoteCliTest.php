@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 
 final class LearningNoteCliTest extends TestCase
 {
-    public function testPreparePublishAndStatusUseOwnerContract(): void
+    public function testPreparePublishStatusAndReviewUseOwnerContract(): void
     {
         $base = sys_get_temp_dir() . '/learning-note-cli-' . bin2hex(random_bytes(6));
         $root = $base . '/learning';
@@ -84,6 +84,24 @@ final class LearningNoteCliTest extends TestCase
         $statusData = json_decode($status['output'], true, 512, JSON_THROW_ON_ERROR);
         self::assertCount(1, $statusData['notes']);
         self::assertSame($published['id'], $statusData['notes'][0]['id']);
+
+        $notePath = $root . '/notes/active/' . $published['id'] . '.json';
+        $beforeReview = file_get_contents($notePath);
+        self::assertIsString($beforeReview);
+        file_put_contents($projectRoot . '/src/Example.php', "<?php\n// changed\n");
+
+        $review = $this->executeCli($root, ['review', $published['id']]);
+        self::assertSame(0, $review['exit_code'], $review['output']);
+        $reviewData = json_decode($review['output'], true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame($published['id'], $reviewData['note_id']);
+        self::assertSame('review_needed', $reviewData['evidence_state']);
+        self::assertSame('src/Example.php', $reviewData['repository_evidence'][0]['source_ref']);
+        self::assertNotSame(
+            $reviewData['repository_evidence'][0]['recorded_sha256'],
+            $reviewData['repository_evidence'][0]['current_sha256'],
+        );
+        self::assertSame('review_needed', $reviewData['repository_evidence'][0]['state']);
+        self::assertSame($beforeReview, file_get_contents($notePath));
     }
 
     /**
