@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.18.18] - 2026-09-18
+
+### Added
+
+- Add typed, read-only LearningNote repository-evidence review through `LearningNoteService::reviewEvidence()` and `agent-learning-note review`, exposing exact recorded/current hashes and per-source evidence state without mutating or re-anchoring the note (#121, #122).
+- Route the packaged LearningNote authoring skill through the owner-backed review when repository evidence drifts, while keeping semantic review and explicit publish/retire authority separate (#121, #122).
+
+### Validation
+
+- `composer ci` passed with 382 tests, 1391 assertions, and PHPStan clean on PHP 8.4; the exact PR head also passed PHP 8.3 and 8.5 plus the installed-skill consumer and lineage rebuild benchmark.
+
 ## [0.18.17] - 2026-09-17
 
 ### Fixed
