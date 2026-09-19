@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.18.19] - 2026-09-19
+
+### Fixed
+
+- Make Learning attention/backlog semantics LearningNote-aware: validated Findings already represented by a current LearningNote remain validated for future recurrence evidence but are no longer mislabeled as immediate downstream Learning work (#124, #125).
+- Route `learn backlog` through the typed `LearningCatalog::overview()` attention projection while preserving the historical validated-only backlog gate.
+
+### Validation
+
+- PR #125 passed exact-head CI on PHP 8.3, 8.4 and 8.5 plus the clean installed-skill consumer.
+
 ## [0.18.18] - 2026-09-18
 
 ### Added
