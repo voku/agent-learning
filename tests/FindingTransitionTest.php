@@ -22,7 +22,7 @@ final class FindingTransitionTest extends TestCase
         // create candidate finding
         $finding = json_decode((string)file_get_contents(__DIR__ . '/fixtures/findings/finding.2026-06-08.001.json'), true);
         $finding['status'] = 'candidate';
-        $finding['validation_status'] = 'candidate';
+        $finding['validation_status'] = 'unverified';
         file_put_contents($this->root . '/findings/candidate/finding.2026-06-08.001.json', json_encode($finding));
     }
 
@@ -41,6 +41,37 @@ final class FindingTransitionTest extends TestCase
 
         $updated = json_decode((string)file_get_contents($this->root . '/findings/validated/finding.2026-06-08.001.json'), true);
         self::assertSame('validated', $updated['status']);
+        self::assertSame('lars', $updated['validated_by']);
+        self::assertArrayHasKey('validated_at', $updated);
+    }
+
+    public function testValidatingCandidateWithoutStoredConclusionRequiresReviewerConclusion(): void
+    {
+        $path = $this->root . '/findings/candidate/finding.2026-06-08.001.json';
+        $finding = json_decode((string)file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+        $finding['validated_conclusion'] = null;
+        file_put_contents($path, json_encode($finding, JSON_THROW_ON_ERROR));
+
+        $manager = new FindingTransitionManager();
+        try {
+            $manager->transition($this->root, 'finding.2026-06-08.001', FindingStatus::VALIDATED, 'reviewer');
+            self::fail('Expected validation without an explicit conclusion to fail.');
+        } catch (ValidationException $exception) {
+            self::assertStringContainsString('requires an explicit conclusion', $exception->getMessage());
+        }
+        self::assertFileExists($path);
+
+        $manager->transition(
+            $this->root,
+            'finding.2026-06-08.001',
+            FindingStatus::VALIDATED,
+            'reviewer',
+            'The reported workflow gap is reproducible and should proceed to learning triage.',
+        );
+
+        $updated = json_decode((string)file_get_contents($this->root . '/findings/validated/finding.2026-06-08.001.json'), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('The reported workflow gap is reproducible and should proceed to learning triage.', $updated['validated_conclusion']);
+        self::assertSame('reviewer', $updated['validated_by']);
     }
 
     public function testForbiddenTransitionThrowsAndRollsBack(): void

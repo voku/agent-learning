@@ -48,6 +48,96 @@ final class FindingCreateCliTest extends TestCase
         $this->assertNoTemporaryFindingFiles($root);
     }
 
+    public function testCapturesUnverifiedHumanReportWithoutSessionOrEvidenceJson(): void
+    {
+        $root = $this->createFreshLearningRoot();
+
+        [$exitCode, $output] = $this->runFindingCapture($root, [
+            '--task', 'PROJECT-28',
+            '--by', 'product-owner',
+            '--scope', 'docs/',
+            '--observation', 'The onboarding screen does not explain the required approval step.',
+            '--hypothesis', 'A missing explanation leaves contributors unable to complete the intended workflow.',
+            '--evidence', 'Observed during a product acceptance review with a representative account.',
+        ]);
+
+        self::assertSame(0, $exitCode, $output);
+        /** @var array{id: string, path: string, status: string, validation_status: string} $result */
+        $result = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
+        self::assertMatchesRegularExpression(RecordIdGenerator::pattern('finding'), $result['id']);
+        self::assertSame($root . '/findings/candidate/' . $result['id'] . '.json', $result['path']);
+        self::assertSame('candidate', $result['status']);
+        self::assertSame('unverified', $result['validation_status']);
+
+        $finding = (new FindingValidator())->validateFile($result['path']);
+        self::assertSame(FindingStatus::CANDIDATE, $finding->status);
+        self::assertSame('unverified', $finding->validationStatus);
+        self::assertNull($finding->validatedConclusion);
+        self::assertSame('product-owner', $finding->createdBy);
+        self::assertSame('manual:' . $finding->id, $finding->session);
+        self::assertSame('low', $finding->confidence);
+        self::assertSame('internal', $finding->sensitivity);
+        self::assertSame([['type' => 'human_report', 'summary' => 'Observed during a product acceptance review with a representative account.']], $finding->evidence);
+        self::assertArrayHasKey($finding->id, (new FindingRepository())->loadAll($root));
+        $this->assertNoTemporaryFindingFiles($root);
+    }
+
+    public function testCaptureRejectsIncompleteHumanReportBeforeWritingCandidate(): void
+    {
+        $root = $this->createFreshLearningRoot();
+
+        [$exitCode, $output] = $this->runFindingCapture($root, [
+            '--task', 'PROJECT-28',
+            '--by', 'tester',
+            '--observation', 'A plain report still needs its own hypothesis.',
+        ]);
+
+        self::assertSame(1, $exitCode, $output);
+        self::assertStringContainsString('finding-capture missing required options: --hypothesis, --evidence', $output);
+        self::assertDirectoryDoesNotExist($root . '/findings/candidate');
+    }
+
+    public function testReviewerMustSupplyConclusionBeforeCapturedFindingBecomesValidated(): void
+    {
+        $root = $this->createFreshLearningRoot();
+        $id = 'finding.2026-09-19.abc123';
+
+        [$captureExitCode, $captureOutput] = $this->runFindingCapture($root, [
+            '--id', $id,
+            '--task', 'PROJECT-28',
+            '--by', 'developer',
+            '--observation', 'The command output omits the validation boundary.',
+            '--hypothesis', 'Making the boundary explicit prevents premature policy claims.',
+            '--evidence', 'Observed in a documented command walkthrough.',
+        ]);
+
+        self::assertSame(0, $captureExitCode, $captureOutput);
+
+        [$missingConclusionExitCode, $missingConclusionOutput] = $this->runFindingCommand($root, 'finding-transition', [
+            $id,
+            'validated',
+            '--by', 'reviewer',
+        ]);
+
+        self::assertSame(1, $missingConclusionExitCode, $missingConclusionOutput);
+        self::assertStringContainsString('requires an explicit conclusion', $missingConclusionOutput);
+        self::assertFileExists($root . '/findings/candidate/' . $id . '.json');
+
+        [$transitionExitCode, $transitionOutput] = $this->runFindingCommand($root, 'finding-transition', [
+            $id,
+            'validated',
+            '--by', 'reviewer',
+            '--conclusion', 'The boundary is reproducible and the candidate is ready for learning triage.',
+        ]);
+
+        self::assertSame(0, $transitionExitCode, $transitionOutput);
+        $finding = (new FindingValidator())->validateFile($root . '/findings/validated/' . $id . '.json');
+        self::assertSame(FindingStatus::VALIDATED, $finding->status);
+        self::assertSame('validated', $finding->validationStatus);
+        self::assertSame('The boundary is reproducible and the candidate is ready for learning triage.', $finding->validatedConclusion);
+        self::assertSame('reviewer', $finding->raw['validated_by']);
+    }
+
     public function testReportsAllMissingRequiredOptionsInOneFailure(): void
     {
         $root = $this->createFreshLearningRoot();
@@ -212,7 +302,7 @@ final class FindingCreateCliTest extends TestCase
 
     private function assertNoTemporaryFindingFiles(string $root): void
     {
-        $files = glob($root . '/findings/validated/.finding.*.tmp.*');
+        $files = glob($root . '/findings/*/.finding.*.tmp.*');
         self::assertIsArray($files);
         self::assertSame([], $files);
     }
@@ -224,10 +314,30 @@ final class FindingCreateCliTest extends TestCase
      */
     private function runFindingCreate(string $root, array $arguments): array
     {
+        return $this->runFindingCommand($root, 'finding-create', $arguments);
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function runFindingCapture(string $root, array $arguments): array
+    {
+        return $this->runFindingCommand($root, 'finding-capture', $arguments);
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function runFindingCommand(string $root, string $findingCommand, array $arguments): array
+    {
         $command = [
             PHP_BINARY,
             __DIR__ . '/../bin/agent-learning',
-            'finding-create',
+            $findingCommand,
             '--root',
             $root,
             ...$arguments,

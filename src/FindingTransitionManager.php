@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning;
 
+use DateTimeImmutable;
+use DateTimeInterface;
+
 /**
  * Governs state transitions for Findings.
  */
@@ -44,7 +47,13 @@ final class FindingTransitionManager
      * @param string        $actor
      * @throws ValidationException
      */
-    public function transition(string $root, string $findingId, FindingStatus $targetStatus, string $actor): void
+    public function transition(
+        string $root,
+        string $findingId,
+        FindingStatus $targetStatus,
+        string $actor,
+        ?string $validatedConclusion = null,
+    ): void
     {
         if (trim($actor) === '') {
             throw new ValidationException('', null, $findingId, 'actor name must be explicit');
@@ -72,7 +81,14 @@ final class FindingTransitionManager
         $data = $finding->raw;
         $data['status'] = $targetStatus->value;
         if ($targetStatus === FindingStatus::VALIDATED || $targetStatus === FindingStatus::CONSOLIDATED) {
+            $conclusion = $validatedConclusion ?? $finding->validatedConclusion;
+            if ($conclusion === null || trim($conclusion) === '') {
+                throw new ValidationException($currentPath, null, $findingId, 'validating a candidate requires an explicit conclusion');
+            }
+            $data['validated_conclusion'] = $conclusion;
             $data['validation_status'] = 'validated';
+            $data['validated_by'] = $actor;
+            $data['validated_at'] = (new DateTimeImmutable('now'))->format(DateTimeInterface::ATOM);
         } elseif ($targetStatus === FindingStatus::INVALIDATED) {
             $data['validation_status'] = 'invalidated';
         } elseif ($targetStatus === FindingStatus::REJECTED) {
