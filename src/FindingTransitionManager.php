@@ -73,7 +73,7 @@ final class FindingTransitionManager
             return;
         }
 
-        if (!$this->isTransitionAllowed($currentStatus, $targetStatus)) {
+        if (!in_array($targetStatus, $this->lifecycle->allowedTransitions($currentStatus), true)) {
             throw new ValidationException($currentPath, null, $findingId, sprintf('transition from %s to %s is not allowed', $currentStatus->value, $targetStatus->value));
         }
 
@@ -127,31 +127,6 @@ final class FindingTransitionManager
             file_put_contents($currentPath, $originalContent);
             throw new ValidationException($currentPath, null, $findingId, 'finding transition failed and was rolled back: ' . $e->getMessage());
         }
-    }
-
-    private function isTransitionAllowed(FindingStatus $current, FindingStatus $target): bool
-    {
-        if ($current === FindingStatus::CANDIDATE) {
-            return in_array($target, [FindingStatus::VALIDATED, FindingStatus::INVALIDATED, FindingStatus::REJECTED], true);
-        }
-
-        if ($current === FindingStatus::VALIDATED) {
-            return in_array($target, [FindingStatus::CONSOLIDATED, FindingStatus::SUPERSEDED, FindingStatus::ARCHIVED], true);
-        }
-
-        $terminalStates = [
-            FindingStatus::VALIDATED,
-            FindingStatus::INVALIDATED,
-            FindingStatus::REJECTED,
-            FindingStatus::CONSOLIDATED,
-            FindingStatus::SUPERSEDED,
-        ];
-
-        if (in_array($current, $terminalStates, true) && $target === FindingStatus::ARCHIVED) {
-            return true;
-        }
-
-        return false;
     }
 
     private function validateRepository(string $root): void
