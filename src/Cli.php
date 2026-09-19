@@ -889,7 +889,6 @@ final class Cli
         return 0;
     }
 
-
     /**
      * @return array{
      *     id: string,
