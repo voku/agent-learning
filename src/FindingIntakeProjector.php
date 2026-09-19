@@ -24,15 +24,15 @@ final readonly class FindingIntakeProjector
             foreach ($this->lifecycle->allowedTransitions($finding->status) as $target) {
                 $actions[] = match ($target) {
                     FindingStatus::VALIDATED => [
-                        'id' => 'review_validate',
+                        'id' => FindingIntakeProjection::ACTION_REVIEW_VALIDATE,
                         'requires' => ['actor', 'conclusion'],
                     ],
                     FindingStatus::INVALIDATED => [
-                        'id' => 'review_invalidate',
+                        'id' => FindingIntakeProjection::ACTION_REVIEW_INVALIDATE,
                         'requires' => ['actor'],
                     ],
                     FindingStatus::REJECTED => [
-                        'id' => 'review_reject',
+                        'id' => FindingIntakeProjection::ACTION_REVIEW_REJECT,
                         'requires' => ['actor'],
                     ],
                     default => throw new \LogicException(
@@ -45,7 +45,7 @@ final readonly class FindingIntakeProjector
             && $finding->classification === null
         ) {
             $actions[] = [
-                'id' => 'classify',
+                'id' => FindingIntakeProjection::ACTION_CLASSIFY,
                 'requires' => ['classification'],
             ];
         }
