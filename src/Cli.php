@@ -14,6 +14,7 @@ final class Cli
     public function __construct(
         private readonly PathResolver $pathResolver = new PathResolver(),
         private readonly FindingLifecycle $findingLifecycle = new FindingLifecycle(),
+        private readonly FindingIntakeProjector $findingIntakeProjector = new FindingIntakeProjector(),
     ) {
     }
 
@@ -734,12 +735,7 @@ final class Cli
         );
 
         $this->write(json_encode(
-            [
-                'id' => $result->finding->id,
-                'path' => $result->path,
-                'status' => $result->finding->status->value,
-                'validation_status' => $result->finding->validationStatus,
-            ],
+            $this->findingIntakeResult($result->finding, $result->path),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         ) . "\n");
 
@@ -816,7 +812,7 @@ final class Cli
         );
 
         $this->write(json_encode(
-            ['id' => $finding->id, 'classification' => $finding->classification?->value],
+            $this->findingIntakeResult($finding),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         ) . "\n");
 
@@ -874,16 +870,47 @@ final class Cli
             throw new ValidationException($root, null, null, 'unsupported status: ' . $statusVal);
         }
 
-        (new FindingTransitionManager())->transition(
+        $manager = new FindingTransitionManager();
+        $manager->transition(
             $root,
             $findingId,
             $status,
             $actor,
             $this->stringOption($parsed['options'], 'conclusion'),
         );
-        $this->write(sprintf("Transitioned finding %s to status %s\n", $findingId, $status->value));
+
+        $path = $manager->resolveFindingPath($findingId, $root);
+        $finding = (new FindingValidator())->validateFile($path);
+        $this->write(json_encode(
+            $this->findingIntakeResult($finding),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+        ) . "\n");
 
         return 0;
+    }
+
+
+    /**
+     * @return array{
+     *     id: string,
+     *     path?: string,
+     *     status: string,
+     *     validation_status: string,
+     *     classification: ?string,
+     *     available_actions: list<array{id: non-empty-string, requires: list<non-empty-string>}>
+     * }
+     */
+    private function findingIntakeResult(Finding $finding, ?string $path = null): array
+    {
+        $result = ['id' => $finding->id];
+        if ($path !== null) {
+            $result['path'] = $path;
+        }
+
+        return [
+            ...$result,
+            ...$this->findingIntakeProjector->project($finding)->toArray(),
+        ];
     }
 
     /**
