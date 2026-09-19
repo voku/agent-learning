@@ -9,6 +9,7 @@ use voku\AgentLearning\EvidenceValidator;
 use voku\AgentLearning\FindingRepository;
 use voku\AgentLearning\FindingStatus;
 use voku\AgentLearning\FindingValidator;
+use voku\AgentLearning\LearningClassification;
 use voku\AgentLearning\RecordIdGenerator;
 
 final class FindingCreateCliTest extends TestCase
@@ -62,12 +63,18 @@ final class FindingCreateCliTest extends TestCase
         ]);
 
         self::assertSame(0, $exitCode, $output);
-        /** @var array{id: string, path: string, status: string, validation_status: string} $result */
+        /** @var array{id: string, path: string, status: string, validation_status: string, classification: ?string, available_actions: list<array{id: non-empty-string, requires: list<non-empty-string>}>} $result */
         $result = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
         self::assertMatchesRegularExpression(RecordIdGenerator::pattern('finding'), $result['id']);
         self::assertSame($root . '/findings/candidate/' . $result['id'] . '.json', $result['path']);
         self::assertSame('candidate', $result['status']);
         self::assertSame('unverified', $result['validation_status']);
+        self::assertNull($result['classification']);
+        self::assertSame([
+            ['id' => 'review_validate', 'requires' => ['actor', 'conclusion']],
+            ['id' => 'review_invalidate', 'requires' => ['actor']],
+            ['id' => 'review_reject', 'requires' => ['actor']],
+        ], $result['available_actions']);
 
         $finding = (new FindingValidator())->validateFile($result['path']);
         self::assertSame(FindingStatus::CANDIDATE, $finding->status);
@@ -136,6 +143,62 @@ final class FindingCreateCliTest extends TestCase
         self::assertSame('validated', $finding->validationStatus);
         self::assertSame('The boundary is reproducible and the candidate is ready for learning triage.', $finding->validatedConclusion);
         self::assertSame('reviewer', $finding->raw['validated_by']);
+    }
+
+
+    public function testHumanIntakeCliIsSelfDescribingAcrossCaptureReviewAndClassification(): void
+    {
+        $root = $this->createFreshLearningRoot();
+        $id = 'finding.2026-09-19.131001';
+
+        [$captureExit, $captureOutput] = $this->runFindingCapture($root, [
+            '--id', $id,
+            '--task', 'PROJECT-131',
+            '--by', 'tester',
+            '--observation', 'Successful Finding commands do not expose one coherent continuation envelope.',
+            '--hypothesis', 'The Learning owner should project the current intake interaction after each mutation.',
+            '--evidence', 'Reproduced through the public CLI.',
+        ]);
+        self::assertSame(0, $captureExit, $captureOutput);
+
+        /** @var array<string, mixed> $capture */
+        $capture = json_decode($captureOutput, true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('candidate', $capture['status']);
+        self::assertSame('unverified', $capture['validation_status']);
+        self::assertNull($capture['classification']);
+        self::assertSame('review_validate', $capture['available_actions'][0]['id'] ?? null);
+
+        [$reviewExit, $reviewOutput] = $this->runFindingCommand($root, 'finding-transition', [
+            $id,
+            'validated',
+            '--by', 'reviewer',
+            '--conclusion', 'The inconsistent machine continuation is reproduced and ready for explicit learning triage.',
+        ]);
+        self::assertSame(0, $reviewExit, $reviewOutput);
+
+        /** @var array<string, mixed> $review */
+        $review = json_decode($reviewOutput, true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame($id, $review['id']);
+        self::assertSame('validated', $review['status']);
+        self::assertSame('validated', $review['validation_status']);
+        self::assertNull($review['classification']);
+        self::assertSame([
+            ['id' => 'classify', 'requires' => ['classification']],
+        ], $review['available_actions']);
+
+        [$classifyExit, $classifyOutput] = $this->runFindingCommand($root, 'finding-classify', [
+            $id,
+            LearningClassification::IGNORE->value,
+        ]);
+        self::assertSame(0, $classifyExit, $classifyOutput);
+
+        /** @var array<string, mixed> $classified */
+        $classified = json_decode($classifyOutput, true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame($id, $classified['id']);
+        self::assertSame('validated', $classified['status']);
+        self::assertSame('validated', $classified['validation_status']);
+        self::assertSame(LearningClassification::IGNORE->value, $classified['classification']);
+        self::assertSame([], $classified['available_actions']);
     }
 
     public function testReportsAllMissingRequiredOptionsInOneFailure(): void

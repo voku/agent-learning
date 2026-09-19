@@ -66,6 +66,30 @@ final class FindingLifecycle
         return $files;
     }
 
+    /**
+     * @return list<FindingStatus>
+     */
+    public function allowedTransitions(FindingStatus $current): array
+    {
+        return match ($current) {
+            FindingStatus::CANDIDATE => [
+                FindingStatus::VALIDATED,
+                FindingStatus::INVALIDATED,
+                FindingStatus::REJECTED,
+            ],
+            FindingStatus::VALIDATED => [
+                FindingStatus::CONSOLIDATED,
+                FindingStatus::SUPERSEDED,
+                FindingStatus::ARCHIVED,
+            ],
+            FindingStatus::INVALIDATED,
+            FindingStatus::REJECTED,
+            FindingStatus::CONSOLIDATED,
+            FindingStatus::SUPERSEDED => [FindingStatus::ARCHIVED],
+            FindingStatus::ARCHIVED => [],
+        };
+    }
+
     public function assertPathMatchesStatus(Finding $finding, string $file, string $root): void
     {
         $expectedDirectory = $this->directoryFor($finding->status);
