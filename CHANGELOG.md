@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.18.20] - 2026-09-19
+
+### Added
+
+- Add `agent-learning finding-capture` for developers, product owners, and testers to record plain evidence-backed reports as unverified candidate Findings without a Session or caller-shaped evidence JSON (#128).
+- Require an explicit reviewer conclusion when an unverified candidate transitions to `validated`, recording the validator and timestamp while retaining the original report lineage (#128).
+
+### Validation
+
+- PR #128 passed PHP 8.3, 8.4, and 8.5 CI, the clean installed-skill consumer, and local `composer ci` (388 tests, 1,430 assertions; PHPStan clean).
+
 ## [0.18.19] - 2026-09-19
 
 ### Fixed
