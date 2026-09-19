@@ -22,6 +22,7 @@ final class EvidenceValidator
         'schema_reference',
         'runtime_observation',
         'manual_verification',
+        'human_report',
         'agent_history_reference',
     ];
 

@@ -42,6 +42,7 @@ final class Cli
                 'lineage-rebuild' => $this->lineageRebuildCommand($tokens),
                 'backlog' => $this->backlogCommand($tokens),
                 'finding-create' => $this->findingCreateCommand($tokens),
+                'finding-capture' => $this->findingCaptureCommand($tokens),
                 'finding-classify' => $this->findingClassifyCommand($tokens),
                 'finding-id' => $this->findingIdCommand($tokens),
                 'finding-transition' => $this->findingTransitionCommand($tokens),
@@ -673,6 +674,79 @@ final class Cli
     }
 
     /**
+     * Capture an unverified human report without requiring a governed Session
+     * or caller-shaped evidence JSON.
+     *
+     * @param list<string> $tokens
+     */
+    private function findingCaptureCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        if ($parsed['arguments'] !== []) {
+            throw new ValidationException($root, null, null, 'finding-capture takes no positional arguments');
+        }
+
+        $missingOptions = [];
+        foreach ([
+            'task' => '--task',
+            'by' => '--by',
+            'observation' => '--observation',
+            'hypothesis' => '--hypothesis',
+            'evidence' => '--evidence',
+        ] as $name => $label) {
+            if ($this->stringOption($parsed['options'], $name) === null) {
+                $missingOptions[] = $label;
+            }
+        }
+        if ($missingOptions !== []) {
+            throw new ValidationException(
+                $root,
+                null,
+                null,
+                'finding-capture missing required options: ' . implode(', ', $missingOptions),
+            );
+        }
+
+        $taskId = $this->stringOption($parsed['options'], 'task');
+        $actor = $this->stringOption($parsed['options'], 'by');
+        $observation = $this->stringOption($parsed['options'], 'observation');
+        $hypothesis = $this->stringOption($parsed['options'], 'hypothesis');
+        $evidence = $this->stringOption($parsed['options'], 'evidence');
+        if ($taskId === null || $actor === null || $observation === null || $hypothesis === null || $evidence === null) {
+            throw new ValidationException($root, null, null, 'finding-capture input is incomplete');
+        }
+
+        $id = $this->stringOption($parsed['options'], 'id') ?? (new RecordIdGenerator())->generate('finding');
+        $result = (new FindingCreator())->createCandidate(
+            root: $root,
+            taskId: $taskId,
+            session: $this->stringOption($parsed['options'], 'session') ?? 'manual:' . $id,
+            createdBy: $actor,
+            scope: $this->uniqueStrings($this->stringOptions($parsed['options'], 'scope')),
+            observation: $observation,
+            evidence: [['type' => 'human_report', 'summary' => $evidence]],
+            hypothesis: $hypothesis,
+            confidence: $this->stringOption($parsed['options'], 'confidence') ?? 'low',
+            sensitivity: $this->stringOption($parsed['options'], 'sensitivity') ?? 'internal',
+            id: $id,
+            taskIdPattern: $this->stringOption($parsed['options'], 'task-id-pattern'),
+        );
+
+        $this->write(json_encode(
+            [
+                'id' => $result->finding->id,
+                'path' => $result->path,
+                'status' => $result->finding->status->value,
+                'validation_status' => $result->finding->validationStatus,
+            ],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+        ) . "\n");
+
+        return 0;
+    }
+
+    /**
      * Apply explicit reusable-learning triage after raw Finding capture.
      *
      * @param list<string> $tokens
@@ -800,7 +874,13 @@ final class Cli
             throw new ValidationException($root, null, null, 'unsupported status: ' . $statusVal);
         }
 
-        (new FindingTransitionManager())->transition($root, $findingId, $status, $actor);
+        (new FindingTransitionManager())->transition(
+            $root,
+            $findingId,
+            $status,
+            $actor,
+            $this->stringOption($parsed['options'], 'conclusion'),
+        );
         $this->write(sprintf("Transitioned finding %s to status %s\n", $findingId, $status->value));
 
         return 0;
@@ -1025,6 +1105,7 @@ final class Cli
             . "  history-status       Fail when compact history projections are missing, corrupt, or stale.\n"
             . "  backlog              List validated findings not yet consolidated; exits non-zero while any remain.\n"
             . "  finding-create       Create one validated Finding through the owner schema.\n"
+            . "  finding-capture      Capture an unverified human report as a candidate Finding.\n"
             . "  finding-classify     Classify a captured Finding for reusable-learning promotion.\n"
             . "  finding-id           Allocate a collision-resistant finding ID.\n"
             . "  finding-transition   Transition a finding to a new state.\n"
@@ -1039,16 +1120,17 @@ final class Cli
             . "  --root PATH              Learning root or project root. Defaults to auto-discovery.\n"
             . "  --task-id-pattern REGEX  Override finding task id validation.\n"
             . "  --finding ID             Finding id selector for prepare. Repeatable.\n"
-            . "  --id ID                  Optional explicit ID for finding-create.\n"
-            . "  --task ID                Task id for finding-create or selector for prepare. Repeatable.\n"
+            . "  --id ID                  Optional explicit ID for finding-create or finding-capture.\n"
+            . "  --task ID                Task id for finding-create/finding-capture or selector for prepare. Repeatable.\n"
             . "  --ticket ID              Alias for --task when selecting findings.\n"
-            . "  --session ID             Source session for finding-create.\n"
+            . "  --session ID             Source session for finding-create; optional capture linkage.\n"
             . "  --scope PATH             Finding scope or prepare selector. Repeatable.\n"
-            . "  --observation TEXT       Observed fact for finding-create.\n"
-            . "  --hypothesis TEXT        Inferred explanation for finding-create.\n"
-            . "  --conclusion TEXT        Validated conclusion for finding-create.\n"
-            . "  --confidence LEVEL       low, medium, or high for finding-create.\n"
-            . "  --sensitivity VALUE      Explicit sensitivity for finding-create.\n"
+            . "  --observation TEXT       Observed fact for finding-create or finding-capture.\n"
+            . "  --hypothesis TEXT        Inferred explanation for finding-create or finding-capture.\n"
+            . "  --evidence TEXT          Plain-text source summary for finding-capture.\n"
+            . "  --conclusion TEXT        Validated conclusion for finding-create or candidate validation.\n"
+            . "  --confidence LEVEL       low, medium, or high; capture defaults to low.\n"
+            . "  --sensitivity VALUE      Explicit sensitivity; capture defaults to internal.\n"
             . "  --evidence-json JSON     Evidence object for finding-create. Repeatable.\n"
             . "  --pattern-key KEY        Reusable pattern identity for finding-classify.\n"
             . "  --given TEXT             Validation precondition for finding-classify.\n"

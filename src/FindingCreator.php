@@ -9,7 +9,8 @@ use DateTimeInterface;
 use Throwable;
 
 /**
- * Creates one validated Finding without exposing its storage schema to consumers.
+ * Creates owner-validated or unverified candidate Findings without exposing
+ * storage schema details to consumers.
  */
 final readonly class FindingCreator
 {
@@ -42,8 +43,94 @@ final readonly class FindingCreator
         ?string $patternKey = null,
         ?ValidationCase $validationCase = null,
     ): FindingCreationResult {
+        return $this->create(
+            root: $root,
+            taskId: $taskId,
+            session: $session,
+            createdBy: $createdBy,
+            scope: $scope,
+            observation: $observation,
+            evidence: $evidence,
+            hypothesis: $hypothesis,
+            validatedConclusion: $validatedConclusion,
+            confidence: $confidence,
+            sensitivity: $sensitivity,
+            status: FindingStatus::VALIDATED,
+            validationStatus: 'validated',
+            id: $id,
+            taskIdPattern: $taskIdPattern,
+            classification: $classification,
+            patternKey: $patternKey,
+            validationCase: $validationCase,
+        );
+    }
+
+    /**
+     * Create an unverified candidate that may be reviewed later, but cannot
+     * itself become reusable guidance.
+     *
+     * @param list<string>               $scope
+     * @param list<array<string, mixed>> $evidence
+     */
+    public function createCandidate(
+        string $root,
+        string $taskId,
+        string $session,
+        string $createdBy,
+        array $scope,
+        string $observation,
+        array $evidence,
+        string $hypothesis,
+        string $confidence,
+        string $sensitivity,
+        ?string $id = null,
+        ?string $taskIdPattern = null,
+    ): FindingCreationResult {
+        return $this->create(
+            root: $root,
+            taskId: $taskId,
+            session: $session,
+            createdBy: $createdBy,
+            scope: $scope,
+            observation: $observation,
+            evidence: $evidence,
+            hypothesis: $hypothesis,
+            validatedConclusion: null,
+            confidence: $confidence,
+            sensitivity: $sensitivity,
+            status: FindingStatus::CANDIDATE,
+            validationStatus: 'unverified',
+            id: $id,
+            taskIdPattern: $taskIdPattern,
+        );
+    }
+
+    /**
+     * @param list<string>               $scope
+     * @param list<array<string, mixed>> $evidence
+     */
+    private function create(
+        string $root,
+        string $taskId,
+        string $session,
+        string $createdBy,
+        array $scope,
+        string $observation,
+        array $evidence,
+        string $hypothesis,
+        ?string $validatedConclusion,
+        string $confidence,
+        string $sensitivity,
+        FindingStatus $status,
+        string $validationStatus,
+        ?string $id = null,
+        ?string $taskIdPattern = null,
+        ?LearningClassification $classification = null,
+        ?string $patternKey = null,
+        ?ValidationCase $validationCase = null,
+    ): FindingCreationResult {
         $id ??= $this->idGenerator->generate('finding');
-        $directory = $root . '/findings/' . $this->lifecycle->directoryFor(FindingStatus::VALIDATED);
+        $directory = $root . '/findings/' . $this->lifecycle->directoryFor($status);
         $path = $directory . '/' . $id . '.json';
         $raw = [
             'id' => $id,
@@ -57,8 +144,8 @@ final readonly class FindingCreator
             'hypothesis' => $hypothesis,
             'validated_conclusion' => $validatedConclusion,
             'confidence' => $confidence,
-            'validation_status' => 'validated',
-            'status' => FindingStatus::VALIDATED->value,
+            'validation_status' => $validationStatus,
+            'status' => $status->value,
             'sensitivity' => $sensitivity,
         ];
         if ($classification instanceof LearningClassification) {
@@ -79,7 +166,7 @@ final readonly class FindingCreator
         $this->assertIdDoesNotExist($root, $finding->id);
 
         if (!is_dir($directory) && !mkdir($directory, 0777, true) && !is_dir($directory)) {
-            throw new ValidationException($directory, null, $finding->id, 'cannot create findings/validated directory');
+            throw new ValidationException($directory, null, $finding->id, 'cannot create finding status directory');
         }
 
         $encoded = json_encode(
