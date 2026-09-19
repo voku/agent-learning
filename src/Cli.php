@@ -297,11 +297,10 @@ final class Cli
 
         $catalog = new LearningCatalog($root);
         $overview = $catalog->overview();
-        $pendingIds = $overview->findingAttentionIds;
         $pending = [];
-        foreach ($pendingIds as $findingId) {
+        foreach ($overview->findingAttentionIds as $findingId) {
             $finding = $catalog->finding($findingId);
-            if ($finding === null) {
+            if ($finding === null || $finding->status !== FindingStatus::VALIDATED->value) {
                 continue;
             }
             $pending[] = $finding;
