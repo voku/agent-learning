@@ -67,6 +67,36 @@ final class FindingClassifyCliTest extends TestCase
         self::assertFalse((new LearningNoteService())->promotionReadiness($root, $findingId)->promotable);
     }
 
+
+    public function testCandidateCannotBeClassifiedBeforeReviewerValidation(): void
+    {
+        $root = $this->createLearningRoot();
+        $findingId = 'finding.2026-09-19.131002';
+
+        [$captureExit, $captureOutput] = $this->runCli($root, [
+            'finding-capture',
+            '--id', $findingId,
+            '--task', 'PROJECT-131',
+            '--by', 'tester',
+            '--observation', 'Classification was reachable before reviewer validation.',
+            '--hypothesis', 'Reusable-learning triage must follow explicit validation.',
+            '--evidence', 'Reproduced through the supported public CLI.',
+        ]);
+        self::assertSame(0, $captureExit, $captureOutput);
+
+        [$classifyExit, $classifyOutput] = $this->runCli($root, [
+            'finding-classify',
+            $findingId,
+            LearningClassification::IGNORE->value,
+        ]);
+
+        self::assertSame(1, $classifyExit, $classifyOutput);
+        self::assertStringContainsString(
+            'finding-classify requires status validated; current status is candidate',
+            $classifyOutput,
+        );
+    }
+
     public function testInvalidClassificationDoesNotChangeFinding(): void
     {
         $root = $this->createLearningRoot();
