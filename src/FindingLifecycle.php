@@ -66,7 +66,6 @@ final class FindingLifecycle
         return $files;
     }
 
-
     /**
      * @return list<FindingStatus>
      */
