@@ -295,20 +295,19 @@ final class Cli
         $parsed = $this->parseOptions($tokens);
         $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
 
-        $validated = (new FindingRepository())->loadValidated($root);
-        $representedByCurrentPrecedent = [];
-        foreach ((new LearningNoteRepository())->loadActive($root) as $note) {
-            foreach ($note->sourceFindings as $findingId) {
-                $representedByCurrentPrecedent[$findingId] = true;
+        $catalog = new LearningCatalog($root);
+        $overview = $catalog->overview();
+        $pendingIds = $overview->findingAttentionIds;
+        $pending = [];
+        foreach ($pendingIds as $findingId) {
+            $finding = $catalog->finding($findingId);
+            if ($finding === null) {
+                continue;
             }
+            $pending[] = $finding;
         }
-        $pending = array_filter(
-            $validated,
-            static fn (Finding $finding): bool => !isset($representedByCurrentPrecedent[$finding->id]),
-        );
-        ksort($pending);
 
-        $this->write('Validated findings needing downstream Learning handling: ' . count($pending) . "\n");
+        $this->write('Findings needing downstream Learning handling: ' . count($pending) . "\n");
         foreach ($pending as $finding) {
             $this->write(sprintf("- %s (task %s): %s\n", $finding->id, $finding->taskId, $finding->observation));
         }
