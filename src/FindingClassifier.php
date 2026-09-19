@@ -27,6 +27,15 @@ final readonly class FindingClassifier
     ): Finding {
         $path = $this->resolveFindingPath($root, $findingId);
         $finding = $this->parser->parseFile($path);
+        if ($finding->status !== FindingStatus::VALIDATED) {
+            throw new ValidationException(
+                $path,
+                null,
+                $findingId,
+                'finding-classify requires status validated; current status is ' . $finding->status->value,
+            );
+        }
+
         $raw = $finding->raw;
         $raw['classification'] = $classification->value;
 
