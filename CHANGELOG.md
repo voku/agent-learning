@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.18.21] - 2026-09-19
+
+### Added
+
+- Add a typed, read-only human Finding intake projection that reports current status, validation state, classification, and owner-supported `available_actions` after capture, review transitions, and classification (#131, #132).
+- Expose reviewer choices without fabricating a mandatory `next_action`, keeping validation and classification under explicit human/owner semantics (#131, #132).
+
+### Fixed
+
+- Reject `finding-classify` unless the Finding is already `validated`, preventing classification from bypassing the released human-review boundary (#131, #132).
+- Make `FindingLifecycle::allowedTransitions()` the single transition-policy source used by mutation and intake projection (#131, #132).
+
+### Validation
+
+- PR #132 passed exact-head CI on PHP 8.3, 8.4, and 8.5 plus the installed-skill consumer (390 tests, 1,453 assertions; PHPStan clean).
+
 ## [0.18.20] - 2026-09-19
 
 ### Added
