@@ -6,6 +6,11 @@ namespace voku\AgentLearning;
 
 final readonly class FindingIntakeProjection
 {
+    public const string ACTION_REVIEW_VALIDATE = 'review_validate';
+    public const string ACTION_REVIEW_INVALIDATE = 'review_invalidate';
+    public const string ACTION_REVIEW_REJECT = 'review_reject';
+    public const string ACTION_CLASSIFY = 'classify';
+
     /**
      * @param list<array{id: non-empty-string, requires: list<non-empty-string>}> $availableActions
      */
