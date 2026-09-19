@@ -10,6 +10,9 @@ use RecursiveIteratorIterator;
 use SplFileInfo;
 use voku\AgentLearning\GuidanceType;
 use voku\AgentLearning\LearningCatalog;
+use voku\AgentLearning\LearningNoteContent;
+use voku\AgentLearning\LearningNoteDraft;
+use voku\AgentLearning\LearningNoteService;
 
 final class LearningCatalogTest extends TestCase
 {
@@ -41,6 +44,79 @@ final class LearningCatalogTest extends TestCase
         self::assertCount(2, $overview->recentProposalIds);
         self::assertContains('proposal.2026-06-08.001', $overview->recentProposalIds);
         self::assertContains('proposal.2026-06-08.002', $overview->recentProposalIds);
+    }
+
+    public function testOverviewDoesNotFlagCurrentLearningNoteSourceForImmediateAttention(): void
+    {
+        $base = sys_get_temp_dir() . '/learning-catalog-note-' . bin2hex(random_bytes(6));
+        $root = $base . '/learning';
+        $projectRoot = $base . '/project';
+        mkdir($root . '/findings/validated', 0777, true);
+        mkdir($projectRoot, 0777, true);
+        file_put_contents(
+            $root . '/config.json',
+            json_encode([
+                'schema_version' => '1.0',
+                'project_root' => '../project',
+                'constraint_generation_dir' => 'constraint-generation',
+                'active_constraints_dir' => 'constraints/active',
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n",
+        );
+
+        $findingId = 'finding.2026-09-19.001';
+        file_put_contents(
+            $root . '/findings/validated/' . $findingId . '.json',
+            json_encode([
+                'id' => $findingId,
+                'task_id' => 'GH-124',
+                'session' => 'session_GH-124',
+                'created_at' => '2026-09-19T03:00:00+00:00',
+                'created_by' => 'test',
+                'scope' => ['src/'],
+                'observation' => 'A solved case should remain precedent.',
+                'evidence' => [['type' => 'manual_verification', 'summary' => 'Reproduced.']],
+                'hypothesis' => 'Precedent should not be immediate Proposal work.',
+                'validated_conclusion' => 'The Finding is reusable precedent.',
+                'confidence' => 'high',
+                'validation_status' => 'validated',
+                'status' => 'validated',
+                'sensitivity' => 'public',
+                'classification' => 'ADD_LEARNING_NOTE',
+                'pattern_key' => 'workflow.precedent',
+                'validation_case' => [
+                    'given' => 'A later related task.',
+                    'when' => 'The precedent applies.',
+                    'then' => 'Reuse it without treating it as active guidance.',
+                ],
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n",
+        );
+
+        (new LearningNoteService())->publish(
+            $root,
+            new LearningNoteDraft(
+                sourceFindings: [$findingId],
+                sourceProposals: [],
+                tags: ['workflow'],
+                repositoryEvidence: [],
+                content: new LearningNoteContent(
+                    title: 'Precedent',
+                    context: 'A solved case exists.',
+                    guidance: 'Reuse the solved case when relevant.',
+                    whyItWorks: 'It preserves bounded prior evidence.',
+                    whenToApply: 'On related work.',
+                    whenNotToApply: 'When current evidence conflicts.',
+                    verification: 'Inspect current evidence and source lineage.',
+                ),
+            ),
+            $projectRoot,
+        );
+
+        $overview = (new LearningCatalog($root))->overview();
+
+        self::assertSame(1, $overview->findingCounts['validated']);
+        self::assertSame([], $overview->findingAttentionIds);
+
+        $this->removeDirectory($base);
     }
 
     public function testCompleteListQueriesPreserveOwnerProjectionAndStatusFiltering(): void
@@ -176,6 +252,19 @@ final class LearningCatalogTest extends TestCase
         self::assertNotEmpty($analytics->cohorts);
         self::assertArrayHasKey('terminal_proposals', $analytics->lifecycleBreakdown);
         self::assertArrayHasKey('findings_per_proposal_distribution', $analytics->consolidation);
+    }
+
+    private function removeDirectory(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $files = array_diff(scandir($dir), ['.', '..']);
+        foreach ($files as $file) {
+            $path = $dir . '/' . $file;
+            is_dir($path) ? $this->removeDirectory($path) : unlink($path);
+        }
+        rmdir($dir);
     }
 
     /** @return array<string, string> */

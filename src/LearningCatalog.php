@@ -34,6 +34,12 @@ final readonly class LearningCatalog
         $guidanceCounts = array_fill_keys(array_map(static fn (GuidanceType $type): string => $type->value, GuidanceType::cases()), 0);
         $findingAttention = [];
         $proposalAttention = [];
+        $currentPrecedentFindingIds = [];
+        foreach ((new LearningNoteRepository())->loadActive($this->root) as $note) {
+            foreach ($note->sourceFindings as $findingId) {
+                $currentPrecedentFindingIds[$findingId] = true;
+            }
+        }
         $durable = [];
         $recentFindings = [];
         $recentProposals = [];
@@ -41,7 +47,14 @@ final readonly class LearningCatalog
         foreach ($state->findingsById as $finding) {
             ++$findingCounts[$finding->status->value];
             $recentFindings[] = [$finding->createdAt, $finding->id];
-            if (in_array($finding->status, [FindingStatus::CANDIDATE, FindingStatus::VALIDATED], true)) {
+            if (
+                $finding->status === FindingStatus::CANDIDATE
+                ||
+                (
+                    $finding->status === FindingStatus::VALIDATED
+                    && !isset($currentPrecedentFindingIds[$finding->id])
+                )
+            ) {
                 $findingAttention[] = $finding->id;
             }
         }

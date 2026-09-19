@@ -295,15 +295,23 @@ final class Cli
         $parsed = $this->parseOptions($tokens);
         $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
 
-        $validated = (new FindingRepository())->loadValidated($root);
-        ksort($validated);
+        $catalog = new LearningCatalog($root);
+        $overview = $catalog->overview();
+        $pending = [];
+        foreach ($overview->findingAttentionIds as $findingId) {
+            $finding = $catalog->finding($findingId);
+            if ($finding === null || $finding->status !== FindingStatus::VALIDATED->value) {
+                continue;
+            }
+            $pending[] = $finding;
+        }
 
-        $this->write('Unconsolidated validated findings: ' . count($validated) . "\n");
-        foreach ($validated as $finding) {
+        $this->write('Findings needing downstream Learning handling: ' . count($pending) . "\n");
+        foreach ($pending as $finding) {
             $this->write(sprintf("- %s (task %s): %s\n", $finding->id, $finding->taskId, $finding->observation));
         }
 
-        if ($validated === []) {
+        if ($pending === []) {
             $this->write("Backlog is clear.\n");
 
             return 0;
@@ -314,8 +322,9 @@ final class Cli
         }
 
         $this->writeError(
-            'Learning backlog is not empty: ' . count($validated)
-            . " validated finding(s) still need consolidation. Consolidate them, or pass --allow-nonempty for an informational listing.\n"
+            'Learning backlog is not empty: ' . count($pending)
+            . " validated finding(s) still need downstream Learning handling. "
+            . "Capture the appropriate Learning product, or pass --allow-nonempty for an informational listing.\n"
         );
 
         return 1;
