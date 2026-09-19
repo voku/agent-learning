@@ -8,6 +8,9 @@ use PHPUnit\Framework\TestCase;
 use voku\AgentLearning\Cli;
 use voku\AgentLearning\FindingStatus;
 use voku\AgentLearning\FindingTransitionManager;
+use voku\AgentLearning\LearningNoteContent;
+use voku\AgentLearning\LearningNoteDraft;
+use voku\AgentLearning\LearningNoteService;
 
 final class BacklogCommandTest extends TestCase
 {
@@ -38,6 +41,42 @@ final class BacklogCommandTest extends TestCase
         self::assertSame(0, $this->runBacklog([]));
     }
 
+    public function testBacklogDoesNotRequireImmediateProposalForCurrentLearningNoteSource(): void
+    {
+        $this->seedValidatedFinding([
+            'classification' => 'ADD_LEARNING_NOTE',
+            'pattern_key' => 'workflow.current-precedent',
+            'validation_case' => [
+                'given' => 'A later related task.',
+                'when' => 'The precedent applies.',
+                'then' => 'Current precedent can be reused without becoming active guidance.',
+            ],
+            'validated_conclusion' => 'The solved case is reusable precedent.',
+        ]);
+
+        (new LearningNoteService())->publish(
+            $this->root,
+            new LearningNoteDraft(
+                sourceFindings: ['finding.2026-06-08.001'],
+                sourceProposals: [],
+                tags: ['workflow'],
+                repositoryEvidence: [],
+                content: new LearningNoteContent(
+                    title: 'Current precedent',
+                    context: 'A validated solved case is useful on later related work.',
+                    guidance: 'Reuse the precedent when current evidence says it applies.',
+                    whyItWorks: 'The concrete solved case remains available without premature generalization.',
+                    whenToApply: 'On a later related task.',
+                    whenNotToApply: 'When stronger current authority or evidence conflicts.',
+                    verification: 'Check the source Finding lineage and current evidence.',
+                ),
+            ),
+        );
+
+        self::assertFileExists($this->root . '/findings/validated/finding.2026-06-08.001.json');
+        self::assertSame(0, $this->runBacklog([]));
+    }
+
     /**
      * @param list<string> $extraArgs
      */
@@ -53,11 +92,15 @@ final class BacklogCommandTest extends TestCase
         }
     }
 
-    private function seedValidatedFinding(): void
+    /** @param array<string, mixed> $overrides */
+    private function seedValidatedFinding(array $overrides = []): void
     {
         $data = json_decode((string)file_get_contents(__DIR__ . '/fixtures/findings/finding.2026-06-08.001.json'), true);
         $data['status'] = 'candidate';
         $data['validation_status'] = 'unverified';
+        foreach ($overrides as $key => $value) {
+            $data[$key] = $value;
+        }
         file_put_contents($this->root . '/findings/candidate/finding.2026-06-08.001.json', json_encode($data));
 
         (new FindingTransitionManager())->transition($this->root, 'finding.2026-06-08.001', FindingStatus::VALIDATED, 'maintainer');
