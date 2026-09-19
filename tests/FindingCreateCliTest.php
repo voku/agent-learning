@@ -63,7 +63,7 @@ final class FindingCreateCliTest extends TestCase
         ]);
 
         self::assertSame(0, $exitCode, $output);
-        /** @var array{id: string, path: string, status: string, validation_status: string} $result */
+        /** @var array{id: string, path: string, status: string, validation_status: string, classification: ?string, available_actions: list<array{id: non-empty-string, requires: list<non-empty-string>}>} $result */
         $result = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
         self::assertMatchesRegularExpression(RecordIdGenerator::pattern('finding'), $result['id']);
         self::assertSame($root . '/findings/candidate/' . $result['id'] . '.json', $result['path']);
