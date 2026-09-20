@@ -18,21 +18,34 @@ final class SkillPromotionSkillTest extends TestCase
         self::assertFileExists($skills['agent-skill-promotion'] . '/SKILL.md');
     }
 
-    public function testSkillPreservesPromotionAndHumanAuthorityBoundaries(): void
+    public function testSkillUsesExistingLearningPrepareAndProposalImportOwners(): void
     {
         $skill = (string) file_get_contents(
             __DIR__ . '/../resources/skills/agent-skill-promotion/SKILL.md',
         );
 
         self::assertStringContainsString('name: agent-skill-promotion', $skill);
-        self::assertStringContainsString('UPDATE_SKILL', $skill);
-        self::assertStringContainsString('CREATE_SKILL', $skill);
+        self::assertStringContainsString('vendor/bin/agent-learning prepare', $skill);
+        self::assertStringContainsString('vendor/bin/agent-learning proposal-import', $skill);
+        self::assertStringContainsString('Use the generated consolidation input as the Learning-owned evidence envelope.', $skill);
+        self::assertStringContainsString('The owner re-parses the result', $skill);
+        self::assertStringContainsString('SKILL_PROMOTION_CANDIDATE', $skill);
+        self::assertStringContainsString('SKILL_PROMOTION_REDIRECT', $skill);
+        self::assertStringContainsString('SKILL_PROMOTION_BLOCKED', $skill);
+    }
+
+    public function testSkillShapesGuidanceWithoutDuplicatingPromotionAuthority(): void
+    {
+        $skill = (string) file_get_contents(
+            __DIR__ . '/../resources/skills/agent-skill-promotion/SKILL.md',
+        );
+
         self::assertStringContainsString('Prefer the existing semantic owner', $skill);
-        self::assertStringContainsString('Define the discovery contract', $skill);
+        self::assertStringContainsString('Define a discoverable skill boundary', $skill);
         self::assertStringContainsString('Keep one coherent context boundary', $skill);
         self::assertStringContainsString('Use progressive disclosure', $skill);
-        self::assertStringContainsString('Do not write the candidate into Learning-private proposal storage.', $skill);
-        self::assertStringContainsString('A candidate means "ready for proposal review", not approved guidance.', $skill);
+        self::assertStringContainsString('CREATE_SKILL` requires `ADD`', $skill);
+        self::assertStringContainsString('UPDATE_SKILL` requires `target_type=skill`', $skill);
     }
 
     public function testSkillDoesNotInventAutomaticPromotionOrDirectProposalMutation(): void
@@ -43,8 +56,9 @@ final class SkillPromotionSkillTest extends TestCase
 
         self::assertStringContainsString('must never:', $skill);
         self::assertStringContainsString('change a Finding classification silently', $skill);
-        self::assertStringContainsString('approve, apply, retire, or acknowledge a Proposal', $skill);
-        self::assertStringContainsString('edit `proposals/**` directly', $skill);
+        self::assertStringContainsString('approve, apply, reject, retire, or acknowledge a Proposal', $skill);
+        self::assertStringContainsString('Do not edit `proposals/**` directly', $skill);
         self::assertStringContainsString('mutate the target skill as if a candidate were already approved', $skill);
+        self::assertStringContainsString('Human/owner review remains the authority-bearing step', $skill);
     }
 }
