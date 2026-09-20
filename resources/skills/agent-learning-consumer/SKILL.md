@@ -25,8 +25,8 @@ Use this skill when a project wants to run `voku/agent-learning` locally. The go
 4. Classify reusable learning explicitly:
    - `ADD_LEARNING_NOTE` is the default for a useful solved case that should remain precedent rather than active guidance. Author it through the package-owned `agent-learning-note` skill and `agent-learning-note prepare/publish` owner boundary; never write `notes/**` directly.
    - `NO_DURABLE_LEARNING` preserves a real reusable `pattern_key` + `validation_case` lineage when deterministic enforcement or another existing durable owner already owns the lesson; it must not make a LearningNote or Memory promotion-ready merely because more evidence arrived.
-   - `UPDATE_SKILL` is preferred when an existing skill owns the behavior.
-   - `CREATE_SKILL` is rare and requires existing-skill overlap evidence.
+   - `UPDATE_SKILL` is preferred when an existing skill owns the behavior. Route candidate authoring through the package-owned `agent-skill-promotion` skill; classification and Proposal approval remain Learning-owned.
+   - `CREATE_SKILL` is rare and requires existing-skill overlap evidence. Route candidate authoring through `agent-skill-promotion`; a new skill needs a distinct discovery/context boundary, not merely adjacent useful guidance.
    - `IGNORE` remains for praise, vague reflection, and one-off noise; it does not preserve reusable pattern lineage.
 5. Every classification except `IGNORE` needs `pattern_key` and a concrete `validation_case` with `given`, `when`, and `then`.
 6. Do not confuse `LearningClassification::NO_DURABLE_LEARNING` with absence of reusable evidence: use it only when the evidence should stay in pattern lineage but no new soft guidance should be created. If there is no bounded reusable pattern, use `IGNORE` instead. A LearningNote is optional downstream knowledge capture and is never required proof that the software task itself is complete.
