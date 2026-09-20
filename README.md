@@ -396,6 +396,7 @@ This package ships package-specific skills under `skills/`:
 
 - [`agent-learning-consumer`](resources/skills/agent-learning-consumer/SKILL.md): for end users setting up a learning root, capturing findings, validating proposals, and preparing consolidation input.
 - [`agent-learning-note`](resources/skills/agent-learning-note/SKILL.md): for authoring or updating one evidence-grounded LearningNote from explicit validated Finding IDs through `LearningNoteService`/CLI owner boundaries; it never promotes the note into active guidance.
+- [`agent-skill-promotion`](resources/skills/agent-skill-promotion/SKILL.md): for shaping a bounded `UPDATE_SKILL` or `CREATE_SKILL` candidate from validated Learning evidence while preserving semantic ownership, discovery quality, progressive disclosure, and human Proposal authority.
 - [`agent-learning-ctx-evidence`](resources/skills/agent-learning-ctx-evidence/SKILL.md): for using ctx-backed local agent-history search as bounded evidence references without importing raw transcripts.
 - [`agent-hard-constraint-author`](resources/skills/agent-hard-constraint-author/SKILL.md): for end users promoting validated findings into executable PHPStan, PHP-CS-Fixer, test, or CI constraints.
 - [`agent-learning-maintainer`](resources/skills/agent-learning-maintainer/SKILL.md): for maintainers changing `voku/agent-learning` source, tests, docs, or local vendor syncs.
