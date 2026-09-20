@@ -30,6 +30,7 @@ final class PackageResources
         return [
             'agent-learning-consumer' => $root . '/agent-learning-consumer',
             'agent-learning-note' => $root . '/agent-learning-note',
+            'agent-skill-promotion' => $root . '/agent-skill-promotion',
             'agent-hard-constraint-author' => $root . '/agent-hard-constraint-author',
             'agent-learning-ctx-evidence' => $root . '/agent-learning-ctx-evidence',
         ];
