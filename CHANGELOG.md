@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.18.22] - 2026-09-20
+
+### Added
+
+- Add the Learning-owned `agent-skill-promotion` consumer skill for shaping bounded `UPDATE_SKILL` and `CREATE_SKILL` candidates through the existing `prepare` and `proposal-import` owner paths while preserving human Proposal authority (#135).
+
+### Validation
+
+- PR #135 passed exact-head CI on PHP 8.3, 8.4, and 8.5 plus the installed-skill consumer; local `composer ci` passed with 394 tests, 1,478 assertions, and PHPStan clean.
+
 ## [0.18.21] - 2026-09-19
 
 ### Added
