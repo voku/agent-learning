@@ -51,12 +51,13 @@ vendor/bin/agent-learning history-status --root=infra/doc/agent-learning
 
 ## Shipped Assets & PackageResources
 
-The package ships 5 first-party workflow skills under `resources/skills/`:
+The package ships 6 first-party workflow skills under `resources/skills/`:
 - `agent-hard-constraint-author`
 - `agent-learning-consumer`
 - `agent-learning-ctx-evidence`
 - `agent-learning-maintainer`
 - `agent-learning-note`
+- `agent-skill-promotion`
 
 Consumers and tool integrations can resolve them programmatically without hard-coding filesystem paths:
 
