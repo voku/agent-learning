@@ -21,6 +21,7 @@ final class PackageResourcesTest extends TestCase
         self::assertNotEmpty($skills);
         self::assertArrayHasKey('agent-learning-consumer', $skills);
         self::assertArrayHasKey('agent-learning-note', $skills);
+        self::assertArrayHasKey('agent-skill-promotion', $skills);
         self::assertArrayHasKey('agent-hard-constraint-author', $skills);
         self::assertArrayHasKey('agent-learning-ctx-evidence', $skills);
         self::assertArrayNotHasKey('agent-learning-maintainer', $skills);
