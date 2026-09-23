@@ -47,7 +47,8 @@ final class DreamingEvaluatorTest extends TestCase
         $second = $evaluator->evaluate([$finding->id => $finding], [], [$selection], [], projectRoot: $this->projectRoot, reviewHorizonDays: 20, now: $now);
 
         self::assertEquals($first, $second);
-        self::assertSame(['evidence_reference_unresolvable', 'finding_review_horizon_exceeded', 'outcome_missing'], array_map(static fn (DreamWarning $warning): string => $warning->code, $first->warnings));
+        // An unjudged selection is neutral: coverage is a metric, not a warning.
+        self::assertSame(['evidence_reference_unresolvable', 'finding_review_horizon_exceeded'], array_map(static fn (DreamWarning $warning): string => $warning->code, $first->warnings));
         self::assertSame(1, $first->metrics->selectedGuidanceCount);
         self::assertSame(0, $first->metrics->explicitOutcomeCount);
         self::assertSame(0.0, $first->metrics->outcomeCompletenessRate);

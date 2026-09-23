@@ -8,13 +8,17 @@ final readonly class RunLearningDecision
 {
     /**
      * @param list<non-empty-string> $findingIds
+     * @param non-empty-string|null $reason Optional context. The decision, Finding
+     *                                      ids, and follow-up reference are the
+     *                                      evidence; "nothing durable was learned"
+     *                                      needs no prose to be a real decision.
      */
     public function __construct(
         public string $runId,
         public RunLearningDecisionStatus $decision,
         public string $decidedBy,
         public string $decidedAt,
-        public string $reason,
+        public ?string $reason,
         public array $findingIds,
         public ?string $followUpRef,
         public string $path,

@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.18.24] - 2026-09-23
+
+### Changed
+
+- `RunLearningDecision::$reason` is optional (`non-empty-string|null`); `RunLearningDecisionStore::record()` accepts no reason, and a blank one is stored as `null`. The decision, Finding ids, and follow-up reference are the evidence. Existing records with a reason stay readable. Typed consumers must accept a `null` reason.
+- Dream no longer emits `outcome_missing` for selected-but-unjudged guidance: an unjudged selection is neutral. The judged/selected metric remains and is now labelled "Outcome coverage".
+
+### Validation
+
+- Local `composer ci` passed (409 tests, PHPStan clean); exact-head PR CI is the release gate.
+
 ## [0.18.23] - 2026-09-23
 
 ### Added

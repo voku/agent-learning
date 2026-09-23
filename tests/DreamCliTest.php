@@ -92,7 +92,7 @@ final class DreamCliTest extends TestCase
         $report = implode("\n", $output);
 
         self::assertSame(0, $exitCode, $report);
-        self::assertStringContainsString('Outcome completeness: 1/2 selected guidance judged (50%)', $report);
+        self::assertStringContainsString('Outcome coverage: 1/2 selected guidance judged (50%)', $report);
     }
 
     private function writeSelection(string $id, string $compilationId, string $guidanceId): void
