@@ -18,6 +18,24 @@ Projection is rebuilt from JSONL every run and does not persist counters.
 It separates eligibility, selection, application, explicit feedback, distinct tasks, evidence event IDs, and last relevant timestamps.
 Selection means the guidance was selected into a closed session; it does not prove model attention, application, or usefulness.
 
+## Decision-time attribution
+
+A `guidance-outcome` event may carry an optional `attribution` object:
+
+```json
+"attribution": {
+  "seen_before_decision": true,
+  "also_prescribed_by": ["skill"]
+}
+```
+
+- `seen_before_decision`: the session read the selected guidance before making the decision it credits.
+- `also_prescribed_by`: every other source that already prescribed that decision. Allowed values are `task_prompt`, `contract`, `skill`, `template`, `constraint`, and `repository_docs`; an empty list states that no other source did.
+
+A plain `helpful` judgement cannot distinguish "this changed my choice" from "this matches what I did anyway". Real history showed both confounds: guidance first read after the credited fix, and decisions already prescribed by an always-loaded skill, template, or Constraint.
+
+`GuidanceUsageSummary::$attributableHelpfulEventIds` lists the `helpful` events whose attribution is unconfounded (read first, prescribed nowhere else). That list is the candidate set for a causal behavioral-value audit, not proof: the attribution is still a self-report and must be checked against the session evidence before any value is claimed. Records without `attribution` remain valid and are counted as before, but never enter that set. Malformed attribution fails closed.
+
 Decisions are `NO_ACTION`, `PROMOTION_CANDIDATE`, `STALE_CANDIDATE`, `REPLACEMENT_CANDIDATE`, or `CONFLICT`.
 Each decision carries guidance ID, source tier, target tier when applicable, evidence event IDs, independent task IDs, reason, uncertainty, proposed scope, validation requirements, and source findings when available.
 

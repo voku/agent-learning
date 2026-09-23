@@ -21,6 +21,7 @@ final readonly class GuidanceOutcomeEvent
         public string $recordedBy,
         public string $recordedAt,
         public array $raw,
+        public ?GuidanceOutcomeAttribution $attribution = null,
     ) {
     }
 }
