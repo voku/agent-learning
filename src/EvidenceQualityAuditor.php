@@ -25,30 +25,11 @@ final class EvidenceQualityAuditor
         DateTimeImmutable $now,
     ): array {
         $warnings = [];
-        $outcomesBySelection = [];
-        foreach ($outcomeEvents as $event) {
-            $outcomesBySelection[$event->compilationId . "\0" . $event->guidanceId] = $event;
-        }
-
-        $missingOutcomeIds = [];
-        foreach ($selectionEvents as $event) {
-            if (!$event->selected) {
-                continue;
-            }
-            if (!isset($outcomesBySelection[$event->compilationId . "\0" . $event->guidanceId])) {
-                $missingOutcomeIds[] = $event->id;
-            }
-        }
-        if ($missingOutcomeIds !== []) {
-            sort($missingOutcomeIds);
-            $warnings[] = new DreamWarning(
-                'outcome_missing',
-                'Selected guidance has no explicit outcome record.',
-                $this->bounded($missingOutcomeIds),
-                'Record helpful, harmful, irrelevant, not_used, or unknown for each selected guidance item.',
-            );
-        }
-
+        // Selected-but-unjudged guidance is neutral, not missing evidence.
+        // Asking for a judgement on every selected item made sessions invent
+        // `not_used`/`irrelevant` rows (82% of all outcomes in one real
+        // consumer) that no retirement ever relied on. Coverage stays visible
+        // through the judged/selected metric instead of as a warning.
         $unknownIds = [];
         foreach ($outcomeEvents as $event) {
             if ($event->outcome === OutcomeValue::UNKNOWN) {

@@ -22,7 +22,7 @@ final class RunLearningDecisionStore
         string $runId,
         RunLearningDecisionStatus $decision,
         string $decidedBy,
-        string $reason,
+        ?string $reason = null,
         array $findingIds = [],
         ?string $followUpRef = null,
         ?int $contractRevision = null,
@@ -32,7 +32,7 @@ final class RunLearningDecisionStore
     ): RunLearningDecision {
         $runId = $this->nonEmpty($runId, 'run_id');
         $decidedBy = $this->nonEmpty($decidedBy, 'decided_by');
-        $reason = $this->nonEmpty($reason, 'reason');
+        $reason = $this->optionalReason($reason);
         $findingIds = $this->normalizeFindingIds($findingIds);
         $followUpRef = $followUpRef === null ? null : $this->nonEmpty($followUpRef, 'follow_up_ref');
         $this->assertDecisionShape($decision, $findingIds, $followUpRef);
@@ -218,7 +218,7 @@ final class RunLearningDecisionStore
             $decision,
             $this->requiredString($data, 'decided_by', $path),
             $this->requiredString($data, 'decided_at', $path),
-            $this->requiredString($data, 'reason', $path),
+            $this->optionalReason($this->nullableString($data['reason'] ?? null, 'reason', $path)),
             $findingIds,
             $followUpRef,
             $path,
@@ -320,6 +320,21 @@ final class RunLearningDecisionStore
         }
 
         return trim($value);
+    }
+
+    /**
+     * The reason is optional context; a blank one is the same as none.
+     *
+     * @return non-empty-string|null
+     */
+    private function optionalReason(?string $reason): ?string
+    {
+        if ($reason === null) {
+            return null;
+        }
+        $reason = trim($reason);
+
+        return $reason === '' ? null : $reason;
     }
 
     private function nullableString(mixed $value, string $name, string $path): ?string

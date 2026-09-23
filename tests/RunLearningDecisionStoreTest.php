@@ -41,6 +41,33 @@ final class RunLearningDecisionStoreTest extends TestCase
         self::assertSame($record->toArray(), $store->find('run:ABC-123:deadbeef')?->toArray());
     }
 
+    public function testDecisionNeedsNoProseToBeRecorded(): void
+    {
+        $store = new RunLearningDecisionStore($this->root);
+
+        $plain = $store->record('run:ABC-124:deadbeef', RunLearningDecisionStatus::NO_DURABLE_LEARNING, 'lars');
+        $blank = $store->record('run:ABC-125:deadbeef', RunLearningDecisionStatus::NO_DURABLE_LEARNING, 'lars', '   ');
+        $findings = $store->record('run:ABC-126:deadbeef', RunLearningDecisionStatus::FINDINGS_RECORDED, 'lars', null, ['finding.2026-09-23.001']);
+        $followUp = $store->record('run:ABC-127:deadbeef', RunLearningDecisionStatus::FOLLOW_UP_REQUIRED, 'lars', null, [], 'FOL-31');
+
+        foreach ([$plain, $blank, $findings, $followUp] as $record) {
+            self::assertNull($record->reason);
+            self::assertNull($record->toArray()['reason']);
+            self::assertSame($record->toArray(), $store->find($record->runId)?->toArray());
+        }
+        // Idempotent retry without a reason stays the same decision.
+        self::assertSame($plain->toArray(), $store->record('run:ABC-124:deadbeef', RunLearningDecisionStatus::NO_DURABLE_LEARNING, 'lars')->toArray());
+    }
+
+    public function testRecordedReasonIsStillPersistedWhenGiven(): void
+    {
+        $store = new RunLearningDecisionStore($this->root);
+        $record = $store->record('run:ABC-128:deadbeef', RunLearningDecisionStatus::NO_DURABLE_LEARNING, 'lars', '  Local regression only.  ');
+
+        self::assertSame('Local regression only.', $store->find('run:ABC-128:deadbeef')?->reason);
+        self::assertSame('Local regression only.', $record->reason);
+    }
+
     public function testIdenticalRetryIsIdempotentButDifferentConclusionIsRejected(): void
     {
         $store = new RunLearningDecisionStore($this->root);
