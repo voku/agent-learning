@@ -59,6 +59,9 @@ final class GuidanceUsageProjector
             };
             if ($event->outcome === OutcomeValue::HELPFUL) {
                 $builder['last_helpful_at'] = $this->later($builder['last_helpful_at'], $event->recordedAt);
+                if ($event->attribution?->isIndependentlyAttributable() === true) {
+                    $builder['attributable_helpful_event_ids'][$event->id] = true;
+                }
             }
             $builders[$event->guidanceId] = $builder;
         }
@@ -70,6 +73,8 @@ final class GuidanceUsageProjector
             sort($taskIds);
             $eventIds = array_keys($builder['evidence_event_ids']);
             sort($eventIds);
+            $attributableHelpfulEventIds = array_keys($builder['attributable_helpful_event_ids']);
+            sort($attributableHelpfulEventIds);
             $summaries[$guidanceId] = new GuidanceUsageSummary(
                 $guidanceId,
                 $builder['guidance_type'],
@@ -89,6 +94,7 @@ final class GuidanceUsageProjector
                 $builder['last_helpful_at'],
                 $taskIds,
                 $eventIds,
+                $attributableHelpfulEventIds,
             );
         }
 
@@ -108,6 +114,7 @@ final class GuidanceUsageProjector
      *     unknown_count: int,
      *     task_ids: array<string, true>,
      *     evidence_event_ids: array<string, true>,
+     *     attributable_helpful_event_ids: array<string, true>,
      *     last_eligible_at: string|null,
      *     last_selected_at: string|null,
      *     last_helpful_at: string|null
@@ -127,6 +134,7 @@ final class GuidanceUsageProjector
             'unknown_count' => 0,
             'task_ids' => [],
             'evidence_event_ids' => [],
+            'attributable_helpful_event_ids' => [],
             'last_eligible_at' => null,
             'last_selected_at' => null,
             'last_helpful_at' => null,

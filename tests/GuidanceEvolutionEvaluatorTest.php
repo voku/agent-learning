@@ -54,6 +54,29 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
         self::assertSame(['PROJECT-1', 'PROJECT-2'], $first['proposal.2026-06-18.100']->distinctTaskIds);
     }
 
+    public function testOnlyUnconfoundedHelpfulOutcomesEnterTheCausalAuditSet(): void
+    {
+        foreach (['A' => '001', 'B' => '002', 'C' => '003', 'D' => '004'] as $task => $sequence) {
+            $this->appendSelection('recall-selection.2026-06-18.' . $sequence, 'compilation.PROJECT-' . $task . '.001', 'PROJECT-' . $task, 'proposal.2026-06-18.100', 'memory');
+        }
+        // Read before the decision, prescribed nowhere else: the only auditable case.
+        $this->appendOutcome('guidance-outcome.2026-06-18.001', 'compilation.PROJECT-A.001', 'PROJECT-A', 'proposal.2026-06-18.100', 'helpful', true, ['seen_before_decision' => true, 'also_prescribed_by' => []]);
+        // Read only after the decision was made.
+        $this->appendOutcome('guidance-outcome.2026-06-18.002', 'compilation.PROJECT-B.001', 'PROJECT-B', 'proposal.2026-06-18.100', 'helpful', true, ['seen_before_decision' => false, 'also_prescribed_by' => []]);
+        // The skill already prescribed the same decision.
+        $this->appendOutcome('guidance-outcome.2026-06-18.003', 'compilation.PROJECT-C.001', 'PROJECT-C', 'proposal.2026-06-18.100', 'helpful', true, ['seen_before_decision' => true, 'also_prescribed_by' => ['skill']]);
+        // Legacy helpful without attribution stays counted but is not auditable.
+        $this->appendOutcome('guidance-outcome.2026-06-18.004', 'compilation.PROJECT-D.001', 'PROJECT-D', 'proposal.2026-06-18.100', 'helpful', true);
+
+        $summary = (new GuidanceUsageProjector())->project(
+            (new RecallSelectionEventRepository())->load($this->root),
+            (new GuidanceOutcomeEventRepository())->load($this->root),
+        )['proposal.2026-06-18.100'];
+
+        self::assertSame(4, $summary->helpfulCount);
+        self::assertSame(['guidance-outcome.2026-06-18.001'], $summary->attributableHelpfulEventIds);
+    }
+
     public function testDuplicateEventAndMalformedJsonlAreRejectedWithContext(): void
     {
         $this->appendSelection('recall-selection.2026-06-18.001', 'compilation.PROJECT-1.001', 'PROJECT-1', 'proposal.2026-06-18.100', 'memory');
@@ -466,7 +489,10 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
         file_put_contents($this->root . '/history/recall-selections.jsonl', json_encode($record, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n", FILE_APPEND);
     }
 
-    private function appendOutcome(string $id, string $compilationId, string $taskId, string $guidanceId, string $outcome, bool $applied): void
+    /**
+     * @param array{seen_before_decision: bool, also_prescribed_by: list<string>}|null $attribution
+     */
+    private function appendOutcome(string $id, string $compilationId, string $taskId, string $guidanceId, string $outcome, bool $applied, ?array $attribution = null): void
     {
         $record = [
             'schema_version' => '1.0',
@@ -481,6 +507,9 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
             'recorded_by' => 'test',
             'recorded_at' => '2026-06-18T12:00:00+00:00',
         ];
+        if ($attribution !== null) {
+            $record['attribution'] = $attribution;
+        }
         file_put_contents($this->root . '/history/outcomes.jsonl', json_encode($record, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n", FILE_APPEND);
     }
 

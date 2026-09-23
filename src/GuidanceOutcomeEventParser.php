@@ -62,6 +62,47 @@ final class GuidanceOutcomeEventParser
             $this->recordAccess->string($record, 'recorded_by', $file, $line, $id),
             $recordedAt,
             $record,
+            $this->attribution($record, $file, $line, $id),
         );
+    }
+
+    /**
+     * Optional decision-time attribution. Records written before it existed
+     * stay valid; a present value must be exact, because a lenient parse would
+     * let a malformed self-report count as independently attributable.
+     *
+     * @param array<string, mixed> $record
+     */
+    private function attribution(array $record, string $file, ?int $line, string $id): ?GuidanceOutcomeAttribution
+    {
+        if (!array_key_exists('attribution', $record) || $record['attribution'] === null) {
+            return null;
+        }
+        $value = $record['attribution'];
+        if (!is_array($value) || array_is_list($value) && $value !== []) {
+            throw new ValidationException($file, $line, $id, 'attribution must be an object');
+        }
+        $unknown = array_diff(array_keys($value), ['seen_before_decision', 'also_prescribed_by']);
+        if ($unknown !== []) {
+            throw new ValidationException($file, $line, $id, 'unknown attribution field: ' . implode(', ', $unknown));
+        }
+        $seenBeforeDecision = $value['seen_before_decision'] ?? null;
+        if (!is_bool($seenBeforeDecision)) {
+            throw new ValidationException($file, $line, $id, 'field must be boolean: attribution.seen_before_decision');
+        }
+
+        $sources = [];
+        foreach ($this->recordAccess->stringList($value, 'also_prescribed_by', $file, $line, $id) as $sourceValue) {
+            $source = GuidanceOutcomeAttributionSource::tryFrom($sourceValue);
+            if (!$source instanceof GuidanceOutcomeAttributionSource) {
+                throw new ValidationException($file, $line, $id, 'unknown attribution source: ' . $sourceValue);
+            }
+            if (in_array($source, $sources, true)) {
+                throw new ValidationException($file, $line, $id, 'duplicate attribution source: ' . $sourceValue);
+            }
+            $sources[] = $source;
+        }
+
+        return new GuidanceOutcomeAttribution($seenBeforeDecision, $sources);
     }
 }

@@ -9,6 +9,9 @@ final readonly class GuidanceUsageSummary
     /**
      * @param list<string> $distinctTaskIds
      * @param list<string> $evidenceEventIds
+     * @param list<string> $attributableHelpfulEventIds helpful outcome events whose decision-time attribution
+     *                                                  says the guidance was read first and nothing else
+     *                                                  prescribed the decision; the audit set for causal value
      */
     public function __construct(
         public string $guidanceId,
@@ -29,6 +32,7 @@ final readonly class GuidanceUsageSummary
         public ?string $lastHelpfulAt,
         public array $distinctTaskIds,
         public array $evidenceEventIds,
+        public array $attributableHelpfulEventIds = [],
     ) {
     }
 }
