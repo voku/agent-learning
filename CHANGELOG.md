@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.18.23] - 2026-09-23
+
+### Added
+
+- Record optional decision-time `attribution` on guidance outcome events (`seen_before_decision`, `also_prescribed_by`) and expose unconfounded helpful outcomes as `GuidanceUsageSummary::$attributableHelpfulEventIds`, the candidate set for a causal behavioral-value audit (#137).
+
+### Validation
+
+- Local `composer ci` passed with 407 tests, 1,505 assertions, and PHPStan clean; PR #137 exact-head CI is the release gate.
+
 ## [0.18.22] - 2026-09-20
 
 ### Added
