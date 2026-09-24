@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `DreamService::run(DreamRequest): DreamOutcome`, the typed entry point for a Dream run. It owns the validator → evolution → suppression → evaluation composition that previously lived only inside `agent-learning dream`, so embedding owners (agent-loop, and through it agent-ui) can run Dream and read its `DreamRunResult`, history projection and written candidate ids without rebuilding that sequence or parsing CLI output. A run is read-only unless `writeCandidates` is set, and even then only writes candidate Proposals; nothing becomes active guidance without the existing human review path.
+
+### Changed
+
+- `agent-learning dream` delegates to `DreamService`; its text and JSON reports are unchanged.
+
 ## [0.18.24] - 2026-09-23
 
 ### Changed

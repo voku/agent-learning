@@ -147,51 +147,27 @@ final class Cli
         if (!in_array($format, ['text', 'json'], true)) {
             throw new ValidationException($root, null, null, 'dream --format must be text or json');
         }
-        $reviewHorizonDays = $this->positiveIntOption($parsed['options'], 'review-horizon-days', 90);
-        $projectRoot = (new LearningProjectPaths())->projectRootForLearningRoot(
-            $root,
-            $this->stringOption($parsed['options'], 'project-root'),
-        );
-        $validation = (new LearningRepositoryValidator($this->findingLifecycle))->validate(
-            $root,
-            $this->stringOption($parsed['options'], 'task-id-pattern'),
-        );
-        $writer = new GuidanceCandidateProposalWriter();
-        $baseEvolution = (new GuidanceEvolutionEvaluator())->evaluate(
-            $validation->findingsById,
-            $validation->proposalsById,
-            $validation->recallSelectionEvents,
-            $validation->guidanceOutcomeEvents,
-        );
-        $replacement = (new ReplacementCandidatePolicy())->evaluate($validation->proposalsById, $validation->findingsById);
-        $conflicts = (new GuidanceConflictPolicy())->evaluate($validation->findingsById, $validation->proposalsById);
-        $suppressedKeys = $writer->suppressedDecisionKeys($root, array_merge($baseEvolution->decisions, $replacement, $conflicts));
-        $projectionStartedAt = hrtime(true);
-        $projection = (new HistoryProjectionBuilder())->build($root, $validation->findingsById, $validation->proposalsById);
-        $projectionRuntimeMilliseconds = intdiv(hrtime(true) - $projectionStartedAt, 1_000_000);
-        $result = (new DreamingEvaluator())->evaluate(
-            $validation->findingsById,
-            $validation->proposalsById,
-            $validation->recallSelectionEvents,
-            $validation->guidanceOutcomeEvents,
-            $suppressedKeys,
-            $projectRoot,
-            $reviewHorizonDays,
-        );
+        $writeCandidates = $this->boolOption($parsed['options'], 'write-candidates') && !$this->boolOption($parsed['options'], 'dry-run');
+        $outcome = (new DreamService($this->findingLifecycle))->run(new DreamRequest(
+            learningRoot: $root,
+            projectRoot: $this->stringOption($parsed['options'], 'project-root'),
+            taskIdPattern: $this->stringOption($parsed['options'], 'task-id-pattern'),
+            reviewHorizonDays: $this->positiveIntOption($parsed['options'], 'review-horizon-days', 90),
+            writeCandidates: $writeCandidates,
+        ));
+        $result = $outcome->result;
+        $projection = $outcome->projection;
         $report = $this->dreamReport(
             $result,
             $projection,
-            $this->boolOption($parsed['options'], 'include-runtime') ? $projectionRuntimeMilliseconds : null,
+            $this->boolOption($parsed['options'], 'include-runtime') ? $outcome->projectionRuntimeMilliseconds : null,
         );
         $reportPath = $this->stringOption($parsed['options'], 'report');
         if ($reportPath !== null) {
             $this->writeDreamReport($reportPath, $report);
         }
 
-        $written = [];
-        if ($this->boolOption($parsed['options'], 'write-candidates') && !$this->boolOption($parsed['options'], 'dry-run')) {
-            $written = $writer->write($root, $result->decisions, $validation->findingsById);
-        }
+        $written = $outcome->writtenCandidateIds;
         if ($format === 'json') {
             $this->write($report);
         } else {
