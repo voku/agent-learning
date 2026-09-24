@@ -24,7 +24,17 @@ final readonly class GuidanceProjection
         public ?string $canonicalTarget,
         public ?string $content,
         public GuidanceUsageProjection $usage,
+        // When this guidance became durable: the applied_at its source proposal
+        // carries. Null while the proposal is approved but not yet applied.
+        public ?string $appliedAt = null,
     ) {
+    }
+
+    private static function appliedAt(Proposal $proposal): ?string
+    {
+        $value = $proposal->raw['applied_at'] ?? null;
+
+        return is_string($value) && trim($value) !== '' ? $value : null;
     }
 
     public static function fromProposal(Proposal $proposal, ?GuidanceUsageSummary $usage): ?self
@@ -44,6 +54,7 @@ final readonly class GuidanceProjection
             $proposal->target,
             $proposal->new,
             GuidanceUsageProjection::fromSummary($usage),
+            self::appliedAt($proposal),
         );
     }
 }

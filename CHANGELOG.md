@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.18.26] - 2026-09-24
+
+### Added
+
+- `ProposalProjection` exposes the lifecycle moments `ProposalTransitionManager` already writes into the proposal record: `$acknowledgedAt`/`$acknowledgedBy`, `$appliedAt`/`$appliedBy` and `$retiredAt`/`$retiredBy`. Each pair is `null` exactly when that transition has not happened. Until now the projection stopped at `$approvedAt`, so a consumer that wanted to date anything after approval had to read `$proposal->raw` - which this package's own `AppliedGuidanceTargetValidator`, `DreamingEvaluator` and `CorpusAnalyticsService` do, and which a presentation-layer consumer must not (#140).
+- `GuidanceProjection::$appliedAt`: when the guidance became durable, taken from its source proposal's `applied_at`. `null` while the proposal is approved but not yet applied.
+
+No stored field is added or changed: these values are already in every record written by the corresponding transition, and a record that predates it projects `null`. All new constructor parameters are trailing and optional, so positional construction against the earlier shape keeps compiling.
+
+Not in scope, noted for a follow-up: `reject()` records no time at all, so there is no `rejectedAt` to project, although `DreamingEvaluator` already reads a `rejected_at` that nothing writes.
+
+### Validation
+
+- The new fields are asserted inside the existing tests that drive each real transition (`acknowledge`, `apply`, `retire`), equal to the value the writer persisted, not to a hand-written fixture. Six mutations - each mapping nulled, one pointed at the wrong key, and the guidance mapping nulled - are each killed.
+- Local `composer ci`: 413 tests, 1554 assertions, PHPStan clean; exact-head PR CI is the release gate.
+
 ## [0.18.25] - 2026-09-24
 
 ### Added

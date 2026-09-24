@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning\Tests;
 
+use voku\AgentLearning\LearningCatalog;
 use PHPUnit\Framework\TestCase;
 use voku\AgentLearning\ProposalTransitionManager;
 use voku\AgentLearning\ValidationException;
@@ -33,6 +34,11 @@ final class ProposalAcknowledgementTest extends TestCase
     {
         $this->writeCandidateProposal($this->noDurableLearningProposalData());
 
+        $before = (new LearningCatalog($this->root))->proposal('proposal.2026-06-08.001');
+        self::assertNotNull($before);
+        self::assertNull($before->acknowledgedAt, 'an unacknowledged proposal has no acknowledgement moment');
+        self::assertNull($before->acknowledgedBy);
+
         $manager = new ProposalTransitionManager();
         $manager->acknowledge($this->root, 'proposal.2026-06-08.001', 'lars', 'Correctly classified, closing formally');
 
@@ -44,6 +50,15 @@ final class ProposalAcknowledgementTest extends TestCase
         self::assertSame('lars', $data['acknowledged_by']);
         self::assertSame('Correctly classified, closing formally', $data['reason']);
         self::assertIsString($data['acknowledged_at']);
+
+        // The typed projection carries the moment the writer recorded, so a
+        // consumer never has to read the record's private shape to date it.
+        $projected = (new LearningCatalog($this->root))->proposal('proposal.2026-06-08.001');
+        self::assertNotNull($projected);
+        self::assertSame($data['acknowledged_at'], $projected->acknowledgedAt);
+        self::assertSame('lars', $projected->acknowledgedBy);
+        self::assertNull($projected->appliedAt);
+        self::assertNull($projected->retiredAt);
 
         self::assertFileExists($this->root . '/history/acknowledged-proposals.jsonl');
         $history = file_get_contents($this->root . '/history/acknowledged-proposals.jsonl');

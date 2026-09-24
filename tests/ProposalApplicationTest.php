@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning\Tests;
 
+use voku\AgentLearning\LearningCatalog;
 use PHPUnit\Framework\TestCase;
 use voku\AgentLearning\ProposalRepository;
 use voku\AgentLearning\ProposalTransitionManager;
@@ -67,6 +68,18 @@ final class ProposalApplicationTest extends TestCase
         self::assertSame('applied', $appliedProposal['status']);
         self::assertSame('skills/agent-learning-cli.md', $appliedProposal['applied_validation']['target_source_ref']);
         self::assertSame(hash_file('sha256', $target), $appliedProposal['applied_validation']['target_content_hash']);
+
+        $catalog = new LearningCatalog($this->root);
+        $projected = $catalog->proposal('proposal.2026-06-08.001');
+        self::assertNotNull($projected);
+        self::assertSame($appliedProposal['applied_at'], $projected->appliedAt);
+        self::assertSame('lars', $projected->appliedBy);
+        self::assertNull($projected->retiredAt);
+
+        // Guidance becomes durable when it is applied, and says when.
+        $guidance = $catalog->guidance('proposal.2026-06-08.001');
+        self::assertNotNull($guidance);
+        self::assertSame($appliedProposal['applied_at'], $guidance->appliedAt);
 
         $decisions = file($this->root . '/history/decisions.jsonl', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         self::assertIsArray($decisions);
