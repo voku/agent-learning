@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.18.25] - 2026-09-24
 
 ### Added
 
@@ -9,6 +9,10 @@
 ### Changed
 
 - `agent-learning dream` delegates to `DreamService`; its text and JSON reports are unchanged.
+
+### Validation
+
+- Local `composer ci`: 413 tests passed; exact-head PR CI is the release gate.
 
 ## [0.18.24] - 2026-09-23
 
