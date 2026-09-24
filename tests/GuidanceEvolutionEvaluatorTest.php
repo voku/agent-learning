@@ -300,8 +300,11 @@ final class GuidanceEvolutionEvaluatorTest extends TestCase
         $argv = ['agent-learning', 'guidance-evaluate', '--root', $this->root, '--write-candidates'];
         ob_start();
         try {
-            self::assertSame(0, (new Cli())->run($argv));
-            self::assertSame(0, (new Cli())->run($argv));
+            // Two runs: the second must find the first run's candidates and not
+            // fail on them. Both exit codes are captured before asserting so the
+            // analyser does not treat the second call as a repeat of the first.
+            $exitCodes = [(new Cli())->run($argv), (new Cli())->run($argv)];
+            self::assertSame([0, 0], $exitCodes);
         } finally {
             ob_end_clean();
         }
