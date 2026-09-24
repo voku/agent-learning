@@ -36,7 +36,26 @@ final readonly class ProposalProjection
         public array $supersedesProposalIds,
         public array $conflictsWithProposalIds,
         public ?string $correctsProposalId,
+        // The lifecycle moments ProposalTransitionManager already writes into
+        // the record when a proposal is acknowledged, applied or retired. Each
+        // pair is null exactly when that transition has not happened, which is
+        // an absence and not a gap. Declared last and optional so positional
+        // construction written against the earlier shape keeps compiling.
+        public ?string $acknowledgedAt = null,
+        public ?string $acknowledgedBy = null,
+        public ?string $appliedAt = null,
+        public ?string $appliedBy = null,
+        public ?string $retiredAt = null,
+        public ?string $retiredBy = null,
     ) {
+    }
+
+    /** A recorded transition field, or null when the record carries none. */
+    private static function recordedString(Proposal $proposal, string $key): ?string
+    {
+        $value = $proposal->raw[$key] ?? null;
+
+        return is_string($value) && trim($value) !== '' ? $value : null;
     }
 
     /** @param list<string> $sourceTaskIds */
@@ -85,6 +104,12 @@ final readonly class ProposalProjection
             $supersedes,
             $conflicts,
             is_string($corrects) && $corrects !== '' ? $corrects : null,
+            self::recordedString($proposal, 'acknowledged_at'),
+            self::recordedString($proposal, 'acknowledged_by'),
+            self::recordedString($proposal, 'applied_at'),
+            self::recordedString($proposal, 'applied_by'),
+            self::recordedString($proposal, 'retired_at'),
+            self::recordedString($proposal, 'retired_by'),
         );
     }
 }

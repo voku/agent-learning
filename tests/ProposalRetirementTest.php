@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning\Tests;
 
+use voku\AgentLearning\LearningCatalog;
 use PHPUnit\Framework\TestCase;
 use voku\AgentLearning\ProposalTransitionManager;
 use voku\AgentLearning\ValidationException;
@@ -78,6 +79,14 @@ final class ProposalRetirementTest extends TestCase
         // approved_by/approved_at/applied_by/applied_at must survive the transition
         self::assertSame('maintainer', $retired['approved_by']);
         self::assertSame('maintainer', $retired['applied_by']);
+
+        $projected = (new LearningCatalog($this->root))->proposal('proposal.2026-06-08.001');
+        self::assertNotNull($projected);
+        self::assertSame($retired['retired_at'], $projected->retiredAt);
+        self::assertSame('lars', $projected->retiredBy);
+        // Retiring does not erase when it was applied; both moments stay published.
+        self::assertSame($retired['applied_at'], $projected->appliedAt);
+        self::assertSame('maintainer', $projected->appliedBy);
 
         self::assertFileExists($this->root . '/history/retired-proposals.jsonl');
         $retirements = file_get_contents($this->root . '/history/retired-proposals.jsonl');
