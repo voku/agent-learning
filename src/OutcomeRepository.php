@@ -116,8 +116,8 @@ final class OutcomeRepository
     private function validateLegacyOutcomeRecord(array $record, string $file, ?int $line, ?string $recordId, array $proposalsById = []): void
     {
         $id = $record['id'] ?? null;
-        if (!is_string($id) || preg_match('/^outcome\.\d{4}-\d{2}-\d{2}\.\d{3}$/', $id) !== 1) {
-            throw new ValidationException($file, $line, $recordId, 'outcome id must match outcome.YYYY-MM-DD.NNN');
+        if (!is_string($id) || preg_match('/^outcome\.\d{4}-\d{2}-\d{2}\.\d{3,}$/', $id) !== 1) {
+            throw new ValidationException($file, $line, $recordId, 'outcome id must match outcome.YYYY-MM-DD.NNN (at least 3 digits)');
         }
 
         $taskId = $record['task_id'] ?? null;

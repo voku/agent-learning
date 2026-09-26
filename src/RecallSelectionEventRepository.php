@@ -35,7 +35,8 @@ final class RecallSelectionEventRepository
             $compilationGuidance[$key] = true;
             $events[] = $event;
         }
-        usort($events, static fn(RecallSelectionEvent $a, RecallSelectionEvent $b) => strcmp($a->id, $b->id));
+        // Natural order: the daily sequence grows past 999 (`.1000` must sort after `.999`).
+        usort($events, static fn(RecallSelectionEvent $a, RecallSelectionEvent $b) => strnatcmp($a->id, $b->id));
 
         return $events;
     }

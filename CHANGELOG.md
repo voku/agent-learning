@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Daily event sequences may grow past 999. `recall-selection.*`, `guidance-outcome.*` and the read-compatibility `outcome.*` ids now accept a zero-padded sequence of **at least** three digits (`.1000`, `.1001`, …) instead of exactly three. The writers (`voku/agent-recall-compiler` `EventHistoryWriter::nextEventId()` / `OutcomeLogger`) already parse the previous maximum numerically and format with `%03d`, so after `.999` they emit `.1000` - which `RecallSelectionEventParser` then rejected, and `agent-loop verify` failed for the rest of the day once a busy learning root crossed 999 selections (observed: 1023 selections on 2026-09-26 in one consuming project). No id is rewritten; every existing three-digit id stays valid.
+- `RecallSelectionEventRepository` and `GuidanceOutcomeEventRepository` order events with `strnatcmp` instead of `strcmp`, so `.1000` sorts after `.999`. Three-digit ids keep their order.
+
+### Validation
+
+- New tests: a four-digit sequence is accepted by both event parsers, a two-digit one is still rejected, and the repository orders `.002`, `.999`, `.1000` numerically. Against the previous source the new tests fail (3 errors); with the new parser but the old `strcmp` the ordering test fails on its own.
+- Local `composer test` (417 tests, 1559 assertions) and `composer phpstan` clean.
+
 ## [0.18.26] - 2026-09-24
 
 ### Added

@@ -84,6 +84,15 @@ final class GuidanceOutcomeEventParserTest extends TestCase
         (new GuidanceOutcomeEventParser())->parse($this->record($attribution), 'history/outcomes.jsonl', 1);
     }
 
+    public function testDailySequenceMayGrowBeyondThreeDigits(): void
+    {
+        $record = ['id' => 'guidance-outcome.2026-09-26.1000'] + $this->record();
+
+        $event = (new GuidanceOutcomeEventParser())->parse($record, 'history/guidance-outcomes.jsonl', 1);
+
+        self::assertSame('guidance-outcome.2026-09-26.1000', $event->id);
+    }
+
     /** @return array<string, mixed> */
     private function record(mixed $attribution = null): array
     {
