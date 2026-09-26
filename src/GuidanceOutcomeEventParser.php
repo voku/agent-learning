@@ -25,8 +25,8 @@ final class GuidanceOutcomeEventParser
         if (($record['schema_version'] ?? null) !== '1.0') {
             throw new ValidationException($file, $line, $id, 'unsupported guidance outcome schema version');
         }
-        if (!is_string($id) || preg_match('/^guidance-outcome\.\d{4}-\d{2}-\d{2}\.\d{3}$/', $id) !== 1) {
-            throw new ValidationException($file, $line, $id, 'guidance outcome id must match guidance-outcome.YYYY-MM-DD.NNN');
+        if (!is_string($id) || preg_match('/^guidance-outcome\.\d{4}-\d{2}-\d{2}\.\d{3,}$/', $id) !== 1) {
+            throw new ValidationException($file, $line, $id, 'guidance outcome id must match guidance-outcome.YYYY-MM-DD.NNN (at least 3 digits)');
         }
 
         $outcomeValue = $this->recordAccess->string($record, 'outcome', $file, $line, $id);

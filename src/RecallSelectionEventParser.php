@@ -25,8 +25,8 @@ final class RecallSelectionEventParser
         if (($record['schema_version'] ?? null) !== '1.0') {
             throw new ValidationException($file, $line, $id, 'unsupported recall selection schema version');
         }
-        if (!is_string($id) || preg_match('/^recall-selection\.\d{4}-\d{2}-\d{2}\.\d{3}$/', $id) !== 1) {
-            throw new ValidationException($file, $line, $id, 'recall selection id must match recall-selection.YYYY-MM-DD.NNN');
+        if (!is_string($id) || preg_match('/^recall-selection\.\d{4}-\d{2}-\d{2}\.\d{3,}$/', $id) !== 1) {
+            throw new ValidationException($file, $line, $id, 'recall selection id must match recall-selection.YYYY-MM-DD.NNN (at least 3 digits)');
         }
 
         $guidanceTypeValue = $this->recordAccess->string($record, 'guidance_type', $file, $line, $id);

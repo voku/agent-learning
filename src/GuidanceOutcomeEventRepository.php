@@ -39,7 +39,8 @@ final class GuidanceOutcomeEventRepository
             $compilationGuidance[$key] = true;
             $events[] = $event;
         }
-        usort($events, static fn(GuidanceOutcomeEvent $a, GuidanceOutcomeEvent $b) => strcmp($a->id, $b->id));
+        // Natural order: the daily sequence grows past 999 (`.1000` must sort after `.999`).
+        usort($events, static fn(GuidanceOutcomeEvent $a, GuidanceOutcomeEvent $b) => strnatcmp($a->id, $b->id));
 
         return $events;
     }
