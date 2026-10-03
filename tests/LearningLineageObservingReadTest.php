@@ -155,6 +155,54 @@ final class LearningLineageObservingReadTest extends TestCase
         $service->lineage($this->root, self::PROPOSAL, repairProjection: false);
     }
 
+    /**
+     * A file at the projection path is not necessarily a projection.
+     *
+     * `GraphStore`'s ordinary constructor creates the schema in whatever SQLite file it is
+     * given, so opening a zero-byte file "to look at it" would have grown it to a full empty
+     * graph. The observing read must not open it for writing at all.
+     */
+    public function testAnEmptyFileAtTheProjectionPathIsReportedAndLeftEmpty(): void
+    {
+        $database = $this->databasePath();
+        mkdir(dirname($database), 0o775, true);
+        touch($database);
+        $before = $this->snapshot();
+
+        foreach (['lineage', 'precedents'] as $read) {
+            try {
+                $read === 'lineage'
+                    ? (new LearningLineageService())->lineage($this->root, self::PROPOSAL, repairProjection: false)
+                    : (new LearningLineageService())->precedentsForTask($this->root, 'ABC-1', repairProjection: false);
+                self::fail('An empty file is not a current projection (' . $read . ').');
+            } catch (LearningLineageProjectionUnavailable) {
+                // Reported, as for an absent projection.
+            }
+            clearstatcache();
+            self::assertSame(0, filesize($database), $read . ' must not have created a schema in the file.');
+            self::assertSame($before, $this->snapshot());
+        }
+    }
+
+    public function testADatabaseWithAnIncompleteSchemaIsRefusedAndNotCompleted(): void
+    {
+        $database = $this->databasePath();
+        mkdir(dirname($database), 0o775, true);
+        $pdo = new \PDO('sqlite:' . $database, null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+        $pdo->exec('CREATE TABLE graph_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+        unset($pdo);
+        $before = $this->snapshot();
+
+        try {
+            (new LearningLineageService())->lineage($this->root, self::PROPOSAL, repairProjection: false);
+            self::fail('An incomplete database must not be treated as a readable projection.');
+        } catch (RuntimeException) {
+            // Refused: fail closed, like any other schema this reader cannot use.
+        }
+
+        self::assertSame($before, $this->snapshot(), 'Observing must not create the missing tables or schema_version.');
+    }
+
     public function testACorruptProjectionIsStillNotReportedAsMerelyStale(): void
     {
         $service = new LearningLineageService();

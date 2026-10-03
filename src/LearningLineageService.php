@@ -504,7 +504,7 @@ final readonly class LearningLineageService
     private function openForRead(string $root, ?string $projectRoot = null, bool $repair = true): GraphStore
     {
         try {
-            return $this->openCurrent($root);
+            return $this->openCurrent($root, readOnly: !$repair);
         } catch (LearningLineageProjectionUnavailable $unavailable) {
             if (!$repair) {
                 throw $unavailable;
@@ -517,7 +517,13 @@ final readonly class LearningLineageService
         return $this->openCurrent($root);
     }
 
-    private function openCurrent(string $root): GraphStore
+    /**
+     * @param bool $readOnly Open the database without write access. `GraphStore`'s ordinary
+     *        constructor creates the schema in whatever SQLite file it is given, so an
+     *        observing read must never use it: an empty or half-built file at the projection
+     *        path would be completed by the act of looking at it.
+     */
+    private function openCurrent(string $root, bool $readOnly = false): GraphStore
     {
         $database = $this->databasePath($root);
         if (!is_file($database)) {
@@ -525,8 +531,16 @@ final readonly class LearningLineageService
                 'Derived Learning lineage graph not found; rebuild it first.',
             );
         }
+        if ($readOnly && filesize($database) === 0) {
+            // Nothing in it to read, which is the same recomputable state as no file. A
+            // read-only open of a zero-byte file would otherwise fail on a missing schema,
+            // and that failure is a different class from "needs rebuilding".
+            throw new LearningLineageProjectionUnavailable(
+                'Derived Learning lineage graph is empty; rebuild it first.',
+            );
+        }
 
-        $store = new GraphStore($database);
+        $store = $readOnly ? GraphStore::openReadOnly($database) : new GraphStore($database);
         $actualRevision = $store->sourceRevision();
         $expectedRevision = $this->sourceRevision($root);
         if ($actualRevision === null || !hash_equals($expectedRevision, $actualRevision)) {
