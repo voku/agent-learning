@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.18.28] - 2026-10-03
+
+### Added
+
+- `LearningLineageService::lineage()` and `precedentsForTask()` take a trailing `bool $repairProjection = true`. With `false`, an absent, empty or stale derived graph throws the existing `LearningLineageProjectionUnavailable` instead of being rebuilt, and the database is opened through `GraphStore::openReadOnly()`, so nothing under the Learning root is created or modified - including a zero-byte or half-built file at the projection path, which `GraphStore`'s ordinary constructor would have completed with a full schema just by being opened. A non-empty database whose schema this reader cannot use is refused with a `RuntimeException` (fail closed), not repaired. The default is unchanged: command-line consumers keep the self-healing read introduced in 0.18.6. This is for consumers that answer an HTTP `GET`, which must not write into Learning's derived cache or rescan every source record per page view, and that would rather show "projection stale" than repair it (#144).
+- Requires `voku/agent-graph` `^0.2.3` (was `^0.2.0`), the release that added `GraphStore::openReadOnly()`.
+- Every other lineage failure is unchanged in both modes: invalid durable data, Learning state moving mid-read and a corrupt database still fail closed, and `verifyCurrent()` still reports staleness.
+
+### Validation
+
+- New `LearningLineageObservingReadTest` (11 tests): an absent and a stale projection are reported for both `lineage()` and `precedentsForTask()`, and a before/after snapshot of every path under the root (hash, mtime, size, directories) is identical; a current projection answers identically in both modes and is not touched; a root with no records still answers empty with no `.derived` directory; the default still repairs; a corrupt database still raises `PDOException`; a zero-byte file stays zero bytes and a database with only `graph_meta` is not completed (both failed against the writable open, which grew the latter from 12,288 to 45,056 bytes). Seven mutants (repair always on, either method dropping the flag, default flipped, writable open, no empty-file guard, observing never read-only) each fail the suite.
+- Local `composer ci` (428 tests, 1590 assertions) clean.
+
 ## [0.18.27] - 2026-09-26
 
 ### Fixed
