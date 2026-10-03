@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.18.28] - 2026-10-03
+
+### Added
+
+- `LearningLineageService::lineage()` and `precedentsForTask()` take a trailing `bool $repairProjection = true`. With `false`, an absent or stale derived graph throws the existing `LearningLineageProjectionUnavailable` instead of being rebuilt, and nothing under the Learning root is created or modified. The default is unchanged: command-line consumers keep the self-healing read introduced in 0.18.6. This is for consumers that answer an HTTP `GET`, which must not write into Learning's derived cache or rescan every source record per page view, and that would rather show "projection stale" than repair it (#144).
+- Every other lineage failure is unchanged in both modes: invalid durable data, Learning state moving mid-read and a corrupt database still fail closed, and `verifyCurrent()` still reports staleness.
+
+### Validation
+
+- New `LearningLineageObservingReadTest` (9 tests): an absent and a stale projection are reported for both `lineage()` and `precedentsForTask()`, and a before/after snapshot of every path under the root (hash, mtime, size, directories) is identical; a current projection answers identically in both modes and is not touched; a root with no records still answers empty with no `.derived` directory; the default still repairs; a corrupt database still raises `PDOException`. Four mutants (repair always on, either method dropping the flag, default flipped) each fail the suite.
+- Local `composer ci` (426 tests, 1585 assertions) clean.
+
 ## [0.18.27] - 2026-09-26
 
 ### Fixed

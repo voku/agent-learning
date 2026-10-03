@@ -72,11 +72,17 @@ final readonly class LearningLineageService
         );
     }
 
+    /**
+     * @param bool $repairProjection `false` makes an absent or stale projection throw
+     *        {@see LearningLineageProjectionUnavailable} instead of rebuilding it, so a
+     *        read-only consumer can report the state without writing under the root.
+     */
     public function lineage(
         string $root,
         string $identityId,
         int $maximumDepth = 3,
         int $maximumResults = 100,
+        bool $repairProjection = true,
     ): LearningLineageResult {
         $identityId = trim($identityId);
         if ($identityId === '') {
@@ -84,7 +90,7 @@ final readonly class LearningLineageService
         }
         $this->assertLimits($maximumDepth, $maximumResults);
 
-        $store = $this->openForRead($this->normalizedRoot($root));
+        $store = $this->openForRead($this->normalizedRoot($root), repair: $repairProjection);
 
         return $this->traverse(
             $store,
@@ -98,6 +104,9 @@ final readonly class LearningLineageService
     /**
      * @param list<string> $taskFiles
      * @param list<string> $taskTags
+     * @param bool $repairProjection `false` makes an absent or stale projection throw
+     *        {@see LearningLineageProjectionUnavailable} instead of rebuilding it, so a
+     *        read-only consumer can report the state without writing under the root.
      */
     public function precedentsForTask(
         string $root,
@@ -106,6 +115,7 @@ final readonly class LearningLineageService
         int $maximumRelatedIdentities = 100,
         array $taskFiles = [],
         array $taskTags = [],
+        bool $repairProjection = true,
     ): LearningTaskPrecedentResult {
         $taskId = trim($taskId);
         if ($taskId === '') {
@@ -152,7 +162,7 @@ final readonly class LearningLineageService
             );
         }
 
-        $store = $this->openForRead($root, $projectRoot);
+        $store = $this->openForRead($root, $projectRoot, $repairProjection);
         $lineage = $this->traverse(
             $store,
             $taskId,
@@ -485,12 +495,20 @@ final readonly class LearningLineageService
      * re-checks the revision rather than trusting that the rebuild produced a usable
      * graph. A read never invents Learning state; it only recomputes what Learning
      * already implies.
+     *
+     * A consumer that must not write on a read path (an HTTP GET) opts out with
+     * `$repair = false` and receives the same `LearningLineageProjectionUnavailable` the
+     * repair would have absorbed. The default is unchanged: command-line consumers keep
+     * the self-healing behaviour above.
      */
-    private function openForRead(string $root, ?string $projectRoot = null): GraphStore
+    private function openForRead(string $root, ?string $projectRoot = null, bool $repair = true): GraphStore
     {
         try {
             return $this->openCurrent($root);
-        } catch (LearningLineageProjectionUnavailable) {
+        } catch (LearningLineageProjectionUnavailable $unavailable) {
+            if (!$repair) {
+                throw $unavailable;
+            }
             // Recomputable. Fall through to one rebuild.
         }
 
