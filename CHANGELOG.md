@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Document on `LearningCatalog::finding()`, `proposal()` and `guidance()` that every call validates the whole Learning root again. A host that looked up 56 attention findings one by one paid about 12 seconds per session start on a mature root; `findings()` and `proposals()` validate once and are the batch path. No behavior change: the catalog still caches nothing, so a long-lived host never reads a stale snapshot.
+
 ## [0.18.28] - 2026-10-03
 
 ### Added

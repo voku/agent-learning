@@ -133,6 +133,12 @@ final readonly class LearningCatalog
         return $proposals;
     }
 
+    /**
+     * Cost: every call validates the whole Learning root again (the catalog caches nothing, so it never
+     * serves a stale snapshot to a long-lived host). Looking up N ids one by one costs N validations;
+     * on a mature root that is about 0.2s each. For more than one id call {@see findings()} once and index
+     * the result.
+     */
     public function finding(string $findingId): ?FindingProjection
     {
         $state = $this->state();
@@ -144,6 +150,12 @@ final readonly class LearningCatalog
         return $this->findingProjection($finding, $state->proposalsById);
     }
 
+    /**
+     * Cost: every call validates the whole Learning root again (the catalog caches nothing, so it never
+     * serves a stale snapshot to a long-lived host). Looking up N ids one by one costs N validations;
+     * on a mature root that is about 0.2s each. For more than one id call {@see proposals()} once and index
+     * the result.
+     */
     public function proposal(string $proposalId): ?ProposalProjection
     {
         $state = $this->state();
@@ -155,6 +167,10 @@ final readonly class LearningCatalog
         return $this->proposalProjection($proposal, $state->findingsById);
     }
 
+    /**
+     * Cost: every call validates the whole Learning root again; the catalog caches nothing. Do not call it
+     * in a loop over many ids.
+     */
     public function guidance(string $guidanceId): ?GuidanceProjection
     {
         $state = $this->state();
