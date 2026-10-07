@@ -32,8 +32,10 @@ final class LearningCatalogTest extends TestCase
         self::assertSame(1, $overview->proposalCounts['rejected']);
         self::assertSame(1, $overview->guidanceCounts[GuidanceType::SKILL->value]);
         self::assertSame(0, $overview->guidanceCounts[GuidanceType::MEMORY->value]);
+        // 001 is cited by an approved proposal that is not applied yet; 002 only by a rejected one, which is a
+        // terminal decision, so it is bookkeeping and no longer open work.
         self::assertSame(
-            ['finding.2026-06-08.001', 'finding.2026-06-08.002'],
+            ['finding.2026-06-08.001'],
             $overview->findingAttentionIds,
         );
         self::assertSame([], $overview->proposalAttentionIds);

@@ -41,6 +41,12 @@ vendor/bin/agent-learning validate --root=infra/doc/agent-learning
 # List candidate/approved proposals with deterministic review facts (read-only, never recommends)
 vendor/bin/agent-learning proposal-queue --root=infra/doc/agent-learning --probe=MEMORY.md
 
+# List backlog findings with deterministic review facts (read-only, never recommends)
+vendor/bin/agent-learning finding-queue --root=infra/doc/agent-learning --probe=MEMORY.md
+
+# Consolidate validated findings whose proposals are all decided (preview first)
+vendor/bin/agent-learning finding-reconcile --root=infra/doc/agent-learning --dry-run
+
 # Check validated findings backlog waiting for consolidation
 vendor/bin/agent-learning backlog --root=infra/doc/agent-learning
 

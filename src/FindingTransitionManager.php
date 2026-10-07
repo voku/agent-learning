@@ -87,8 +87,11 @@ final class FindingTransitionManager
             }
             $data['validated_conclusion'] = $conclusion;
             $data['validation_status'] = 'validated';
-            $data['validated_by'] = $actor;
-            $data['validated_at'] = (new DateTimeImmutable('now'))->format(DateTimeInterface::ATOM);
+            // Consolidating records that the finding was handled; it must not rewrite who validated it or when.
+            if ($targetStatus === FindingStatus::VALIDATED || !isset($data['validated_by'], $data['validated_at'])) {
+                $data['validated_by'] = $actor;
+                $data['validated_at'] = (new DateTimeImmutable('now'))->format(DateTimeInterface::ATOM);
+            }
         } elseif ($targetStatus === FindingStatus::INVALIDATED) {
             $data['validation_status'] = 'invalidated';
         } elseif ($targetStatus === FindingStatus::REJECTED) {
