@@ -18,7 +18,6 @@ use voku\AgentLearning\Catalog\ProposalProjection;
  */
 final readonly class ProposalReviewQueue
 {
-    private const int SHINGLE_WORDS = 4;
     private const int REASON_EXCERPT_CHARS = 220;
 
     /**
@@ -114,7 +113,7 @@ final readonly class ProposalReviewQueue
                 if ($text === null) {
                     continue;
                 }
-                $matches[] = $this->wordingMatch($file, $proposal->proposedChange, $text);
+                $matches[] = (new WordingOverlap())->match($file, $proposal->proposedChange, $text);
             }
             usort(
                 $matches,
@@ -151,44 +150,6 @@ final readonly class ProposalReviewQueue
         }
 
         return $transitions;
-    }
-
-    private function wordingMatch(string $file, string $proposed, string $existing): ProposalWordingMatch
-    {
-        $normalisedProposed = $this->normalise($proposed);
-        if (str_contains($this->normalise($existing), $normalisedProposed)) {
-            return new ProposalWordingMatch($file, 100, true);
-        }
-
-        $proposedShingles = $this->shingles($proposed);
-        if ($proposedShingles === []) {
-            return new ProposalWordingMatch($file, 0, false);
-        }
-        $existingShingles = array_flip($this->shingles($existing));
-        $shared = 0;
-        foreach ($proposedShingles as $shingle) {
-            if (isset($existingShingles[$shingle])) {
-                ++$shared;
-            }
-        }
-
-        return new ProposalWordingMatch($file, intdiv($shared * 100, count($proposedShingles)), false);
-    }
-
-    /** @return list<string> */
-    private function shingles(string $text): array
-    {
-        $words = preg_split('/[^\p{L}\p{N}_]+/u', mb_strtolower($text), -1, PREG_SPLIT_NO_EMPTY);
-        if ($words === false || count($words) < self::SHINGLE_WORDS) {
-            return [];
-        }
-
-        $shingles = [];
-        for ($index = 0, $last = count($words) - self::SHINGLE_WORDS; $index <= $last; ++$index) {
-            $shingles[implode(' ', array_slice($words, $index, self::SHINGLE_WORDS))] = true;
-        }
-
-        return array_keys($shingles);
     }
 
     private function normalise(string $text): string

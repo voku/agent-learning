@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.18.30] - 2026-10-07
+
+### Fixed
+
+- A validated finding whose proposals all reached a terminal decision (applied, rejected, acknowledged, retired) no longer counts as open work. `LearningCatalog::overview()` leaves it out of `findingAttentionIds`, so `backlog` and the SessionStart hint stop counting decided findings. On a mature root, 19 of 56 backlog findings were already decided and only looked pending, because the last bookkeeping step was manual and easy to forget. A finding with no proposal, or one a candidate/approved proposal still waits on, stays in the backlog.
+- `ProposalTransitionManager::reject()`, `acknowledge()` and `apply()` now move the proposal's still-validated source findings to `consolidated` (only when no other proposal still waits on them), through the new `FindingConsolidationService`. The proposal transition is not undone if that step fails; the error names the repair (`finding-reconcile`).
+- `FindingTransitionManager` no longer overwrites `validated_by` and `validated_at` when consolidating a finding; they still record who validated it and when. Validating a candidate behaves as before.
+- `backlog` looks findings up with one `findings()` call instead of `finding()` per id, which revalidated the whole root each time.
+
+### Added
+
+- `agent-learning finding-reconcile --by ACTOR [--dry-run]`: consolidates validated findings whose proposals are all terminal, for roots decided before the transitions did it themselves. `backlog` points at it when such findings exist.
+- `agent-learning finding-queue [--probe PATH]... [--format text|json]` and `FindingReviewQueue`: a read-only list of backlog findings with deterministic facts (proposals citing the finding, scope paths that no longer resolve, how much of the conclusion already exists in probe files, the transitions the lifecycle accepts). Like `proposal-queue`, it never recommends a bucket, owner or transition; that judgement stays with a named human.
+- `WordingOverlap`, the exact/4-gram overlap measure, now shared by `proposal-queue` and `finding-queue`.
+
+### Validation
+
+- `composer ci` (444 tests, 1670 assertions, PHPStan clean). New `FindingConsolidationTest` (7 tests); disabling the transition hook fails two of them. `LearningCatalogTest` now expects a finding cited only by a rejected proposal to be bookkeeping, not attention. Against the IT-Portal root, `finding-reconcile --dry-run` listed exactly the 19 findings decided by hand and `finding-queue` listed the 37 real backlog findings.
+
 ## [0.18.29] - 2026-10-07
 
 ### Added

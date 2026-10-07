@@ -43,6 +43,8 @@ final class Cli
                 'lineage-rebuild' => $this->lineageRebuildCommand($tokens),
                 'backlog' => $this->backlogCommand($tokens),
                 'proposal-queue' => $this->proposalQueueCommand($tokens),
+                'finding-queue' => $this->findingQueueCommand($tokens),
+                'finding-reconcile' => $this->findingReconcileCommand($tokens),
                 'finding-create' => $this->findingCreateCommand($tokens),
                 'finding-capture' => $this->findingCaptureCommand($tokens),
                 'finding-classify' => $this->findingClassifyCommand($tokens),
@@ -276,13 +278,23 @@ final class Cli
 
         $catalog = new LearningCatalog($root);
         $overview = $catalog->overview();
+        // One validation for all findings: finding() would revalidate the whole root per id.
+        $validatedById = [];
+        foreach ($catalog->findings(FindingStatus::VALIDATED->value) as $validated) {
+            $validatedById[$validated->id] = $validated;
+        }
         $pending = [];
         foreach ($overview->findingAttentionIds as $findingId) {
-            $finding = $catalog->finding($findingId);
-            if ($finding === null || $finding->status !== FindingStatus::VALIDATED->value) {
+            $finding = $validatedById[$findingId] ?? null;
+            if ($finding === null) {
                 continue;
             }
             $pending[] = $finding;
+        }
+
+        $decided = (new FindingConsolidationService())->decidedFindingIds($root);
+        if ($decided !== []) {
+            $this->writeError(count($decided) . " validated finding(s) only cite proposals that already reached a terminal decision; record that with finding-reconcile --by ACTOR.\n");
         }
 
         $this->write('Findings needing downstream Learning handling: ' . count($pending) . "\n");
@@ -373,6 +385,105 @@ final class Cli
             foreach ($row->wordingMatches as $match) {
                 $this->write(sprintf("  wording in %s: %s\n", $match->file, $match->exact ? 'exact' : $match->containmentPercent . '% of 4-word phrases'));
             }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Read-only review queue for backlog findings: proposals citing them, unresolved scope paths,
+     * and wording already present in probe files. It never recommends a bucket or owner.
+     *
+     * @param list<string> $tokens
+     */
+    private function findingQueueCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $format = $this->stringOption($parsed['options'], 'format') ?? 'text';
+        if (!in_array($format, ['text', 'json'], true)) {
+            throw new ValidationException($root, null, null, 'finding-queue --format must be text or json');
+        }
+        $projectRoot = (new LearningRootResolver())->resolveWithOverrides(new CliOverrides(
+            root: $root,
+            projectRoot: $this->stringOption($parsed['options'], 'project-root'),
+        ))->projectRoot;
+
+        $rows = (new FindingReviewQueue())->build($root, $projectRoot, $this->stringOptions($parsed['options'], 'probe'));
+
+        if ($format === 'json') {
+            $this->write(json_encode(array_map(static fn (FindingReviewRow $row): array => [
+                'id' => $row->id,
+                'task_id' => $row->taskId,
+                'age_days' => $row->ageDays,
+                'conclusion_excerpt' => $row->conclusionExcerpt,
+                'allowed_transitions' => $row->allowedTransitions,
+                'proposals' => $row->proposals,
+                'signals' => $row->signals,
+                'wording_matches' => array_map(static fn (ProposalWordingMatch $match): array => [
+                    'file' => $match->file,
+                    'containment_percent' => $match->containmentPercent,
+                    'exact' => $match->exact,
+                ], $row->wordingMatches),
+            ], $rows), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n");
+
+            return 0;
+        }
+
+        $this->write('Findings needing handling: ' . count($rows) . "\n");
+        foreach ($rows as $row) {
+            $this->write(sprintf(
+                "\n%s [task %s] (%dd old)\n  conclusion: %s\n  allowed: %s\n",
+                $row->id,
+                $row->taskId,
+                $row->ageDays,
+                $row->conclusionExcerpt,
+                implode(', ', $row->allowedTransitions),
+            ));
+            if ($row->proposals !== []) {
+                $this->write('  proposals: ' . implode(', ', $row->proposals) . "\n");
+            }
+            if ($row->signals !== []) {
+                $this->write('  signals: ' . implode('; ', $row->signals) . "\n");
+            }
+            foreach ($row->wordingMatches as $match) {
+                $this->write(sprintf("  wording in %s: %s\n", $match->file, $match->exact ? 'exact' : $match->containmentPercent . '% of 4-word phrases'));
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Move validated findings whose proposals all reached a terminal decision to "consolidated".
+     * Repairs roots decided before the proposal transitions did this themselves.
+     *
+     * @param list<string> $tokens
+     */
+    private function findingReconcileCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $service = new FindingConsolidationService();
+
+        if ($this->boolOption($parsed['options'], 'dry-run')) {
+            $ids = $service->decidedFindingIds($root);
+            $this->write('Would consolidate ' . count($ids) . " finding(s):\n");
+            foreach ($ids as $id) {
+                $this->write('- ' . $id . "\n");
+            }
+
+            return 0;
+        }
+
+        $actor = $this->stringOption($parsed['options'], 'by');
+        if ($actor === null || trim($actor) === '') {
+            throw new ValidationException($root, null, null, 'finding-reconcile requires --by actor option (or --dry-run)');
+        }
+        $ids = $service->consolidate($root, $actor);
+        $this->write('Consolidated ' . count($ids) . " finding(s):\n");
+        foreach ($ids as $id) {
+            $this->write('- ' . $id . "\n");
         }
 
         return 0;
@@ -1177,6 +1288,8 @@ final class Cli
             . "  history-status       Fail when compact history projections are missing, corrupt, or stale.\n"
             . "  backlog              List validated findings not yet consolidated; exits non-zero while any remain.\n"
             . "  proposal-queue       List candidate/approved proposals with deterministic review facts; read-only, never recommends.\n"
+            . "  finding-queue        List backlog findings with deterministic review facts; read-only, never recommends.\n"
+            . "  finding-reconcile    Consolidate validated findings whose proposals all reached a terminal decision (--dry-run to preview).\n"
             . "  finding-create       Create one validated Finding through the owner schema.\n"
             . "  finding-capture      Capture an unverified human report as a candidate Finding.\n"
             . "  finding-classify     Classify a captured Finding for reusable-learning promotion.\n"
@@ -1213,7 +1326,7 @@ final class Cli
             . "  --since YYYY-MM-DD       Include findings created on or after this date.\n"
             . "  --until YYYY-MM-DD       Include findings created on or before this date.\n"
             . "  --allow-empty            Allow prepare to write a prompt with no selected findings.\n"
-            . "  --probe PATH             For proposal-queue: measure proposed wording against this file (repeatable, relative to the project root).\n"
+            . "  --probe PATH             For proposal-queue/finding-queue: measure proposed wording or conclusion against this file (repeatable, relative to the project root).\n"
             . "  --allow-nonempty         Make backlog informational (exit 0) instead of gating on a non-empty backlog.\n"
             . "  --proposal PATH          Proposal path for proposal-validate.\n"
             . "  --input PATH             Input file for proposal-import.\n"

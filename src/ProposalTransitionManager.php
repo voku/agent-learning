@@ -160,6 +160,7 @@ final class ProposalTransitionManager
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
         $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $rejectedPath, $rejectionLine, 'rejection');
+        $this->consolidateSourceFindings($root, $proposal, $actor, 'rejection');
     }
 
     /**
@@ -224,6 +225,7 @@ final class ProposalTransitionManager
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
         $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $acknowledgedPath, $acknowledgementLine, 'acknowledgement');
+        $this->consolidateSourceFindings($root, $proposal, $actor, 'acknowledgement');
     }
 
     public function generateAcknowledgementId(string $root, ?DateTimeImmutable $date = null): string
@@ -873,6 +875,26 @@ final class ProposalTransitionManager
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
         $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $decisionsPath, $decisionLine, 'apply');
+        $this->consolidateSourceFindings($root, $proposal, $actor, 'apply');
+    }
+
+    /**
+     * A decided proposal implies its still-validated source findings are handled. Recording that here keeps
+     * the backlog an honest count of open work; a finding another proposal still waits on stays validated.
+     * The proposal transition has already succeeded, so a failure here names the repair instead of undoing it.
+     */
+    private function consolidateSourceFindings(string $root, Proposal $proposal, string $actor, string $transition): void
+    {
+        try {
+            (new FindingConsolidationService())->consolidate($root, $actor, $proposal->sourceFindings);
+        } catch (ValidationException $e) {
+            throw new ValidationException(
+                $root,
+                null,
+                $proposal->id,
+                'proposal ' . $transition . ' succeeded, but consolidating its source findings failed: ' . $e->getMessage() . '; repair with finding-reconcile',
+            );
+        }
     }
 
     /**

@@ -44,6 +44,18 @@ final readonly class LearningCatalog
         $recentFindings = [];
         $recentProposals = [];
 
+        // A validated finding whose proposals all reached a terminal decision is bookkeeping, not open work.
+        $openProposalFindingIds = [];
+        $citedFindingIds = [];
+        foreach ($state->proposalsById as $proposal) {
+            foreach ($proposal->sourceFindings as $findingId) {
+                $citedFindingIds[$findingId] = true;
+                if ($proposal->status === ProposalStatus::CANDIDATE || $proposal->status === ProposalStatus::APPROVED) {
+                    $openProposalFindingIds[$findingId] = true;
+                }
+            }
+        }
+
         foreach ($state->findingsById as $finding) {
             ++$findingCounts[$finding->status->value];
             $recentFindings[] = [$finding->createdAt, $finding->id];
@@ -53,6 +65,7 @@ final readonly class LearningCatalog
                 (
                     $finding->status === FindingStatus::VALIDATED
                     && !isset($currentPrecedentFindingIds[$finding->id])
+                    && (!isset($citedFindingIds[$finding->id]) || isset($openProposalFindingIds[$finding->id]))
                 )
             ) {
                 $findingAttention[] = $finding->id;
