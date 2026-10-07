@@ -42,6 +42,7 @@ final class Cli
                 'history-status' => $this->historyStatusCommand($tokens),
                 'lineage-rebuild' => $this->lineageRebuildCommand($tokens),
                 'backlog' => $this->backlogCommand($tokens),
+                'proposal-queue' => $this->proposalQueueCommand($tokens),
                 'finding-create' => $this->findingCreateCommand($tokens),
                 'finding-capture' => $this->findingCaptureCommand($tokens),
                 'finding-classify' => $this->findingClassifyCommand($tokens),
@@ -306,6 +307,75 @@ final class Cli
         );
 
         return 1;
+    }
+
+    /**
+     * Read-only review queue: candidate and approved proposals with deterministic facts
+     * (lineage, same-target proposals, wording already present, missing paths). It never
+     * recommends a transition; the decision stays with a named human.
+     *
+     * @param list<string> $tokens
+     */
+    private function proposalQueueCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $root = $this->pathResolver->resolve($this->stringOption($parsed['options'], 'root'));
+        $format = $this->stringOption($parsed['options'], 'format') ?? 'text';
+        if (!in_array($format, ['text', 'json'], true)) {
+            throw new ValidationException($root, null, null, 'proposal-queue --format must be text or json');
+        }
+        $projectRoot = (new LearningRootResolver())->resolveWithOverrides(new CliOverrides(
+            root: $root,
+            projectRoot: $this->stringOption($parsed['options'], 'project-root'),
+        ))->projectRoot;
+
+        $rows = (new ProposalReviewQueue())->build($root, $projectRoot, $this->stringOptions($parsed['options'], 'probe'));
+
+        if ($format === 'json') {
+            $this->write(json_encode(array_map(static fn (ProposalReviewRow $row): array => [
+                'id' => $row->id,
+                'status' => $row->status,
+                'action' => $row->action,
+                'target_type' => $row->targetType,
+                'target' => $row->target,
+                'age_days' => $row->ageDays,
+                'source_finding_count' => $row->sourceFindingCount,
+                'reason_excerpt' => $row->reasonExcerpt,
+                'allowed_transitions' => $row->allowedTransitions,
+                'signals' => $row->signals,
+                'wording_matches' => array_map(static fn (ProposalWordingMatch $match): array => [
+                    'file' => $match->file,
+                    'containment_percent' => $match->containmentPercent,
+                    'exact' => $match->exact,
+                ], $row->wordingMatches),
+            ], $rows), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n");
+
+            return 0;
+        }
+
+        $this->write('Pending proposals: ' . count($rows) . "\n");
+        foreach ($rows as $row) {
+            $this->write(sprintf(
+                "\n%s [%s %s] %s (%dd old, %d finding%s)\n  reason: %s\n  allowed: %s\n",
+                $row->id,
+                $row->status,
+                $row->action,
+                $row->target ?? '-',
+                $row->ageDays,
+                $row->sourceFindingCount,
+                $row->sourceFindingCount === 1 ? '' : 's',
+                $row->reasonExcerpt,
+                implode(', ', $row->allowedTransitions),
+            ));
+            if ($row->signals !== []) {
+                $this->write('  signals: ' . implode('; ', $row->signals) . "\n");
+            }
+            foreach ($row->wordingMatches as $match) {
+                $this->write(sprintf("  wording in %s: %s\n", $match->file, $match->exact ? 'exact' : $match->containmentPercent . '% of 4-word phrases'));
+            }
+        }
+
+        return 0;
     }
 
     /**
@@ -1106,6 +1176,7 @@ final class Cli
             . "  history-rebuild      Explicitly write compact active-guidance and chronicle projections.\n"
             . "  history-status       Fail when compact history projections are missing, corrupt, or stale.\n"
             . "  backlog              List validated findings not yet consolidated; exits non-zero while any remain.\n"
+            . "  proposal-queue       List candidate/approved proposals with deterministic review facts; read-only, never recommends.\n"
             . "  finding-create       Create one validated Finding through the owner schema.\n"
             . "  finding-capture      Capture an unverified human report as a candidate Finding.\n"
             . "  finding-classify     Classify a captured Finding for reusable-learning promotion.\n"
@@ -1142,6 +1213,7 @@ final class Cli
             . "  --since YYYY-MM-DD       Include findings created on or after this date.\n"
             . "  --until YYYY-MM-DD       Include findings created on or before this date.\n"
             . "  --allow-empty            Allow prepare to write a prompt with no selected findings.\n"
+            . "  --probe PATH             For proposal-queue: measure proposed wording against this file (repeatable, relative to the project root).\n"
             . "  --allow-nonempty         Make backlog informational (exit 0) instead of gating on a non-empty backlog.\n"
             . "  --proposal PATH          Proposal path for proposal-validate.\n"
             . "  --input PATH             Input file for proposal-import.\n"

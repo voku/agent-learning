@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## [0.18.29] - 2026-10-07
+
+### Added
+
+- `agent-learning proposal-queue [--probe PATH]... [--format text|json]` and `ProposalReviewQueue`: a read-only list of the proposals still waiting for a human decision (candidate) or for application (approved). Each row carries only deterministic facts: age, source-finding count, the transitions the lifecycle accepts for that status and action, lineage (`corrects`, `corrected_by`, `supersedes`, `conflicts_with`), other proposals on the same target with their status, scope and target paths that no longer resolve, and how much of the proposed wording (share of its word 4-grams, or an exact whitespace-normalised match) already exists in the target skill file and in any `--probe` file. It never recommends approve, reject or acknowledge; that judgement stays with a named human. Motivation: a reviewer judging a queue by hand called two proposals duplicates from memory instead of from the repository, and missed that three approved memory proposals were already present in `MEMORY.md`.
 
 ### Changed
 
