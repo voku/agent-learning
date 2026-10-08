@@ -4,18 +4,20 @@
 
 ### Added
 
-- `agent-learning finding-transition <id> <status> --by ACTOR [--reason TEXT]` records why a finding changed status. A non-blank reason is stored on the finding as `status_reason`, with `status_changed_by` and `status_changed_at`; without one nothing extra is written and every existing caller behaves as before. Archiving or superseding without a reason prints a note on stderr (exit code unchanged), because that is exactly where the answer to "why did this leave the backlog" used to live only in a commit message. `FindingTransitionManager::transition()` takes the reason as a trailing optional argument.
+- `agent-learning finding-transition <id> <status> --by ACTOR [--reason TEXT]` records why a finding changed status. A non-blank reason is stored on the finding as `status_reason`, with `status_changed_by` and `status_changed_at`; without one no status-reason metadata is stored, including metadata from a previous transition, and existing callers remain compatible. Archiving or superseding without a reason prints a note on stderr (exit code unchanged), because that is exactly where the answer to "why did this leave the backlog" used to live only in a commit message. `FindingTransitionManager::transition()` takes the reason as a trailing optional argument.
 
 - `agent-learning guidance-consistency --source GLOB... [--project-root PATH] [--format text|markdown|json] [--limit N]` and `GuidanceConsistencyAudit`: a read-only list of two kinds of fact in written guidance (AGENTS.md, MEMORY.md, skills, ADRs): a repository path named in an inline code span that does not exist (git-ignored paths, placeholders, globs, URLs, `Class::method` and code fences are skipped), and a long paragraph or table row whose wording largely repeats in another file. `--format markdown` renders the review table with empty Proposal and Decision columns. It reports no verdicts: whether two statements contradict each other needs judgement and stays with the reviewer.
 
 ### Fixed
+
+- Guidance-consistency glob expansion guards the platform-dependent `GLOB_BRACE` constant; ordinary globs remain available where brace expansion is unsupported.
 
 - The consumer instruction fragment that `agent-loop init sync-instructions` copies into a host's `AGENTS.md` named a fixed `.agent-loop/learning/`, which is wrong for every host that sets `paths.learning_root` (IT-Portal keeps it in `infra/doc/agent-learning/` and its `AGENTS.md` therefore contradicted itself). The fragment now says `{{learning_root}}/`. Requires an `agent-loop` that resolves this placeholder (`FirstPartyPackageCatalog::resolveProjectPlaceholders()`); an older one would print it literally.
 
 ### Validation
 
 - Nine tests in `GuidanceConsistencyAuditTest` plus one CLI test. Mutants (same-file duplicates counted, code fences scanned) fail them.
-- Four new tests in `FindingTransitionTest`: the reason, actor and time are recorded and trimmed, a blank reason writes no fields, and the CLI (run out of process) stores a given reason without the note and notes an archive without one. Removing the recording block fails two of them. `composer ci` (448 tests, 1683 assertions, PHPStan clean).
+- Five new tests in `FindingTransitionTest`: the reason, actor and time are recorded and trimmed, a blank reason writes no fields, and the CLI (run out of process) stores a given reason without the note and notes an archive without one. Removing the recording block fails two of them; the later-transition regression verifies that a missing or blank reason clears previous status metadata while retaining validation provenance. `composer ci` (459 tests, 1721 assertions, PHPStan clean).
 
 ## [0.18.30] - 2026-10-07
 

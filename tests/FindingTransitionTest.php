@@ -58,6 +58,30 @@ final class FindingTransitionTest extends TestCase
         self::assertArrayHasKey('status_changed_at', $updated);
     }
 
+    public function testTransitionWithoutReasonDoesNotRetainPreviousStatusMetadata(): void
+    {
+        foreach ([null, '   '] as $reason) {
+            $manager = new FindingTransitionManager();
+            $manager->transition($this->root, 'finding.2026-06-08.001', FindingStatus::VALIDATED, 'validator', null, 'Validated evidence.');
+            $manager->transition($this->root, 'finding.2026-06-08.001', FindingStatus::ARCHIVED, 'archiver', null, $reason);
+
+            $path = $this->root . '/findings/archived/finding.2026-06-08.001.json';
+            $updated = (new \voku\AgentLearning\FindingParser())->parseFile($path)->raw;
+            self::assertArrayNotHasKey('status_reason', $updated);
+            self::assertArrayNotHasKey('status_changed_by', $updated);
+            self::assertArrayNotHasKey('status_changed_at', $updated);
+            self::assertSame('validator', $updated['validated_by']);
+            self::assertArrayHasKey('validated_at', $updated);
+
+            // Restore the original fixture for the second input boundary.
+            unlink($path);
+            $finding = json_decode((string)file_get_contents(__DIR__ . '/fixtures/findings/finding.2026-06-08.001.json'), true);
+            $finding['status'] = 'candidate';
+            $finding['validation_status'] = 'unverified';
+            file_put_contents($this->root . '/findings/candidate/finding.2026-06-08.001.json', json_encode($finding));
+        }
+    }
+
     public function testNoReasonLeavesNoStatusReasonFields(): void
     {
         $manager = new FindingTransitionManager();

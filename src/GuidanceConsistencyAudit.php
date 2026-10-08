@@ -55,7 +55,7 @@ final readonly class GuidanceConsistencyAudit
     {
         $files = [];
         foreach ($globs as $glob) {
-            foreach (glob(rtrim($projectRoot, '/') . '/' . ltrim($glob, '/'), GLOB_BRACE) ?: [] as $path) {
+            foreach (glob(rtrim($projectRoot, '/') . '/' . ltrim($glob, '/'), defined('GLOB_BRACE') ? GLOB_BRACE : 0) ?: [] as $path) {
                 if (is_file($path)) {
                     $files[substr($path, strlen(rtrim($projectRoot, '/')) + 1)] = true;
                 }

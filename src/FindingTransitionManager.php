@@ -107,6 +107,8 @@ final class FindingTransitionManager
             $data['status_reason'] = trim($reason);
             $data['status_changed_by'] = $actor;
             $data['status_changed_at'] = (new DateTimeImmutable('now'))->format(DateTimeInterface::ATOM);
+        } else {
+            unset($data['status_reason'], $data['status_changed_by'], $data['status_changed_at']);
         }
 
         $targetDir = $root . '/findings/' . $this->lifecycle->directoryFor($targetStatus);
