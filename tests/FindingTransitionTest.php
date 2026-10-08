@@ -45,6 +45,80 @@ final class FindingTransitionTest extends TestCase
         self::assertArrayHasKey('validated_at', $updated);
     }
 
+    public function testReasonIsRecordedWithWhoAndWhenOnTheFinding(): void
+    {
+        $manager = new FindingTransitionManager();
+        $manager->transition($this->root, 'finding.2026-06-08.001', FindingStatus::VALIDATED, 'lars');
+        $manager->transition($this->root, 'finding.2026-06-08.001', FindingStatus::ARCHIVED, 'lars', null, '  Resolved in code by the batch lookup.  ');
+
+        $updated = json_decode((string)file_get_contents($this->root . '/findings/archived/finding.2026-06-08.001.json'), true);
+        self::assertSame('archived', $updated['status']);
+        self::assertSame('Resolved in code by the batch lookup.', $updated['status_reason']);
+        self::assertSame('lars', $updated['status_changed_by']);
+        self::assertArrayHasKey('status_changed_at', $updated);
+    }
+
+    public function testTransitionWithoutReasonDoesNotRetainPreviousStatusMetadata(): void
+    {
+        foreach ([null, '   '] as $reason) {
+            $manager = new FindingTransitionManager();
+            $manager->transition($this->root, 'finding.2026-06-08.001', FindingStatus::VALIDATED, 'validator', null, 'Validated evidence.');
+            $manager->transition($this->root, 'finding.2026-06-08.001', FindingStatus::ARCHIVED, 'archiver', null, $reason);
+
+            $path = $this->root . '/findings/archived/finding.2026-06-08.001.json';
+            $updated = (new \voku\AgentLearning\FindingParser())->parseFile($path)->raw;
+            self::assertArrayNotHasKey('status_reason', $updated);
+            self::assertArrayNotHasKey('status_changed_by', $updated);
+            self::assertArrayNotHasKey('status_changed_at', $updated);
+            self::assertSame('validator', $updated['validated_by']);
+            self::assertArrayHasKey('validated_at', $updated);
+
+            // Restore the original fixture for the second input boundary.
+            unlink($path);
+            $finding = json_decode((string)file_get_contents(__DIR__ . '/fixtures/findings/finding.2026-06-08.001.json'), true);
+            $finding['status'] = 'candidate';
+            $finding['validation_status'] = 'unverified';
+            file_put_contents($this->root . '/findings/candidate/finding.2026-06-08.001.json', json_encode($finding));
+        }
+    }
+
+    public function testNoReasonLeavesNoStatusReasonFields(): void
+    {
+        $manager = new FindingTransitionManager();
+        $manager->transition($this->root, 'finding.2026-06-08.001', FindingStatus::VALIDATED, 'lars', null, '   ');
+
+        $updated = json_decode((string)file_get_contents($this->root . '/findings/validated/finding.2026-06-08.001.json'), true);
+        self::assertArrayNotHasKey('status_reason', $updated);
+        self::assertArrayNotHasKey('status_changed_by', $updated);
+        self::assertArrayNotHasKey('status_changed_at', $updated);
+    }
+
+    public function testCliRecordsTheReasonAndNotesAnArchiveWithoutOne(): void
+    {
+        (new FindingTransitionManager())->transition($this->root, 'finding.2026-06-08.001', FindingStatus::VALIDATED, 'lars');
+        $base = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/../bin/agent-learning') . ' finding-transition finding.2026-06-08.001 archived --by lars --root ' . escapeshellarg($this->root);
+
+        // Out of process: the command writes to STDOUT and STDERR, which an output buffer cannot observe.
+        exec($base . ' 2>&1', $withoutReason, $withoutExit);
+        self::assertSame(0, $withoutExit);
+        self::assertStringContainsString('archived without --reason', implode("\n", $withoutReason));
+        $archived = json_decode((string)file_get_contents($this->root . '/findings/archived/finding.2026-06-08.001.json'), true);
+        self::assertArrayNotHasKey('status_reason', $archived);
+    }
+
+    public function testCliStoresTheGivenReasonWithoutTheNote(): void
+    {
+        (new FindingTransitionManager())->transition($this->root, 'finding.2026-06-08.001', FindingStatus::VALIDATED, 'lars');
+        $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/../bin/agent-learning') . ' finding-transition finding.2026-06-08.001 archived --by lars --reason ' . escapeshellarg('Contradicted by 12 migrations.') . ' --root ' . escapeshellarg($this->root) . ' 2>&1';
+
+        exec($command, $output, $exit);
+
+        self::assertSame(0, $exit);
+        self::assertStringNotContainsString('without --reason', implode("\n", $output));
+        $archived = json_decode((string)file_get_contents($this->root . '/findings/archived/finding.2026-06-08.001.json'), true);
+        self::assertSame('Contradicted by 12 migrations.', $archived['status_reason']);
+    }
+
     public function testValidatingCandidateWithoutStoredConclusionRequiresReviewerConclusion(): void
     {
         $path = $this->root . '/findings/candidate/finding.2026-06-08.001.json';

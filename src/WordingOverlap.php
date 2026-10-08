@@ -33,8 +33,12 @@ final readonly class WordingOverlap
         return new ProposalWordingMatch($file, intdiv($shared * 100, count($wordingShingles)), false);
     }
 
-    /** @return list<string> */
-    private function shingles(string $text): array
+    /**
+     * The distinct word 4-grams of a text; empty when the text has fewer than four words.
+     *
+     * @return list<string>
+     */
+    public function shingles(string $text): array
     {
         $words = preg_split('/[^\p{L}\p{N}_]+/u', mb_strtolower($text), -1, PREG_SPLIT_NO_EMPTY);
         if ($words === false || count($words) < self::SHINGLE_WORDS) {

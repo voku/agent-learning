@@ -153,6 +153,22 @@ final class DreamCliTest extends TestCase
         ]));
     }
 
+    public function testGuidanceConsistencyRendersAMarkdownReviewTableWithoutVerdicts(): void
+    {
+        $project = $this->root . '/project';
+        mkdir($project . '/docs', 0777, true);
+        file_put_contents($project . '/docs/a.md', "The rule lives in `docs/gone.md` now.\n");
+
+        exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/../bin/agent-learning') . ' guidance-consistency --source ' . escapeshellarg('docs/*.md') . ' --project-root ' . escapeshellarg($project) . ' --format markdown 2>&1', $lines, $code);
+        $output = implode("\n", $lines);
+
+        self::assertSame(0, $code);
+        self::assertStringContainsString('| # | Kind | Source A | Source B | Evidence | Proposal | Decision |', $output);
+        self::assertStringContainsString('| 1 | unresolved_path | docs/a.md:1 | - |', $output);
+        self::assertStringContainsString('1 candidate(s)', $output);
+        self::assertSame(1, (new Cli())->run(['agent-learning', 'guidance-consistency']));
+    }
+
     private function removeDirectory(string $directory): void
     {
         if (!is_dir($directory)) {

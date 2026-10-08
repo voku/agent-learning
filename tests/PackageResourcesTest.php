@@ -52,6 +52,9 @@ final class PackageResourcesTest extends TestCase
         $content = file_get_contents($fragment);
         self::assertIsString($content);
         self::assertStringContainsString('Agent Learning', $content);
+        // The host knows where its Learning root is (init.json learning_root); a literal path here is wrong for every host that moved it.
+        self::assertStringContainsString('{{learning_root}}', $content);
+        self::assertStringNotContainsString('.agent-loop/learning', $content);
     }
 
     public function testConstraintPrecedentsRootExists(): void
