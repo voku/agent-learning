@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.18.32] - 2026-10-08
+
+### Changed
+
+- Accept `voku/agent-graph` `^0.2.3 || ^0.3.0`, so installs can resolve agent-map 0.22.0 (which requires agent-graph 0.3). The suite and PHPStan pass against agent-graph 0.3.0.
+
 ## [0.18.31] - 2026-10-08
 
 ### Added
