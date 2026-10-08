@@ -1027,6 +1027,11 @@ final class Cli
             throw new ValidationException($root, null, null, 'unsupported status: ' . $statusVal);
         }
 
+        $reason = $this->stringOption($parsed['options'], 'reason');
+        if (($reason === null || trim($reason) === '') && in_array($status, [FindingStatus::ARCHIVED, FindingStatus::SUPERSEDED], true)) {
+            $this->writeError('Note: ' . $status->value . ' without --reason; the record will not say why the finding left the backlog.' . "\n");
+        }
+
         $manager = new FindingTransitionManager();
         $manager->transition(
             $root,
@@ -1034,6 +1039,7 @@ final class Cli
             $status,
             $actor,
             $this->stringOption($parsed['options'], 'conclusion'),
+            $reason,
         );
 
         $path = $manager->resolveFindingPath($findingId, $root);
@@ -1348,7 +1354,7 @@ final class Cli
             . "  --approve-candidate      Allow constraint-loop to approve a candidate proposal before applying.\n"
             . "  --manifest PATH          Manifest output path for constraint-loop or constraint-activate.\n"
             . "  --by ACTOR               Actor performing the operation.\n"
-            . "  --reason REASON          Reason for proposal rejection, retirement, or acknowledgement.\n"
+            . "  --reason REASON          Reason for proposal rejection, retirement or acknowledgement, and for a finding-transition (recorded on the finding).\n"
             . "  --superseded-by ID       Applied active constraint that can retire approved duplicate guidance.\n"
             . "  --commit COMMIT          Commit hash or pull request reference.\n"
             . "  --validation PATH        Path to validation evidence JSON file.\n"

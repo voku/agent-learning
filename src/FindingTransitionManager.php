@@ -53,6 +53,7 @@ final class FindingTransitionManager
         FindingStatus $targetStatus,
         string $actor,
         ?string $validatedConclusion = null,
+        ?string $reason = null,
     ): void
     {
         if (trim($actor) === '') {
@@ -98,6 +99,14 @@ final class FindingTransitionManager
             if ($finding->validationStatus === 'unverified') {
                 $data['validation_status'] = 'invalidated';
             }
+        }
+
+        // Why a finding left the backlog (archived as resolved, superseded by another, ...) otherwise lives
+        // only in a commit message; keep it with the record, together with who decided and when.
+        if ($reason !== null && trim($reason) !== '') {
+            $data['status_reason'] = trim($reason);
+            $data['status_changed_by'] = $actor;
+            $data['status_changed_at'] = (new DateTimeImmutable('now'))->format(DateTimeInterface::ATOM);
         }
 
         $targetDir = $root . '/findings/' . $this->lifecycle->directoryFor($targetStatus);

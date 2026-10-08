@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.18.31] - 2026-10-08
+
+### Added
+
+- `agent-learning finding-transition <id> <status> --by ACTOR [--reason TEXT]` records why a finding changed status. A non-blank reason is stored on the finding as `status_reason`, with `status_changed_by` and `status_changed_at`; without one nothing extra is written and every existing caller behaves as before. Archiving or superseding without a reason prints a note on stderr (exit code unchanged), because that is exactly where the answer to "why did this leave the backlog" used to live only in a commit message. `FindingTransitionManager::transition()` takes the reason as a trailing optional argument.
+
+### Validation
+
+- Four new tests in `FindingTransitionTest`: the reason, actor and time are recorded and trimmed, a blank reason writes no fields, and the CLI (run out of process) stores a given reason without the note and notes an archive without one. Removing the recording block fails two of them. `composer ci` (448 tests, 1683 assertions, PHPStan clean).
+
 ## [0.18.30] - 2026-10-07
 
 ### Fixed
