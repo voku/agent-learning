@@ -187,6 +187,14 @@ Use `--format=json` for CI. The report has no generated timestamp, so equivalent
 
 ### Compact history projections
 
+To find places where written guidance disagrees with the repository or repeats itself, list the machine-checkable facts and review them as one table:
+
+```bash
+vendor/bin/agent-learning guidance-consistency --source AGENTS.md --source 'infra/doc/agents/skills/*/SKILL.md' --format markdown
+```
+
+Rows are candidates (a missing path, duplicated wording), never verdicts; contradictions between differently worded statements still need a human or model reading.
+
 Raw findings, proposals, and event histories remain the audit source. Create compact, reproducible working views only with an explicit write command:
 
 ```bash

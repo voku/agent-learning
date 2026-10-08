@@ -38,6 +38,7 @@ final class Cli
                 'constraint-loop' => $this->constraintLoopCommand($tokens),
                 'guidance-evaluate' => $this->guidanceEvaluateCommand($tokens),
                 'dream' => $this->dreamCommand($tokens),
+                'guidance-consistency' => $this->guidanceConsistencyCommand($tokens),
                 'history-rebuild' => $this->historyRebuildCommand($tokens),
                 'history-status' => $this->historyStatusCommand($tokens),
                 'lineage-rebuild' => $this->lineageRebuildCommand($tokens),
@@ -133,6 +134,56 @@ final class Cli
                 $this->write('- ' . $proposalId . "\n");
             }
         }
+
+        return 0;
+    }
+
+    /**
+     * List consistency candidates in written guidance as facts for a human review table; never a verdict.
+     *
+     * @param list<string> $tokens
+     */
+    private function guidanceConsistencyCommand(array $tokens): int
+    {
+        $parsed = $this->parseOptions($tokens);
+        $format = $this->stringOption($parsed['options'], 'format') ?? 'text';
+        if (!in_array($format, ['text', 'markdown', 'json'], true)) {
+            throw new ValidationException('', null, null, 'guidance-consistency --format must be text, markdown or json');
+        }
+        $sources = $this->stringOptions($parsed['options'], 'source');
+        if ($sources === []) {
+            throw new ValidationException('', null, null, 'guidance-consistency requires at least one --source GLOB (relative to the project root)');
+        }
+        $projectRoot = $this->stringOption($parsed['options'], 'project-root') ?? (string)getcwd();
+        $limit = $this->positiveIntOption($parsed['options'], 'limit', 200);
+
+        $all = (new GuidanceConsistencyAudit())->audit($projectRoot, $sources);
+        $shown = array_slice($all, 0, $limit);
+
+        if ($format === 'json') {
+            $this->write(json_encode([
+                'total' => count($all),
+                'shown' => count($shown),
+                'candidates' => array_map(static fn (GuidanceConsistencyCandidate $c): array => [
+                    'kind' => $c->kind,
+                    'source_a' => $c->sourceA,
+                    'source_b' => $c->sourceB,
+                    'evidence' => $c->evidence,
+                ], $shown),
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
+
+            return 0;
+        }
+
+        $out = $format === 'markdown' ? "| # | Kind | Source A | Source B | Evidence | Proposal | Decision |\n| --- | --- | --- | --- | --- | --- | --- |\n" : '';
+        foreach ($shown as $number => $c) {
+            $cells = [(string)($number + 1), $c->kind, $c->sourceA, $c->sourceB ?? '-', $c->evidence];
+            $out .= $format === 'markdown'
+                ? '| ' . implode(' | ', array_map(static fn (string $cell): string => str_replace('|', '\\|', $cell), $cells)) . " |  |  |\n"
+                : implode("\t", $cells) . "\n";
+        }
+        $out .= sprintf("%d candidate(s), %d shown. Candidates are facts, not contradictions: a human judges each row.\n", count($all), count($shown));
+        $this->write($out);
 
         return 0;
     }
@@ -1289,6 +1340,7 @@ final class Cli
             . "  constraint-activate  Write an active constraint manifest from an approved/applied proposal.\n"
             . "  constraint-loop      Export, apply, and activate a generated constraint proposal.\n"
             . "  guidance-evaluate    Project recall usage events and create reviewable candidate proposals.\n"
+            . "  guidance-consistency Read-only: list missing paths and duplicated wording in guidance files (--source GLOB repeatable, --project-root, --format text|markdown|json, --limit N).\n"
             . "  dream                Audit immutable evidence and render a deterministic guidance-maintenance review queue.\n"
             . "  history-rebuild      Explicitly write compact active-guidance and chronicle projections.\n"
             . "  history-status       Fail when compact history projections are missing, corrupt, or stale.\n"
