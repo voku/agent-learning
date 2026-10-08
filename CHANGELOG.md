@@ -8,6 +8,10 @@
 
 - `agent-learning guidance-consistency --source GLOB... [--project-root PATH] [--format text|markdown|json] [--limit N]` and `GuidanceConsistencyAudit`: a read-only list of two kinds of fact in written guidance (AGENTS.md, MEMORY.md, skills, ADRs): a repository path named in an inline code span that does not exist (git-ignored paths, placeholders, globs, URLs, `Class::method` and code fences are skipped), and a long paragraph or table row whose wording largely repeats in another file. `--format markdown` renders the review table with empty Proposal and Decision columns. It reports no verdicts: whether two statements contradict each other needs judgement and stays with the reviewer.
 
+### Fixed
+
+- The consumer instruction fragment that `agent-loop init sync-instructions` copies into a host's `AGENTS.md` named a fixed `.agent-loop/learning/`, which is wrong for every host that sets `paths.learning_root` (IT-Portal keeps it in `infra/doc/agent-learning/` and its `AGENTS.md` therefore contradicted itself). The fragment now says `{{learning_root}}/`. Requires an `agent-loop` that resolves this placeholder (`FirstPartyPackageCatalog::resolveProjectPlaceholders()`); an older one would print it literally.
+
 ### Validation
 
 - Nine tests in `GuidanceConsistencyAuditTest` plus one CLI test. Mutants (same-file duplicates counted, code fences scanned) fail them.
