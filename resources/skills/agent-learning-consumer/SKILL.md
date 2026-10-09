@@ -77,7 +77,7 @@ Never write a lesson straight into `MEMORY.md`, a skill or a doc. That leaves no
 5. Stop. A named human runs `proposal-approve --by <name>`. An agent recommends and never picks the approver.
 6. Write the target. The proposal's `new` text must appear **verbatim** in the target file; a paraphrase fails `proposal-mark-applied` with "added guidance wording is not present in target", so copy it.
 7. Commit the target, then write the validation JSON (`target_source_ref`, `target_content_hash` = sha256 of the file as committed, `commit`, `generated_files`, `registration_file`, `tests`).
-8. If other applied proofs already pin the same target, `proposal-reanchor <target> --by <name> --reason <real reason>` first; `mark-applied` fails and rolls back while they are stale. Any later edit of the target changes its hash, so edit before steps 7 and 8.
+8. If other applied proofs already pin the same target, check whether their reviewed guidance still matches. When it does, run `proposal-reanchor <target> --by <name> --reason <real reason>` first. If an existing proof's reviewed guidance changed or disappeared, create the reviewed REPLACE proposal first, then run `proposal-reanchor <target> --supersede <drifted-id>=<replacement-id>`; a named human must approve the replacement before it is applied. `mark-applied` fails and rolls back while stale proofs remain. Any later target edit changes its hash, so edit before steps 7 and 8.
 9. `proposal-mark-applied <id> --by <name> --commit <sha> --validation <json>`, then `validate`, then commit the resulting records (Finding moves to `consolidated`, proposal to `applied`).
 
 ## Applied guidance proof recovery
