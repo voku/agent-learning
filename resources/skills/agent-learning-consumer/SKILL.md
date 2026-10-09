@@ -66,6 +66,20 @@ vendor/bin/agent-learning proposal-validate --root infra/doc/agent-learning --pr
 vendor/bin/agent-learning guidance-evaluate --root infra/doc/agent-learning --selection-history history/recall-selections.jsonl --outcome-history history/outcomes.jsonl
 ```
 
+## From validated Finding to applied memory or skill guidance
+
+Never write a lesson straight into `MEMORY.md`, a skill or a doc. That leaves no evidence, no overlap check, no named approver and no proof that the wording landed. The path below produces all four, and each step fails closed when the one before it was skipped.
+
+1. `finding-create` with real text: observation, hypothesis, conclusion, scope, evidence. The tools write immutable records, so never run it with placeholder arguments just to learn the syntax.
+2. `validate`, then `prepare --finding <id>`. `prepare` only writes a consolidation prompt; it does not produce the result.
+3. The agent authors one consolidation result JSON (shape: README "Example Proposal" and "Proposal Validation", or copy the nearest existing result for the same `target_type`). Set `boundary` and `remaining_uncertainty` honestly: a single measured manifestation stays low-authority precedent. Put the exact guidance text in `new`.
+4. `proposal-import --input <result>` runs the memory overlap check, then `proposal-validate`.
+5. Stop. A named human runs `proposal-approve --by <name>`. An agent recommends and never picks the approver.
+6. Write the target. The proposal's `new` text must appear **verbatim** in the target file; a paraphrase fails `proposal-mark-applied` with "added guidance wording is not present in target", so copy it.
+7. Commit the target, then write the validation JSON (`target_source_ref`, `target_content_hash` = sha256 of the file as committed, `commit`, `generated_files`, `registration_file`, `tests`).
+8. If other applied proofs already pin the same target, `proposal-reanchor <target> --by <name> --reason <real reason>` first; `mark-applied` fails and rolls back while they are stale. Any later edit of the target changes its hash, so edit before steps 7 and 8.
+9. `proposal-mark-applied <id> --by <name> --commit <sha> --validation <json>`, then `validate`, then commit the resulting records (Finding moves to `consolidated`, proposal to `applied`).
+
 ## Applied guidance proof recovery
 
 An applied `memory` or `skill` proposal pins its canonical target file. If validation reports a stale `target_content_hash`, do not edit the Proposal JSON or hash by hand and do not retire/re-apply the guidance merely to clear the error.
