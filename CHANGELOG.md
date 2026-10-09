@@ -4,7 +4,7 @@
 
 ### Added
 
-- The `agent-learning-consumer` skill gains "From validated Finding to applied memory or skill guidance": one ordered runbook (finding, prepare, agent-authored result, import, human approval, verbatim target edit, commit, validation JSON, reanchor, mark-applied). It records the three failures a first run hits (the result is not produced by `prepare`, `new` must appear verbatim in the target, a shared target needs `proposal-reanchor` before `mark-applied`) and says never to write guidance without the proposal path.
+- The `agent-learning-consumer` skill gains "From validated Finding to applied memory or skill guidance": one ordered runbook (finding, prepare, agent-authored result, import, human approval, verbatim target edit, commit, validation JSON, reanchor, mark-applied). It records the three failures a first run hits (the result is not produced by `prepare`, `new` must appear verbatim in the target, a shared target needs re-anchoring before `mark-applied` when reviewed guidance still matches, or a reviewed REPLACE proposal and `--supersede` when guidance drifted) and says never to write guidance without the proposal path.
 
 ## [0.18.32] - 2026-10-08
 
