@@ -146,6 +146,15 @@ final class AppliedGuidanceMaintenanceInspectorTest extends TestCase
 
     public function testMissingAppliedProposalForSelectedTargetIsRejected(): void
     {
+        // The unrelated MEMORY proposal state must be identical in both snapshots.
+        // Otherwise its changed proof correctly blocks before the empty-target check.
+        file_put_contents($this->afterRoot . '/MEMORY.md', $this->memory('src/Dogfood/'));
+        foreach ([self::FIRST, self::SECOND] as $id) {
+            copy(
+                $this->beforeRoot . '/proposals/applied/' . $id . '.json',
+                $this->afterRoot . '/proposals/applied/' . $id . '.json',
+            );
+        }
         file_put_contents($this->beforeRoot . '/docs/other.md', 'old content');
         file_put_contents($this->afterRoot . '/docs/other.md', 'new content');
 
