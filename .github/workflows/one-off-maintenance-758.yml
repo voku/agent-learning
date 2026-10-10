@@ -1,0 +1,74 @@
+name: One-off real agent-loop 758 maintenance proof
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/one-off-maintenance-758.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  frozen-real-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout proposed agent-learning owner
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Install owner dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Checkout exact agent-loop #758 base
+        uses: actions/checkout@v7
+        with:
+          repository: voku/agent-loop
+          ref: 622c004e2cc642fce1c06dc63a4f04d4889637e2
+          path: acceptance/before
+          persist-credentials: false
+
+      - name: Checkout exact agent-loop #758 head
+        uses: actions/checkout@v7
+        with:
+          repository: voku/agent-loop
+          ref: f1d1f7b91a7adad974aa88ca5104135894d43196
+          path: acceptance/after
+          persist-credentials: false
+
+      - name: Prove exact pinned commits and owner maintenance
+        run: |
+          test "$(git -C acceptance/before rev-parse HEAD)" = "622c004e2cc642fce1c06dc63a4f04d4889637e2"
+          test "$(git -C acceptance/after rev-parse HEAD)" = "f1d1f7b91a7adad974aa88ca5104135894d43196"
+          php <<'PHP'
+          <?php
+          require getcwd() . '/vendor/autoload.php';
+          $root = getcwd();
+          $proof = (new \voku\AgentLearning\AppliedGuidanceMaintenanceInspector())->inspect(
+              $root . '/acceptance/before/.agent-loop/learning',
+              $root . '/acceptance/after/.agent-loop/learning',
+              'MEMORY.md',
+          );
+          $expectedIds = ['proposal.2026-08-14.007', 'proposal.2026-08-14.013'];
+          $ids = array_column($proof->reanchors, 'proposal_id');
+          sort($ids);
+          if ($ids !== $expectedIds
+              || $proof->afterSha256 !== '7a9afab8ec812280ae036e6afd901d6c8d7e0f35bc3439197a547f886926fa0e'
+          ) {
+              throw new RuntimeException('Real #758 receipt identity mismatch.');
+          }
+          echo json_encode([
+              'target' => $proof->targetSourceRef,
+              'before_sha256' => $proof->beforeSha256,
+              'after_sha256' => $proof->afterSha256,
+              'proposal_ids' => $ids,
+              'reanchors' => $proof->reanchors,
+              'human_semantic_review' => 'NOT_CLAIMED',
+          ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR), "\n";
+          PHP
