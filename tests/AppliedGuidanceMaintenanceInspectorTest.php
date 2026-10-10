@@ -118,7 +118,7 @@ final class AppliedGuidanceMaintenanceInspectorTest extends TestCase
             $record['applied_validation']['target_content_hash'] = str_repeat('0', 64);
             return $record;
         });
-        $this->expectException(\\voku\\AgentLearning\\ValidationException::class);
+        $this->expectException(\voku\AgentLearning\ValidationException::class);
         $this->expectExceptionMessage('target_content_hash does not match target file');
         $this->inspect();
     }
