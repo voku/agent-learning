@@ -107,11 +107,11 @@ For a skill proposal this normally includes:
 
 ```json
 {
-  "action": "ADD|REPLACE|DELETE",
+  "action": "ADD",
   "source_findings": ["finding...."],
   "reason": "...",
   "remaining_uncertainty": [],
-  "learning_decision": "UPDATE_SKILL|CREATE_SKILL",
+  "learning_decision": "CREATE_SKILL",
   "pattern_key": "...",
   "validation_case": {
     "given": "...",
