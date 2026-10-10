@@ -77,9 +77,14 @@ final readonly class AppliedGuidanceMaintenanceInspector
         $actor = $newProof['reanchored_by'] ?? null;
         $at = $newProof['reanchored_at'] ?? null;
         $reason = $newProof['reanchor_reason'] ?? null;
-        if (!is_string($actor) || trim($actor) === ''
-            || !is_string($at) || trim($at) === ''
-            || !is_string($reason) || trim($reason) === ''
+        if (!is_string($actor) || !is_string($at) || !is_string($reason)) {
+            throw new ValidationException($target, null, $old->id, 'missing new reanchor provenance');
+        }
+        $actor = trim($actor);
+        $at = trim($at);
+        $reason = trim($reason);
+        $proposalId = $old->id;
+        if ($actor === '' || $at === '' || $reason === '' || $proposalId === ''
             || ($oldProof['reanchored_at'] ?? null) === $at
         ) {
             throw new ValidationException($target, null, $old->id, 'missing new reanchor provenance');
@@ -97,10 +102,10 @@ final readonly class AppliedGuidanceMaintenanceInspector
         }
 
         return [
-            'proposal_id' => $old->id,
-            'reanchored_by' => trim($actor),
-            'reanchored_at' => trim($at),
-            'reason' => trim($reason),
+            'proposal_id' => $proposalId,
+            'reanchored_by' => $actor,
+            'reanchored_at' => $at,
+            'reason' => $reason,
         ];
     }
 
