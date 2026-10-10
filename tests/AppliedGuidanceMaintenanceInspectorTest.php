@@ -108,7 +108,7 @@ final class AppliedGuidanceMaintenanceInspectorTest extends TestCase
         file_put_contents($this->before . '/WRONG.md', 'Unrelated before content.');
         file_put_contents($this->after . '/WRONG.md', 'Unrelated after content.');
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('No applied guidance proof names the target');
+        $this->expectExceptionMessage('Unrelated proposal changed during maintenance');
         $this->inspect('WRONG.md');
     }
 
