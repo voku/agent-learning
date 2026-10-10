@@ -82,3 +82,12 @@ canonical target. A Skill file can exist without a recall configuration selectin
 it. `APPLIED` therefore proves application, not automatic authority handoff or
 activation. Retirement and downstream canonical-source selection remain separate,
 reviewable steps.
+
+
+## Read-only cross-snapshot maintenance evidence
+
+`AppliedGuidanceMaintenanceInspector::inspect($beforeRoot, $afterRoot, 'MEMORY.md')` compares two **separately and completely validated** Learning repository snapshots. It returns an immutable `AppliedGuidanceMaintenanceProof` containing the canonical target, its before/after SHA-256 values, and a typed reanchor provenance list for **every** applied proof on that target.
+
+The inspector rejects modified approval/application/guidance data, any unrelated proposal change, missing/partial reanchors, missing targets, and stale hashes. Both repository validators run through the normal applied-guidance checks. It reads only and does not call `proposal-reanchor`.
+
+**This is not an approval or a semantics oracle.** Reanchor actor metadata is recorded provenance, not a cryptographic identity attestation. Even fully valid applied proposals do **not** establish that every unrelated sentence or canonical-home pointer in a shared `MEMORY.md` is right. A consuming workflow must bind an explicit human-reviewed verdict to the **exact before/after target diff** and enforce its own Git/authorization boundary independently. A physically valid but semantically wrong path correction is still not authorized by this proof.
