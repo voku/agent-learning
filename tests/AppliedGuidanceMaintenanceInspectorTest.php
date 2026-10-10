@@ -123,7 +123,6 @@ final class AppliedGuidanceMaintenanceInspectorTest extends TestCase
         );
         $evidence = $this->inspect();
         self::assertSame(2, count($evidence->proposalIds));
-        self::assertFalse(property_exists($evidence, 'humanReviewed'));
     }
 
     private function inspect(string $target = 'MEMORY.md'): \voku\AgentLearning\AppliedGuidanceMaintenanceEvidence

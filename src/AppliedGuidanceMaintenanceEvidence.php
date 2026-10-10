@@ -13,8 +13,8 @@ namespace voku\AgentLearning;
 final readonly class AppliedGuidanceMaintenanceEvidence
 {
     /**
-     * @param non-empty-list<non-empty-string> $proposalIds
-     * @param non-empty-array<non-empty-string, array{actor: non-empty-string, at: non-empty-string, reason: non-empty-string}> $reanchors
+     * @param non-empty-list<string> $proposalIds
+     * @param non-empty-array<string, array{actor: non-empty-string, at: non-empty-string, reason: non-empty-string}> $reanchors
      */
     public function __construct(
         public string $targetSourceRef,

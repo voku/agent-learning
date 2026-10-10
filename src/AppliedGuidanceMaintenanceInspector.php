@@ -69,7 +69,7 @@ final readonly class AppliedGuidanceMaintenanceInspector
                 continue;
             }
 
-            if (!is_array($oldProof) || !is_array($newProof)
+            if ($oldProof === null || $newProof === null
                 || ($oldProof['target_content_hash'] ?? null) !== $oldHash
                 || ($newProof['target_content_hash'] ?? null) !== $newHash) {
                 throw new RuntimeException('Applied target proof mismatch for ' . $id);
@@ -93,11 +93,14 @@ final readonly class AppliedGuidanceMaintenanceInspector
                 throw new RuntimeException('Reviewed proposal or application evidence changed for ' . $id);
             }
 
+            if ($id === '') {
+                throw new RuntimeException('Applied proposal identity must not be empty.');
+            }
             $ids[] = $id;
             $reanchors[$id] = ['actor' => $actor, 'at' => $at, 'reason' => $reason];
         }
 
-        if ($ids === []) {
+        if ($ids === [] || $reanchors === []) {
             throw new RuntimeException('No applied guidance proof names the target in both snapshots.');
         }
 
