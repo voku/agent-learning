@@ -96,7 +96,7 @@ final class AppliedGuidanceMaintenanceInspectorTest extends TestCase
         $this->inspect();
     }
 
-    public function testNoMatchingAppliedProposalsAreRejected(): void
+    public function testMissingTargetFileIsRejected(): void
     {
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('source does not resolve');
@@ -105,9 +105,33 @@ final class AppliedGuidanceMaintenanceInspectorTest extends TestCase
 
     public function testWrongButExistingTargetDoesNotBecomeMaintenanceEvidence(): void
     {
-        file_put_contents($this->after . '/WRONG.md', $this->memory(true));
+        file_put_contents($this->before . '/WRONG.md', 'Unrelated before content.');
+        file_put_contents($this->after . '/WRONG.md', 'Unrelated after content.');
         $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('No applied guidance proof names the target');
         $this->inspect('WRONG.md');
+    }
+
+    public function testTamperedPhysicalHashFailsOwnerValidation(): void
+    {
+        $this->mutateProposal('proposal.2026-06-08.001', static function (array $record): array {
+            $record['applied_validation']['target_content_hash'] = str_repeat('0', 64);
+            return $record;
+        });
+        $this->expectException(\\voku\\AgentLearning\\ValidationException::class);
+        $this->expectExceptionMessage('target_content_hash does not match target file');
+        $this->inspect();
+    }
+
+    public function testChangedReviewedWordingCannotHideUnderAReanchor(): void
+    {
+        $this->mutateProposal('proposal.2026-06-08.001', static function (array $record): array {
+            $record['new'] = 'Reviewed guidance B.';
+            return $record;
+        });
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Reviewed proposal or application evidence changed');
+        $this->inspect();
     }
 
     public function testAChangedUnreviewedRowCannotBeDeclaredHumanApprovedByThisApi(): void
