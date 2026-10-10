@@ -69,8 +69,7 @@ final readonly class AppliedGuidanceMaintenanceInspector
                 continue;
             }
 
-            if ($oldProof === null || $newProof === null
-                || ($oldProof['target_content_hash'] ?? null) !== $oldHash
+            if (($oldProof['target_content_hash'] ?? null) !== $oldHash
                 || ($newProof['target_content_hash'] ?? null) !== $newHash) {
                 throw new RuntimeException('Applied target proof mismatch for ' . $id);
             }
