@@ -18,7 +18,9 @@ final class SkillPromotionExampleTest extends TestCase
 
         $matches = [];
         self::assertSame(1, preg_match('/```json\s*(\{.*?\})\s*```/s', $skill, $matches));
-        $example = json_decode($matches[1], true, 512, JSON_THROW_ON_ERROR);
+        $json = $matches[1] ?? null;
+        self::assertIsString($json);
+        $example = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
         self::assertIsArray($example);
         self::assertIsString($example['action'] ?? null);
         self::assertIsString($example['learning_decision'] ?? null);
