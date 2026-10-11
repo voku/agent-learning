@@ -96,6 +96,16 @@ final class AppliedGuidanceMaintenanceInspectorTest extends TestCase
         $this->inspect();
     }
 
+    public function testTwoValidReanchorsMayShareSecondPrecisionTimestamp(): void
+    {
+        $this->mutateProposal('proposal.2026-06-08.001', static function (array $record): array {
+            $record['applied_validation']['reanchored_at'] = '2026-10-10T20:00:00+00:00';
+            return $record;
+        });
+        $evidence = $this->inspect();
+        self::assertSame(2, count($evidence->proposalIds));
+    }
+
     public function testMissingTargetFileIsRejected(): void
     {
         $this->expectException(RuntimeException::class);
