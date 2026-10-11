@@ -289,6 +289,47 @@ final class FindingCreateCliTest extends TestCase
         self::assertFileExists($result['path']);
     }
 
+    public function testCustomTaskPatternSurvivesTransitionAndSameStatusResponse(): void
+    {
+        foreach (['PHP17-B1' => '/^PHP17-[ABC][12]$/', 'custom:27' => '/^custom:\\d+$/'] as $task => $pattern) {
+            $root = $this->createFreshLearningRoot();
+            [$captureExit, $captureOutput] = $this->runFindingCapture($root, [
+                '--task', $task, '--task-id-pattern', $pattern, '--by', 'reviewer',
+                '--observation', 'Custom task identity passed capture validation.',
+                '--hypothesis', 'Transition should preserve the explicit identity contract.',
+                '--evidence', 'Independent capture and transition CLI reproduction.',
+            ]);
+            self::assertSame(0, $captureExit, $captureOutput);
+            /** @var array{id: string, path: string} $captured */
+            $captured = json_decode($captureOutput, true, 512, JSON_THROW_ON_ERROR);
+            $before = file_get_contents($captured['path']);
+            self::assertIsString($before);
+            [$rejectedExit] = $this->runFindingCommand($root, 'finding-transition', [
+                $captured['id'], 'validated', '--by', 'reviewer',
+                '--task-id-pattern', '/^OTHER-\\d+$/', '--conclusion', 'Observed behavior verified.',
+            ]);
+            self::assertSame(1, $rejectedExit);
+            self::assertSame($before, file_get_contents($captured['path']));
+            self::assertFileDoesNotExist($root . '/findings/validated/' . $captured['id'] . '.json');
+
+            $arguments = [$captured['id'], 'validated', '--by', 'reviewer',
+                '--task-id-pattern', $pattern, '--conclusion', 'Observed behavior verified.'];
+            [$transitionExit, $transitionOutput] = $this->runFindingCommand($root, 'finding-transition', $arguments);
+            self::assertSame(0, $transitionExit, $transitionOutput);
+            /** @var array{status: string, validation_status: string} $transitioned */
+            $transitioned = json_decode($transitionOutput, true, 512, JSON_THROW_ON_ERROR);
+            self::assertSame('validated', $transitioned['status']);
+            self::assertSame('validated', $transitioned['validation_status']);
+            self::assertFileDoesNotExist($captured['path']);
+            $validatedPath = $root . '/findings/validated/' . $captured['id'] . '.json';
+            $validatedBytes = file_get_contents($validatedPath);
+            self::assertIsString($validatedBytes);
+            [$noOpExit, $noOpOutput] = $this->runFindingCommand($root, 'finding-transition', $arguments);
+            self::assertSame(0, $noOpExit, $noOpOutput);
+            self::assertSame($validatedBytes, file_get_contents($validatedPath));
+        }
+    }
+
     public function testExplicitDuplicateIdDoesNotOverwriteExistingFinding(): void
     {
         $root = $this->createFreshLearningRoot();

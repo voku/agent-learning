@@ -1084,6 +1084,7 @@ final class Cli
         }
 
         $manager = new FindingTransitionManager();
+        $taskIdPattern = $this->stringOption($parsed['options'], 'task-id-pattern');
         $manager->transition(
             $root,
             $findingId,
@@ -1091,10 +1092,14 @@ final class Cli
             $actor,
             $this->stringOption($parsed['options'], 'conclusion'),
             $reason,
+            $taskIdPattern,
         );
 
         $path = $manager->resolveFindingPath($findingId, $root);
-        $finding = (new FindingValidator())->validateFile($path);
+        $validator = $taskIdPattern === null
+            ? new FindingValidator()
+            : new FindingValidator(taskIdPattern: $taskIdPattern);
+        $finding = $validator->validateFile($path);
         $this->write(json_encode(
             $this->findingIntakeResult($finding),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
