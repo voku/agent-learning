@@ -79,8 +79,7 @@ final readonly class AppliedGuidanceMaintenanceInspector
             $reason = $newProof['reanchor_reason'] ?? null;
             if (!is_string($actor) || trim($actor) === ''
                 || !is_string($at) || trim($at) === ''
-                || !is_string($reason) || trim($reason) === ''
-                || $at === ($oldProof['reanchored_at'] ?? null)) {
+                || !is_string($reason) || trim($reason) === '') {
                 throw new RuntimeException('Missing new reanchor provenance for ' . $id);
             }
 
