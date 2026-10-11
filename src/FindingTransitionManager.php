@@ -54,6 +54,7 @@ final class FindingTransitionManager
         string $actor,
         ?string $validatedConclusion = null,
         ?string $reason = null,
+        ?string $taskIdPattern = null,
     ): void
     {
         if (trim($actor) === '') {
@@ -132,7 +133,7 @@ final class FindingTransitionManager
             }
 
             // Run repository validation
-            $this->validateRepository($root);
+            $this->validateRepository($root, $taskIdPattern);
         } catch (\Throwable $e) {
             // Rollback
             if (is_file($targetPath) && $targetPath !== $currentPath) {
@@ -143,11 +144,13 @@ final class FindingTransitionManager
         }
     }
 
-    private function validateRepository(string $root): void
+    private function validateRepository(string $root, ?string $taskIdPattern): void
     {
         // Re-validate all findings, proposals, and history
         $findingsById = [];
-        $findingValidator = new FindingValidator();
+        $findingValidator = $taskIdPattern === null
+            ? new FindingValidator()
+            : new FindingValidator(taskIdPattern: $taskIdPattern);
         foreach ($this->lifecycle->findingFiles($root) as $file) {
             $finding = $findingValidator->validateFile($file);
             $this->lifecycle->assertPathMatchesStatus($finding, $file, $root);
