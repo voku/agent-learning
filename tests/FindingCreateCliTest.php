@@ -316,15 +316,17 @@ final class FindingCreateCliTest extends TestCase
                 '--task-id-pattern', $pattern, '--conclusion', 'Observed behavior verified.'];
             [$transitionExit, $transitionOutput] = $this->runFindingCommand($root, 'finding-transition', $arguments);
             self::assertSame(0, $transitionExit, $transitionOutput);
-            /** @var array{path: string, status: string, validation_status: string} $transitioned */
+            /** @var array{status: string, validation_status: string} $transitioned */
             $transitioned = json_decode($transitionOutput, true, 512, JSON_THROW_ON_ERROR);
             self::assertSame('validated', $transitioned['status']);
             self::assertSame('validated', $transitioned['validation_status']);
             self::assertFileDoesNotExist($captured['path']);
-            $validatedBytes = file_get_contents($transitioned['path']);
+            $validatedPath = $root . '/findings/validated/' . $captured['id'] . '.json';
+            $validatedBytes = file_get_contents($validatedPath);
+            self::assertIsString($validatedBytes);
             [$noOpExit, $noOpOutput] = $this->runFindingCommand($root, 'finding-transition', $arguments);
             self::assertSame(0, $noOpExit, $noOpOutput);
-            self::assertSame($validatedBytes, file_get_contents($transitioned['path']));
+            self::assertSame($validatedBytes, file_get_contents($validatedPath));
         }
     }
 
