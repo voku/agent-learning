@@ -2,9 +2,12 @@
 
 ## [Unreleased]
 
+## [0.18.33] - 2026-10-11
+
 ### Added
 
-- The `agent-learning-consumer` skill gains "From validated Finding to applied memory or skill guidance": one ordered runbook (finding, prepare, agent-authored result, import, human approval, verbatim target edit, commit, validation JSON, reanchor, mark-applied). It records the three failures a first run hits (the result is not produced by `prepare`, `new` must appear verbatim in the target, a shared target needs re-anchoring before `mark-applied` when reviewed guidance still matches, or a reviewed REPLACE proposal and `--supersede` when guidance drifted) and says never to write guidance without the proposal path.
+- Expose `AppliedGuidanceMaintenanceInspector::inspect(beforeRoot, afterRoot, targetSourceRef)` and immutable `AppliedGuidanceMaintenanceEvidence`. The owner validates both independent Learning roots, rechecked target hashes and every applied proposal's preserved approval/application fields before projecting recorded reanchor attribution. Neither the hash nor `reanchored_by` is a semantic or human-review verdict. Focused PHPUnit/PHPStan regression coverage includes the real frozen `agent-loop#758` acceptance (two applied proposals), wrong existing targets, altered approval, wording/hash drift and legitimate same-second reanchors.
+- Document the finding-to-approved-and-applied-guidance runbook in the installed `agent-learning-consumer` skill.
 
 ## [0.18.32] - 2026-10-08
 
