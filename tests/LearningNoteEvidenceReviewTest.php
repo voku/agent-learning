@@ -14,6 +14,7 @@ use voku\AgentLearning\LearningNoteDraft;
 use voku\AgentLearning\LearningNoteEvidenceState;
 use voku\AgentLearning\LearningNoteRepositoryEvidence;
 use voku\AgentLearning\LearningNoteService;
+use voku\AgentLearning\ValidationException;
 
 final class LearningNoteEvidenceReviewTest extends TestCase
 {
@@ -157,5 +158,130 @@ final class LearningNoteEvidenceReviewTest extends TestCase
         self::assertSame(LearningNoteEvidenceState::SOURCE_MISSING, $missing->repositoryEvidence[0]->state);
 
         self::assertSame($beforeReview, file_get_contents($notePath));
+    }
+
+    public function testReanchorAcceptsOnlyAnIdenticalInProjectMoveWithoutPartialMutation(): void
+    {
+        $currentPath = $this->projectRoot . '/src/Current.php';
+        $driftPath = $this->projectRoot . '/src/Drift.php';
+        $currentSha = hash_file('sha256', $currentPath);
+        $driftSha = hash_file('sha256', $driftPath);
+        self::assertIsString($currentSha);
+        self::assertIsString($driftSha);
+
+        $service = new LearningNoteService();
+        $published = $service->publish(
+            $this->root,
+            new LearningNoteDraft(
+                sourceFindings: ['finding.2026-09-18.121001'],
+                sourceProposals: [],
+                tags: ['learning'],
+                repositoryEvidence: [
+                    new LearningNoteRepositoryEvidence('src/Current.php', $currentSha),
+                    new LearningNoteRepositoryEvidence('src/Drift.php', $driftSha),
+                ],
+                content: new LearningNoteContent(
+                    title: 'Re-anchor a moved evidence source',
+                    context: 'One evidence file moved without a content change.',
+                    guidance: 'Repair only an explicit content-identical path move.',
+                    whyItWorks: 'The owner preserves the byte-level evidence boundary.',
+                    whenToApply: 'When an inspected repository source moved unchanged.',
+                    whenNotToApply: 'When the source content changed or the move is uncertain.',
+                    verification: 'Verify the exact digest, source path, and project-root boundary.',
+                ),
+            ),
+            $this->projectRoot,
+        );
+
+        mkdir($this->projectRoot . '/moved');
+        self::assertTrue(rename($currentPath, $this->projectRoot . '/moved/Current.php'));
+        $reanchored = $service->reanchorEvidence(
+            $this->root,
+            $published->id,
+            'src/Current.php',
+            'moved/Current.php',
+            $this->projectRoot,
+        );
+        self::assertSame(LearningNoteEvidenceState::CURRENT, $reanchored->evidenceState);
+        $review = $service->reviewEvidence($this->root, $published->id, $this->projectRoot);
+        self::assertSame('moved/Current.php', $review->repositoryEvidence[0]->sourceRef);
+        self::assertSame(LearningNoteEvidenceState::CURRENT, $review->evidenceState);
+
+        $notePath = $this->root . '/notes/active/' . $published->id . '.json';
+        $beforeRejectedAttempt = file_get_contents($notePath);
+        self::assertIsString($beforeRejectedAttempt);
+
+        $this->assertReanchorRefused(
+            $service,
+            $published->id,
+            'moved/Current.php',
+            'moved/Current.php',
+        );
+        self::assertSame($beforeRejectedAttempt, file_get_contents($notePath));
+
+        $this->assertReanchorRefused(
+            $service,
+            $published->id,
+            'src/Unknown.php',
+            'src/Drift.php',
+        );
+        self::assertSame($beforeRejectedAttempt, file_get_contents($notePath));
+
+        $this->assertReanchorRefused(
+            $service,
+            $published->id,
+            'src/Drift.php',
+            'moved/Current.php',
+        );
+        self::assertSame($beforeRejectedAttempt, file_get_contents($notePath));
+
+        file_put_contents($this->projectRoot . '/moved/Changed.php', "<?php\n// changed\n");
+        $this->assertReanchorRefused(
+            $service,
+            $published->id,
+            'src/Drift.php',
+            'moved/Changed.php',
+        );
+        self::assertSame($beforeRejectedAttempt, file_get_contents($notePath));
+
+        $this->assertReanchorRefused(
+            $service,
+            $published->id,
+            'src/Drift.php',
+            'moved/Missing.php',
+        );
+        self::assertSame($beforeRejectedAttempt, file_get_contents($notePath));
+
+        $outside = $this->base . '/outside.php';
+        file_put_contents($outside, "<?php\n");
+        self::assertTrue(symlink($outside, $this->projectRoot . '/moved/Escape.php'));
+        $this->assertReanchorRefused(
+            $service,
+            $published->id,
+            'src/Drift.php',
+            'moved/Escape.php',
+        );
+        self::assertSame($beforeRejectedAttempt, file_get_contents($notePath));
+
+        $this->assertReanchorRefused(
+            $service,
+            $published->id,
+            'src/Drift.php',
+            '../outside.php',
+        );
+        self::assertSame($beforeRejectedAttempt, file_get_contents($notePath));
+    }
+
+    private function assertReanchorRefused(
+        LearningNoteService $service,
+        string $noteId,
+        string $from,
+        string $to,
+    ): void {
+        try {
+            $service->reanchorEvidence($this->root, $noteId, $from, $to, $this->projectRoot);
+            self::fail('Expected re-anchor to be rejected.');
+        } catch (ValidationException) {
+        }
     }
 }

@@ -34,6 +34,7 @@ The supported owner operations are:
 - `activeProjections()` — return compact typed read projections for sibling consumers;
 - `evidenceState()` — distinguish current evidence, changed evidence, missing sources, and notes without hashable repository evidence;
 - `reviewEvidence()` — return exact recorded/current repository-evidence hashes for a drifted active note without mutating it;
+- `reanchorEvidence()` — replace one explicit repository-evidence path only after an in-root target proves byte-identical to the recorded SHA-256;
 - `retire()` — explicitly retire a note while preserving lineage and reason.
 
 One active `LearningNote` owns one stable `pattern_key`. Later validated Findings with the same pattern update that note and accumulate source lineage, scope, tags, and repository evidence rather than creating competing active precedents.
@@ -71,6 +72,18 @@ vendor/bin/agent-learning-note retire \
 Repository evidence is project-relative and SHA-256 bound. Absolute paths and `..` traversal are rejected. When a referenced source changes, the note remains durable historical precedent but is reported as `review_needed`; drift alone never silently rewrites or retires the note.
 
 Use `agent-learning-note review` (or `LearningNoteService::reviewEvidence()`) to inspect each evidence source's recorded hash, current hash when present, and current/review-needed/source-missing state. The review is read-only. A changed hash still requires semantic inspection before the existing explicit `publish` or `retire` path is used; byte drift is never automatic permission to re-anchor.
+
+When an inspected source was moved without changing a byte, the narrow explicit re-anchor operation can replace one recorded path. It verifies that the target is an in-root regular file whose SHA-256 is **exactly** the recorded digest; a missing target, changed content, path traversal, symlink escape, duplicate evidence source, or same-path request fails without writing the note:
+
+```bash
+vendor/bin/agent-learning-note reanchor \
+  --root .agent-loop/learning \
+  learning-note.2026-08-31.abcdef \
+  --from shell/modules/context.sh \
+  --to .redpill/modules/context.sh
+```
+
+This only repairs physical provenance. It does not establish semantic equivalence for changed bytes, approve guidance, or retire a note.
 
 Configured durable state with an unsupported LearningNote schema fails explicitly. Derived consumers may rebuild their own context, but they must not reinterpret Learning-private storage.
 
