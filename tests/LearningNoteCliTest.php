@@ -102,6 +102,32 @@ final class LearningNoteCliTest extends TestCase
         );
         self::assertSame('review_needed', $reviewData['repository_evidence'][0]['state']);
         self::assertSame($beforeReview, file_get_contents($notePath));
+
+        file_put_contents($projectRoot . '/src/Example.php', "<?php\n");
+        mkdir($projectRoot . '/moved');
+        self::assertTrue(rename($projectRoot . '/src/Example.php', $projectRoot . '/moved/Example.php'));
+        $reanchor = $this->executeCli($root, [
+            'reanchor',
+            $published['id'],
+            '--from',
+            'src/Example.php',
+            '--to',
+            'moved/Example.php',
+        ]);
+        self::assertSame(0, $reanchor['exit_code'], $reanchor['output']);
+        $reanchored = json_decode($reanchor['output'], true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('current', $reanchored['evidence_state']);
+
+        $invalidReanchor = $this->executeCli($root, [
+            'reanchor',
+            $published['id'],
+            '--from',
+            'moved/Example.php',
+            '--to',
+            'moved/Missing.php',
+        ]);
+        self::assertSame(1, $invalidReanchor['exit_code']);
+        self::assertStringContainsString('target source is missing', $invalidReanchor['output']);
     }
 
     /**

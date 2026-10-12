@@ -205,6 +205,18 @@ The review is read-only and reports each evidence `source_ref`, recorded SHA-256
 
 Do not auto-re-anchor or auto-retire a note merely because evidence drifted. A changed hash proves changed bytes, not that the precedent is still semantically valid.
 
+If an inspected source was moved and the exact SHA-256 is unchanged, use the narrow owner command only with the literal old and new project-relative paths:
+
+```bash
+vendor/bin/agent-learning-note reanchor \
+  --root <learning-root> \
+  <learning-note-id> \
+  --from <old-source-ref> \
+  --to <new-source-ref>
+```
+
+The command rejects changed bytes, missing targets, duplicate source references, path traversal, and sources resolving outside the project root. It repairs provenance only; it does not approve the lesson or authorize changed evidence.
+
 ## Promotion boundary
 
 A LearningNote may reveal that repeated evidence deserves stronger durable treatment, but this skill must never:
