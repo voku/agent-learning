@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `corpus-analyze` derived its terminal Proposal counts and retirement reasons only from `history/*.jsonl`. A root whose `history/` is local-only (agent-loop gitignores it) therefore reported 0 acknowledged Proposals when 9 existed and classified a superseded retirement as `UNKNOWN_LEGACY_REASON`. Counts now come from the committed Proposal state, and the record's own `superseded_by`/`retired_at`/`acknowledged_at`/`reason` fill in when history is absent. History still takes precedence when present.
+
 ### Changed
 
 - `validate` now fails when approved or applied guidance names a project-local `php|bash|sh <script>` validation entry point that no longer exists. Recall already blocks compilation for any task selecting such guidance, so the break now surfaces in the change that removed or renamed the script instead of at the next `enter`.
