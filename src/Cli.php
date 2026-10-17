@@ -550,6 +550,7 @@ final class Cli
         $taskIdPattern = $this->stringOption($parsed['options'], 'task-id-pattern');
 
         $result = (new LearningRepositoryValidator($this->findingLifecycle))->validate($root, $taskIdPattern);
+        (new GuidanceValidationEntryPointValidator())->validate($root, $result->proposalsById);
 
         $this->write(
             'Validated agent learning root: ' . $result->root . "\n"

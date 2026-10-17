@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `validate` now fails when approved or applied guidance names a project-local `php|bash|sh <script>` validation entry point that no longer exists. Recall already blocks compilation for any task selecting such guidance, so the break now surfaces in the change that removed or renamed the script instead of at the next `enter`.
+
 ## [0.18.33] - 2026-10-11
 
 ### Added
