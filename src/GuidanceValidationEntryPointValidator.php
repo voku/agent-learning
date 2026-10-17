@@ -22,19 +22,18 @@ final readonly class GuidanceValidationEntryPointValidator
      */
     public function validate(string $root, array $proposalsById): void
     {
-        try {
-            $projectRoot = rtrim($this->rootResolver->resolve($root)->projectRoot, '/\\');
-        } catch (RuntimeException) {
-            return;
-        }
-
+        $projectRoot = null;
         foreach ($proposalsById as $proposal) {
             if ($proposal->status !== ProposalStatus::APPROVED && $proposal->status !== ProposalStatus::APPLIED) {
                 continue;
             }
             foreach ($proposal->validation as $command) {
                 $entryPoint = self::projectLocalEntryPoint($command);
-                if ($entryPoint !== null && !is_file($projectRoot . '/' . $entryPoint)) {
+                if ($entryPoint === null) {
+                    continue;
+                }
+                $projectRoot ??= $this->projectRoot($root, $proposal);
+                if (!is_file($projectRoot . '/' . $entryPoint)) {
                     throw new ValidationException(
                         $root,
                         null,
@@ -43,6 +42,15 @@ final readonly class GuidanceValidationEntryPointValidator
                     );
                 }
             }
+        }
+    }
+
+    private function projectRoot(string $root, Proposal $proposal): string
+    {
+        try {
+            return rtrim($this->rootResolver->resolve($root)->projectRoot, '/\\');
+        } catch (RuntimeException $exception) {
+            throw new ValidationException($root, null, $proposal->id, 'cannot resolve project root to check validation entry points: ' . $exception->getMessage());
         }
     }
 
