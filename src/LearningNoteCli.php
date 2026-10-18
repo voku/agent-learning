@@ -30,6 +30,7 @@ final readonly class LearningNoteCli
                 'publish' => $this->publish($argv),
                 'status' => $this->status($argv),
                 'review' => $this->review($argv),
+                'reanchor' => $this->reanchor($argv),
                 'retire' => $this->retire($argv),
                 'help', '--help', '-h' => $this->help(),
                 default => throw new InvalidArgumentException('Unknown LearningNote command: ' . $command),
@@ -148,13 +149,43 @@ final readonly class LearningNoteCli
         return 0;
     }
 
+    /** @param list<string> $tokens */
+    private function reanchor(array $tokens): int
+    {
+        [$options, $arguments] = $this->parseOptions($tokens);
+        $id = $arguments[0] ?? null;
+        if (!is_string($id) || trim($id) === '') {
+            throw new InvalidArgumentException('reanchor requires a LearningNote ID');
+        }
+        if (count($arguments) !== 1) {
+            throw new InvalidArgumentException('reanchor accepts exactly one LearningNote ID');
+        }
+        $from = $this->single($options, 'from');
+        $to = $this->single($options, 'to');
+        if ($from === null || $to === null) {
+            throw new InvalidArgumentException('reanchor requires --from PATH and --to PATH');
+        }
+        $root = $this->pathResolver->resolve($this->single($options, 'root'));
+        $projection = $this->service->reanchorEvidence(
+            $root,
+            trim($id),
+            $from,
+            $to,
+            $this->single($options, 'project-root'),
+        );
+        $this->writeJson($projection->toArray());
+
+        return 0;
+    }
+
     private function help(): int
     {
-        fwrite(STDOUT, "Usage: agent-learning-note <prepare|publish|status|review|retire> [options]\n\n");
+        fwrite(STDOUT, "Usage: agent-learning-note <prepare|publish|status|review|reanchor|retire> [options]\n\n");
         fwrite(STDOUT, "  prepare --root PATH --finding ID [--finding ID] [--project-root PATH]\n");
         fwrite(STDOUT, "  publish --root PATH --input candidate.json [--project-root PATH]\n");
         fwrite(STDOUT, "  status --root PATH [--project-root PATH]\n");
         fwrite(STDOUT, "  review --root PATH LEARNING_NOTE_ID [--project-root PATH]\n");
+        fwrite(STDOUT, "  reanchor --root PATH LEARNING_NOTE_ID --from PATH --to PATH [--project-root PATH]\n");
         fwrite(STDOUT, "  retire --root PATH LEARNING_NOTE_ID --reason TEXT\n");
 
         return 0;

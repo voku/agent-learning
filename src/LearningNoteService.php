@@ -326,6 +326,86 @@ final readonly class LearningNoteService
         return $this->reviewEvidenceForNote($note, $projectRoot);
     }
 
+    /**
+     * Replace one active note's repository-evidence path after a content-identical move.
+     *
+     * This is deliberately narrower than publishing a revised note: the replacement
+     * file must resolve inside the project root and retain the exact recorded bytes.
+     * A changed source remains review-needed and needs the normal authoring review.
+     */
+    public function reanchorEvidence(
+        string $root,
+        string $id,
+        string $fromSourceRef,
+        string $toSourceRef,
+        ?string $projectRoot = null,
+    ): LearningNoteProjection {
+        $note = $this->noteRepository->find($root, $id);
+        if ($note === null || $note->status !== LearningNoteStatus::ACTIVE) {
+            throw new ValidationException($root, null, $id, 'active LearningNote not found');
+        }
+        $this->assertStoredLineage($root, $note);
+        $projectRoot ??= (new LearningProjectPaths())->projectRootForLearningRoot($root);
+
+        $placeholderHash = str_repeat('0', 64);
+        $from = new LearningNoteRepositoryEvidence($fromSourceRef, $placeholderHash);
+        $to = new LearningNoteRepositoryEvidence($toSourceRef, $placeholderHash);
+        if ($from->sourceRef === $to->sourceRef) {
+            throw new ValidationException($root, null, $id, 'LearningNote evidence re-anchor source and target must differ');
+        }
+
+        $reanchoredEvidence = [];
+        $replaced = false;
+        foreach ($note->repositoryEvidence as $evidence) {
+            if ($evidence->sourceRef !== $from->sourceRef) {
+                $reanchoredEvidence[] = $evidence;
+                continue;
+            }
+
+            $replacement = new LearningNoteRepositoryEvidence($to->sourceRef, $evidence->sha256);
+            $actualHash = $this->currentEvidenceHash($projectRoot, $replacement, $id);
+            if (!hash_equals($evidence->sha256, $actualHash)) {
+                throw new ValidationException(
+                    $root,
+                    null,
+                    $id,
+                    'LearningNote evidence re-anchor target content does not match the recorded SHA-256',
+                );
+            }
+            $reanchoredEvidence[] = $replacement;
+            $replaced = true;
+        }
+        if (!$replaced) {
+            throw new ValidationException($root, null, $id, 'LearningNote evidence re-anchor source is not recorded on the active note');
+        }
+
+        $sourceRefs = array_map(static fn (LearningNoteRepositoryEvidence $evidence): string => $evidence->sourceRef, $reanchoredEvidence);
+        if (count($sourceRefs) !== count(array_unique($sourceRefs))) {
+            throw new ValidationException($root, null, $id, 'LearningNote evidence re-anchor target duplicates an existing source_ref');
+        }
+        usort($reanchoredEvidence, static fn (LearningNoteRepositoryEvidence $left, LearningNoteRepositoryEvidence $right): int => $left->sourceRef <=> $right->sourceRef);
+
+        $reanchored = new LearningNote(
+            id: $note->id,
+            patternKey: $note->patternKey,
+            status: $note->status,
+            scope: $note->scope,
+            tags: $note->tags,
+            sourceFindings: $note->sourceFindings,
+            sourceProposals: $note->sourceProposals,
+            validationCase: $note->validationCase,
+            repositoryEvidence: $reanchoredEvidence,
+            content: $note->content,
+            createdAt: $note->createdAt,
+            updatedAt: (new DateTimeImmutable('now'))->format(DateTimeInterface::ATOM),
+        );
+        $this->redactionGuard->assertSafeValue($reanchored->toArray(), 'LearningNote ' . $id, null, $id);
+        $this->noteRepository->publish($root, $reanchored);
+        ($this->lineageService ?? new LearningLineageService())->rebuild($root, $projectRoot);
+
+        return $this->project($reanchored, $projectRoot);
+    }
+
     public function evidenceState(LearningNote $note, string $projectRoot): LearningNoteEvidenceState
     {
         return $this->reviewEvidenceForNote($note, $projectRoot)->evidenceState;
@@ -415,6 +495,36 @@ final readonly class LearningNoteService
             evidenceState: $overallState,
             repositoryEvidence: $review,
         );
+    }
+
+    private function currentEvidenceHash(
+        string $projectRoot,
+        LearningNoteRepositoryEvidence $evidence,
+        string $noteId,
+    ): string {
+        $realProjectRoot = realpath($projectRoot);
+        if ($realProjectRoot === false || !is_dir($realProjectRoot)) {
+            throw new ValidationException($projectRoot, null, $noteId, 'LearningNote project root does not exist');
+        }
+        $path = rtrim($projectRoot, '/\\') . '/' . $evidence->sourceRef;
+        if (!is_file($path)) {
+            throw new ValidationException($path, null, $noteId, 'LearningNote evidence re-anchor target source is missing');
+        }
+        $realSource = realpath($path);
+        if ($realSource === false) {
+            throw new ValidationException($path, null, $noteId, 'LearningNote evidence re-anchor target source is missing');
+        }
+        $projectPrefix = rtrim(str_replace('\\', '/', $realProjectRoot), '/') . '/';
+        $normalizedSource = str_replace('\\', '/', $realSource);
+        if (!str_starts_with($normalizedSource, $projectPrefix)) {
+            throw new ValidationException($path, null, $noteId, 'LearningNote repository evidence resolves outside project root');
+        }
+        $hash = hash_file('sha256', $realSource);
+        if (!is_string($hash)) {
+            throw new ValidationException($path, null, $noteId, 'LearningNote evidence re-anchor target source is unreadable');
+        }
+
+        return $hash;
     }
 
     /**
