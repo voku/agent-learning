@@ -52,6 +52,32 @@ final class CorpusAnalyticsServiceTest extends TestCase
         self::assertStringContainsString('Compiled Down to Active Constraint: 1', $outputText);
     }
 
+    public function testTerminalLifecycleIsDerivedFromCommittedProposalStateWithoutHistoryFiles(): void
+    {
+        $root = sys_get_temp_dir() . '/agent-learning-corpus-nohistory-' . bin2hex(random_bytes(8)) . '/.agent-loop/learning';
+        foreach (['retired', 'acknowledged', 'rejected', 'approved'] as $directory) {
+            mkdir($root . '/proposals/' . $directory, 0777, true);
+        }
+        $records = [
+            'retired' => ['id' => 'proposal.2026-06-05.001', 'status' => 'retired', 'reason' => 'Superseded by proposal.2026-06-09.001', 'superseded_by' => 'proposal.2026-06-09.001', 'retired_at' => '2026-06-10T10:00:00+00:00'],
+            'acknowledged' => ['id' => 'proposal.2026-06-06.001', 'status' => 'acknowledged', 'reason' => 'Already governed elsewhere.', 'acknowledged_at' => '2026-06-07T10:00:00+00:00'],
+            'rejected' => ['id' => 'proposal.2026-06-07.001', 'status' => 'rejected', 'reason' => 'Too broad.'],
+            'approved' => ['id' => 'proposal.2026-06-09.001', 'status' => 'approved', 'reason' => 'Active.'],
+        ];
+        foreach ($records as $directory => $record) {
+            $record += ['action' => 'ADD', 'created_at' => '2026-06-05T10:00:00+00:00', 'source_findings' => []];
+            file_put_contents($root . '/proposals/' . $directory . '/' . $record['id'] . '.json', json_encode($record, JSON_THROW_ON_ERROR));
+        }
+
+        $result = (new CorpusAnalyticsService())->analyze($root);
+
+        self::assertSame(1, $result->lifecycleBreakdown['terminal_proposals']['retired']);
+        self::assertSame(1, $result->lifecycleBreakdown['terminal_proposals']['acknowledged_no_durable_learning']);
+        self::assertSame(1, $result->lifecycleBreakdown['terminal_proposals']['rejected_before_activation']);
+        self::assertSame(1, $result->lifecycleBreakdown['retired_semantic_buckets']['SUPERSEDED_BY_PROPOSAL']);
+        self::assertSame(0, $result->lifecycleBreakdown['retired_semantic_buckets']['UNKNOWN_LEGACY_REASON']);
+    }
+
     private function createFixtureLearningRoot(): string
     {
         $root = sys_get_temp_dir() . '/agent-learning-corpus-test-' . bin2hex(random_bytes(8)) . '/.agent-loop/learning';

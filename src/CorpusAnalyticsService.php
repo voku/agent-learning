@@ -109,7 +109,7 @@ final class CorpusAnalyticsService
                     'source_findings' => $sourceFindings,
                     'reason' => is_string($data['reason'] ?? null) ? (string)$data['reason'] : '',
                     'superseded_by' => is_string($data['superseded_by'] ?? null) ? (string)$data['superseded_by'] : null,
-                    'terminal_info' => $retiredHistory[$id] ?? $rejectedHistory[$id] ?? $acknowledgedHistory[$id] ?? null,
+                    'terminal_info' => $retiredHistory[$id] ?? $rejectedHistory[$id] ?? $acknowledgedHistory[$id] ?? $this->terminalInfoFromRecord($data),
                 ];
 
                 foreach ($sourceFindings as $fid) {
@@ -326,9 +326,9 @@ final class CorpusAnalyticsService
                 'candidate' => count(array_filter($proposals, static fn (array $p): bool => $p['status'] === 'candidate')),
             ],
             'terminal_proposals' => [
-                'rejected_before_activation' => count($rejectedHistory),
-                'acknowledged_no_durable_learning' => count($acknowledgedHistory),
-                'retired' => count($retiredHistory),
+                'rejected_before_activation' => $this->countByStatus($proposals, 'rejected'),
+                'acknowledged_no_durable_learning' => $this->countByStatus($proposals, 'acknowledged'),
+                'retired' => $this->countByStatus($proposals, 'retired'),
             ],
             'retired_semantic_buckets' => [
                 'CAPTURED_IN_TARGET_HOME' => $capturedInTargetCount,
@@ -388,6 +388,44 @@ final class CorpusAnalyticsService
             lifecycleBreakdown: $lifecycleBreakdown,
             consolidation: $consolidation,
         );
+    }
+
+    /**
+     * Terminal facts that the committed proposal record itself carries, so a root
+     * whose `history/` directory is local-only (for example gitignored) still
+     * classifies its retired, rejected and acknowledged proposals.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>|null
+     */
+    private function terminalInfoFromRecord(array $data): ?array
+    {
+        $status = $data['status'] ?? null;
+        if ($status !== 'retired' && $status !== 'rejected' && $status !== 'acknowledged') {
+            return null;
+        }
+
+        $info = [];
+        foreach (['retired_at', 'acknowledged_at', 'superseded_by'] as $key) {
+            if (is_string($data[$key] ?? null)) {
+                $info[$key] = $data[$key];
+            }
+        }
+        if ($status !== 'acknowledged' && is_string($data['reason'] ?? null)) {
+            // Retirement and rejection overwrite `reason` with the decision reason;
+            // an acknowledgement keeps the proposal's own reason, which is not one.
+            $info['reason'] = $data['reason'];
+        }
+
+        return $info;
+    }
+
+    /**
+     * @param array<string, array{status: string}> $proposals
+     */
+    private function countByStatus(array $proposals, string $status): int
+    {
+        return count(array_filter($proposals, static fn (array $p): bool => $p['status'] === $status));
     }
 
     /**

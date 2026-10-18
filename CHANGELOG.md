@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `corpus-analyze` derived its terminal Proposal counts and retirement reasons only from `history/*.jsonl`. A root whose `history/` is local-only (agent-loop gitignores it) therefore reported 0 acknowledged Proposals when 9 existed and classified a superseded retirement as `UNKNOWN_LEGACY_REASON`. Counts now come from the committed Proposal state, and the record's own `superseded_by`/`retired_at`/`acknowledged_at`/`reason` fill in when history is absent. History still takes precedence when present.
+
 ### Changed
 
 - `agent-learning-note publish` now rejects a candidate that carries fields the owner does not accept (for example `scope`, `pattern_key`, `validation_case`) instead of silently ignoring them. A note's scope, pattern key and validation case are derived from its source Findings; an ignored author-supplied `scope` produced a note that did not match the files the author intended.
