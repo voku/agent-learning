@@ -9,6 +9,9 @@ use Throwable;
 
 final readonly class LearningNoteCli
 {
+    /** Public authoring input of `publish`; everything else is owner-derived. */
+    private const array CANDIDATE_FIELDS = ['id', 'source_findings', 'source_proposals', 'tags', 'repository_evidence', 'content'];
+
     public function __construct(
         private PathResolver $pathResolver = new PathResolver(),
         private LearningNoteService $service = new LearningNoteService(),
@@ -162,6 +165,17 @@ final readonly class LearningNoteCli
      */
     private function draft(array $record, string $file): LearningNoteDraft
     {
+        $unknown = array_values(array_diff(array_keys($record), self::CANDIDATE_FIELDS));
+        if ($unknown !== []) {
+            sort($unknown, SORT_STRING);
+            throw new ValidationException(
+                $file,
+                null,
+                null,
+                'candidate contains fields the owner does not accept: ' . implode(', ', $unknown)
+                . '; lifecycle, scope, pattern_key and validation case are derived from the source Findings',
+            );
+        }
         $sourceFindings = $this->stringList($record, 'source_findings', $file, true);
         $sourceProposals = $this->stringList($record, 'source_proposals', $file, false);
         $tags = $this->stringList($record, 'tags', $file, false);

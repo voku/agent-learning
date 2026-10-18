@@ -10,41 +10,7 @@ final class LearningNoteCliTest extends TestCase
 {
     public function testPreparePublishStatusAndReviewUseOwnerContract(): void
     {
-        $base = sys_get_temp_dir() . '/learning-note-cli-' . bin2hex(random_bytes(6));
-        $root = $base . '/learning';
-        $projectRoot = $base . '/project';
-        mkdir($root . '/findings/validated', 0777, true);
-        mkdir($projectRoot . '/src', 0777, true);
-        file_put_contents($projectRoot . '/src/Example.php', "<?php\n");
-        file_put_contents($root . '/config.json', json_encode([
-            'schema_version' => '1.0',
-            'project_root' => '../project',
-            'constraint_generation_dir' => 'constraint-generation',
-            'active_constraints_dir' => 'constraints/active',
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
-        file_put_contents($root . '/findings/validated/finding.2026-08-31.001.json', json_encode([
-            'id' => 'finding.2026-08-31.001',
-            'task_id' => 'TEST-54',
-            'session' => 'session_TEST-54',
-            'created_at' => '2026-08-31T20:00:00+00:00',
-            'created_by' => 'test',
-            'scope' => ['src/'],
-            'observation' => 'A consumer reconstructed owner behavior.',
-            'evidence' => [['type' => 'manual_verification', 'summary' => 'Reproduced in the fixture.']],
-            'hypothesis' => 'The missing owner boundary causes drift.',
-            'validated_conclusion' => 'The owner boundary must remain explicit.',
-            'confidence' => 'high',
-            'validation_status' => 'validated',
-            'status' => 'validated',
-            'sensitivity' => 'public',
-            'classification' => 'ADD_LEARNING_NOTE',
-            'pattern_key' => 'workflow.owner_boundary',
-            'validation_case' => [
-                'given' => 'A later related task.',
-                'when' => 'The same owner boundary applies.',
-                'then' => 'The prior case is available as precedent.',
-            ],
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
+        ['base' => $base, 'root' => $root, 'projectRoot' => $projectRoot] = $this->seedLearningRoot();
 
         $prepare = $this->executeCli($root, ['prepare', '--finding', 'finding.2026-08-31.001']);
         self::assertSame(0, $prepare['exit_code'], $prepare['output']);
@@ -102,6 +68,77 @@ final class LearningNoteCliTest extends TestCase
         );
         self::assertSame('review_needed', $reviewData['repository_evidence'][0]['state']);
         self::assertSame($beforeReview, file_get_contents($notePath));
+    }
+
+    public function testPublishRejectsCandidateFieldsTheOwnerWouldIgnore(): void
+    {
+        ['base' => $base, 'root' => $root] = $this->seedLearningRoot();
+        $candidate = $base . '/candidate.json';
+        file_put_contents($candidate, json_encode([
+            'source_findings' => ['finding.2026-08-31.001'],
+            'scope' => ['src/Elsewhere.php'],
+            'pattern_key' => 'author.chosen.key',
+            'content' => [
+                'title' => 'Owner boundary precedent',
+                'context' => 'c',
+                'guidance' => 'g',
+                'why_it_works' => 'w',
+                'when_to_apply' => 'a',
+                'when_not_to_apply' => 'n',
+                'verification' => 'v',
+            ],
+        ], JSON_THROW_ON_ERROR));
+
+        $publish = $this->executeCli($root, ['publish', '--input', $candidate]);
+
+        self::assertNotSame(0, $publish['exit_code'], $publish['output']);
+        self::assertStringContainsString('pattern_key, scope', $publish['output']);
+        self::assertStringContainsString('derived from the source Findings', $publish['output']);
+        self::assertSame([], glob($root . '/notes/active/*.json') ?: []);
+    }
+
+    /**
+     * @return array{base: string, root: string, projectRoot: string}
+     */
+    private function seedLearningRoot(): array
+    {
+        $base = sys_get_temp_dir() . '/learning-note-cli-' . bin2hex(random_bytes(6));
+        $root = $base . '/learning';
+        $projectRoot = $base . '/project';
+        mkdir($root . '/findings/validated', 0777, true);
+        mkdir($projectRoot . '/src', 0777, true);
+        file_put_contents($projectRoot . '/src/Example.php', "<?php\n");
+        file_put_contents($root . '/config.json', json_encode([
+            'schema_version' => '1.0',
+            'project_root' => '../project',
+            'constraint_generation_dir' => 'constraint-generation',
+            'active_constraints_dir' => 'constraints/active',
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
+        file_put_contents($root . '/findings/validated/finding.2026-08-31.001.json', json_encode([
+            'id' => 'finding.2026-08-31.001',
+            'task_id' => 'TEST-54',
+            'session' => 'session_TEST-54',
+            'created_at' => '2026-08-31T20:00:00+00:00',
+            'created_by' => 'test',
+            'scope' => ['src/'],
+            'observation' => 'A consumer reconstructed owner behavior.',
+            'evidence' => [['type' => 'manual_verification', 'summary' => 'Reproduced in the fixture.']],
+            'hypothesis' => 'The missing owner boundary causes drift.',
+            'validated_conclusion' => 'The owner boundary must remain explicit.',
+            'confidence' => 'high',
+            'validation_status' => 'validated',
+            'status' => 'validated',
+            'sensitivity' => 'public',
+            'classification' => 'ADD_LEARNING_NOTE',
+            'pattern_key' => 'workflow.owner_boundary',
+            'validation_case' => [
+                'given' => 'A later related task.',
+                'when' => 'The same owner boundary applies.',
+                'then' => 'The prior case is available as precedent.',
+            ],
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n");
+
+        return ['base' => $base, 'root' => $root, 'projectRoot' => $projectRoot];
     }
 
     /**
