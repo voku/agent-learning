@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.18.34] - 2026-10-19
+
 ### Fixed
 
 - Finding validation now accepts numeric governed workflow task ids such as `805`, so Learning Findings can retain exact lineage to numeric Loop Runs.
@@ -11,8 +13,6 @@
 ### Changed
 
 - `agent-learning-note publish` now rejects a candidate that carries fields the owner does not accept (for example `scope`, `pattern_key`, `validation_case`) instead of silently ignoring them. A note's scope, pattern key and validation case are derived from its source Findings; an ignored author-supplied `scope` produced a note that did not match the files the author intended.
-
-### Changed
 
 - `validate` now fails when approved or applied guidance names a project-local `php|bash|sh <script>` validation entry point that no longer exists. Recall already blocks compilation for any task selecting such guidance, so the break now surfaces in the change that removed or renamed the script instead of at the next `enter`.
 
