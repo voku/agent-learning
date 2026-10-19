@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Finding validation now accepts numeric governed workflow task ids such as `805`, so Learning Findings can retain exact lineage to numeric Loop Runs.
+
 - `corpus-analyze` derived its terminal Proposal counts and retirement reasons only from `history/*.jsonl`. A root whose `history/` is local-only (agent-loop gitignores it) therefore reported 0 acknowledged Proposals when 9 existed and classified a superseded retirement as `UNKNOWN_LEGACY_REASON`. Counts now come from the committed Proposal state, and the record's own `superseded_by`/`retired_at`/`acknowledged_at`/`reason` fill in when history is absent. History still takes precedence when present.
 
 ### Changed
