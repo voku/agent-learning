@@ -70,6 +70,7 @@ final class FindingValidatorTest extends TestCase
     /** @return iterable<string, array{string}> */
     public static function governedWorkflowTaskIds(): iterable
     {
+        yield 'numeric workflow task id' => ['805'];
         yield 'lowercase slice' => ['roles-impact-approver-view-001'];
         yield 'shortest real id' => ['roles-v2-foundation'];
         yield 'mixed case prefix' => ['LOCAL-m365-external-mail-suffix-employee-flag'];
@@ -97,6 +98,7 @@ final class FindingValidatorTest extends TestCase
         yield 'lowercase ticket key' => ['project-123'];
         yield 'single word' => ['refactor'];
         yield 'two segments only' => ['some-task'];
+        yield 'numeric prefix with suffix' => ['805-task'];
         yield 'leading hyphen' => ['-roles-impact-001'];
         yield 'whitespace' => ['roles impact 001'];
     }

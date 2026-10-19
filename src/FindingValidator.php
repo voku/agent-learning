@@ -25,13 +25,13 @@ final class FindingValidator
         private readonly FindingParser $parser = new FindingParser(),
         private readonly EvidenceValidator $evidenceValidator = new EvidenceValidator(),
         private readonly RedactionGuard $redactionGuard = new RedactionGuard(),
-        // Three accepted shapes: a ticket key (ITPNG-426), an explicit TODO
-        // reference (TODO@agent-loop/map-artifact-layout), and a governed
-        // workflow task id (roles-impact-approver-view-001). The last one needs
-        // at least three hyphen-separated segments so a descriptive work slug
-        // stays distinguishable from a malformed ticket key such as
-        // "project-123", which remains rejected.
-        private readonly string $taskIdPattern = '/^(?:[A-Z][A-Z0-9_-]*-\d+|TODO@[\w:\/.-]+|[A-Za-z0-9][A-Za-z0-9._]*(?:-[A-Za-z0-9._]+){2,})$/',
+        // Accepted shapes include ticket keys (ITPNG-426), numeric governed
+        // workflow task ids (805), explicit TODO references
+        // (TODO@agent-loop/map-artifact-layout), and descriptive governed
+        // workflow task ids (roles-impact-approver-view-001). Descriptive ids
+        // need at least three hyphen-separated segments so a work slug stays
+        // distinguishable from malformed ticket keys such as "project-123".
+        private readonly string $taskIdPattern = '/^(?:[A-Z][A-Z0-9_-]*-\d+|[0-9]+|TODO@[\w:\/.-]+|[A-Za-z0-9][A-Za-z0-9._]*(?:-[A-Za-z0-9._]+){2,})$/',
     ) {
     }
 
