@@ -310,8 +310,9 @@ final class ProposalReanchorTest extends TestCase
     {
         $deepened = 'Keep the packaged entrypoint callable and covered by a smoke test.';
         $replacementId = 'proposal.2026-06-09.001';
-        $this->writeMemory($deepened, self::SECOND_RULE);
         $this->writeCandidateReplacement($replacementId, self::FIRST_RULE, self::FIRST_RULE, $deepened);
+        (new ProposalTransitionManager())->approve($this->root, $replacementId, 'maintainer');
+        $this->writeMemory($deepened, self::SECOND_RULE);
 
         try {
             (new ProposalTransitionManager())->reanchorTarget($this->root, 'MEMORY.md', 'lars', 'Deepened row.');
@@ -370,6 +371,33 @@ final class ProposalReanchorTest extends TestCase
         );
     }
 
+    public function testAnUnapprovedReplacementCannotRetireAnAppliedProof(): void
+    {
+        $replacementId = 'proposal.2026-06-09.001';
+        $this->writeCandidateReplacement($replacementId, self::FIRST_RULE, self::FIRST_RULE, 'Replacement guidance.');
+        $this->writeMemory('Replacement guidance.', self::SECOND_RULE);
+        $appliedPath = $this->root . '/proposals/applied/' . self::FIRST_ID . '.json';
+        $before = (string) file_get_contents($appliedPath);
+
+        try {
+            (new ProposalTransitionManager())->reanchorTarget(
+                $this->root,
+                'MEMORY.md',
+                'lars',
+                'Must not retire guidance without approval.',
+                [self::FIRST_ID => $replacementId],
+            );
+            self::fail('An unapproved replacement must not retire an applied proof.');
+        } catch (ValidationException $exception) {
+            self::assertStringContainsString('approved REPLACE', $exception->getMessage());
+        }
+
+        self::assertSame($before, (string) file_get_contents($appliedPath));
+        self::assertFileDoesNotExist($this->root . '/proposals/retired/' . self::FIRST_ID . '.json');
+        self::assertFileDoesNotExist($this->root . '/history/retired-proposals.jsonl');
+        self::assertFileDoesNotExist($this->root . '/history/reanchored-proposals.jsonl');
+    }
+
     public function testASupersessionMustNameAnAppliedProofOnTheTarget(): void
     {
         $this->writeMemory(self::FIRST_RULE, self::SECOND_RULE, 'An unrelated row moved home.');
@@ -397,11 +425,12 @@ final class ProposalReanchorTest extends TestCase
     public function testTheReplacementMustNameTheSupersededTarget(): void
     {
         $deepened = 'Keep the packaged entrypoint callable and covered by a smoke test.';
-        $this->writeMemory($deepened, self::SECOND_RULE);
         $this->writeCandidateReplacement('proposal.2026-06-09.001', 'An unrelated target', self::FIRST_RULE, $deepened);
+        (new ProposalTransitionManager())->approve($this->root, 'proposal.2026-06-09.001', 'maintainer');
+        $this->writeMemory($deepened, self::SECOND_RULE);
 
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessageMatches('/must be active and name the same target/');
+        $this->expectExceptionMessageMatches('/approved REPLACE on the same target/');
 
         (new ProposalTransitionManager())->reanchorTarget(
             $this->root,
