@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.18.35] - 2026-10-20
+
 ### Fixed
 
 - Require a previously approved or applied REPLACE with the exact proposal identity, target and guidance type before a reanchor supersession can retire applied guidance. Reject candidate and mismatched approvals, preserve transactional rollback, and align the consumer recovery instructions with approval before target edits and supersession (#177, superseding #176).
