@@ -86,4 +86,13 @@ final class LearningNoteSkillTest extends TestCase
         self::assertStringContainsString('fails closed if any applied guidance on the file is missing', $consumer);
         self::assertStringContainsString('If the reviewed guidance itself changed or disappeared, do **not** re-anchor it', $consumer);
     }
+    public function testConsumerSkillRequiresApprovalBeforeSupersessionReanchor(): void
+    {
+        $consumer = (string) file_get_contents(__DIR__ . '/../resources/skills/agent-learning-consumer/SKILL.md');
+
+        self::assertStringContainsString("obtain a named human's approval **before editing or committing the target**", $consumer);
+        self::assertStringContainsString('Apply the already approved replacement only after reanchoring', $consumer);
+        self::assertStringNotContainsString('approve and apply the replacement afterwards', $consumer);
+    }
+
 }
