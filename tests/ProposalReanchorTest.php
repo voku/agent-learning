@@ -6,8 +6,10 @@ namespace voku\AgentLearning\Tests;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use voku\AgentLearning\Action;
 use voku\AgentLearning\AppliedGuidanceTargetValidator;
 use voku\AgentLearning\DecisionHistoryValidator;
+use voku\AgentLearning\GuidanceType;
 use voku\AgentLearning\ProposalParser;
 use voku\AgentLearning\ProposalRepository;
 use voku\AgentLearning\ProposalTransitionManager;
@@ -325,7 +327,7 @@ final class ProposalReanchorTest extends TestCase
             $this->root,
             'MEMORY.md',
             'lars',
-            'The first row was deepened; its replacement is under review.',
+            'The first row was deepened under the approved replacement.',
             [self::FIRST_ID => $replacementId],
         );
 
@@ -369,6 +371,21 @@ final class ProposalReanchorTest extends TestCase
             $this->root,
             (new ProposalRepository())->loadAll($this->root, []),
         );
+        $validationFile = $this->root . '/replacement-validation.json';
+        file_put_contents($validationFile, json_encode([
+            'command' => 'composer ci',
+            'status' => 'passed',
+            'exit_code' => 0,
+            'commit' => 'replacement-commit',
+            'target_source_ref' => 'MEMORY.md',
+            'target_content_hash' => $this->hashMemory(),
+            'summary' => 'Fixture replacement application evidence.',
+        ], JSON_THROW_ON_ERROR));
+        (new ProposalTransitionManager())->apply($this->root, $replacementId, 'implementer', 'replacement-commit', $validationFile);
+        $applied = (new ProposalParser())->parseFile($this->root . '/proposals/applied/' . $replacementId . '.json');
+        self::assertSame('applied', $applied->status->value);
+        self::assertSame('maintainer', $applied->approvedBy);
+        self::assertSame($deepened, $applied->new);
     }
 
     public function testAnUnapprovedReplacementCannotRetireAnAppliedProof(): void
@@ -422,6 +439,94 @@ final class ProposalReanchorTest extends TestCase
         self::assertFileDoesNotExist($this->root . '/history/retired-proposals.jsonl');
     }
 
+    public function testApprovalForAnotherGuidanceTypeCannotRetireAMemoryProof(): void
+    {
+        $id = 'proposal.2026-06-09.001';
+        $this->writeCandidateReplacement($id, self::FIRST_RULE, self::FIRST_RULE, 'A skill replacement.', GuidanceType::SKILL);
+        (new ProposalTransitionManager())->approve($this->root, $id, 'maintainer');
+        $this->writeMemory('A skill replacement.', self::SECOND_RULE);
+        $before = (string) file_get_contents($this->root . '/proposals/applied/' . self::FIRST_ID . '.json');
+
+        try {
+            (new ProposalTransitionManager())->reanchorTarget($this->root, 'MEMORY.md', 'lars', 'Approval belongs to a different guidance type.', [self::FIRST_ID => $id]);
+            self::fail('Skill approval must not authorize retirement of memory guidance.');
+        } catch (ValidationException $exception) {
+            self::assertStringContainsString('same target', $exception->getMessage());
+        }
+
+        self::assertSame($before, file_get_contents($this->root . '/proposals/applied/' . self::FIRST_ID . '.json'));
+        self::assertFileDoesNotExist($this->root . '/proposals/retired/' . self::FIRST_ID . '.json');
+        self::assertFileDoesNotExist($this->root . '/history/retired-proposals.jsonl');
+        self::assertFileDoesNotExist($this->root . '/history/reanchored-proposals.jsonl');
+    }
+
+    public function testReplacementApprovalCannotBeBorrowedThroughAnotherProposalFilename(): void
+    {
+        $approvedId = 'proposal.2026-06-09.001';
+        $aliasId = 'proposal.2026-06-09.002';
+        $this->writeCandidateReplacement($approvedId, self::FIRST_RULE, self::FIRST_RULE, 'Replacement guidance.');
+        (new ProposalTransitionManager())->approve($this->root, $approvedId, 'maintainer');
+        rename($this->root . '/proposals/approved/' . $approvedId . '.json', $this->root . '/proposals/approved/' . $aliasId . '.json');
+        $this->writeMemory('Replacement guidance.', self::SECOND_RULE);
+        $before = (string) file_get_contents($this->root . '/proposals/applied/' . self::FIRST_ID . '.json');
+
+        try {
+            (new ProposalTransitionManager())->reanchorTarget($this->root, 'MEMORY.md', 'lars', 'The mapping must identify the approved record.', [self::FIRST_ID => $aliasId]);
+            self::fail('A different proposal filename must not borrow another proposal approval.');
+        } catch (ValidationException $exception) {
+            self::assertStringContainsString('superseding proposal', $exception->getMessage());
+        }
+
+        self::assertSame($before, file_get_contents($this->root . '/proposals/applied/' . self::FIRST_ID . '.json'));
+        self::assertFileDoesNotExist($this->root . '/proposals/retired/' . self::FIRST_ID . '.json');
+        self::assertFileDoesNotExist($this->root . '/history/retired-proposals.jsonl');
+        self::assertFileDoesNotExist($this->root . '/history/reanchored-proposals.jsonl');
+    }
+
+    public function testAnApprovedAddCannotAuthorizeReplacementRetirement(): void
+    {
+        $id = 'proposal.2026-06-09.001';
+        $this->writeCandidateReplacement($id, self::FIRST_RULE, self::FIRST_RULE, 'Added guidance.', action: Action::ADD);
+        (new ProposalTransitionManager())->approve($this->root, $id, 'maintainer');
+        $this->writeMemory('Added guidance.', self::SECOND_RULE);
+        $before = $this->recordSnapshot();
+
+        try {
+            (new ProposalTransitionManager())->reanchorTarget($this->root, 'MEMORY.md', 'lars', 'ADD approval is not REPLACE approval.', [self::FIRST_ID => $id]);
+            self::fail('An approved ADD must not retire existing guidance.');
+        } catch (ValidationException $exception) {
+            self::assertStringContainsString('approved REPLACE', $exception->getMessage());
+        }
+        self::assertSame($before, $this->recordSnapshot());
+    }
+
+    public function testFailedSupersessionValidationRestoresAllProposalAndHistoryBytes(): void
+    {
+        $manager = new ProposalTransitionManager();
+        $manager->reanchorTarget($this->root, 'MEMORY.md', 'lars', 'Existing proof-repair history.');
+        $id = 'proposal.2026-06-09.001';
+        $this->writeCandidateReplacement($id, self::FIRST_RULE, self::FIRST_RULE, 'Replacement guidance.');
+        $manager->approve($this->root, $id, 'maintainer');
+        $this->writeMemory('Replacement guidance.', self::SECOND_RULE);
+        $path = $this->root . '/proposals/approved/' . $id . '.json';
+        /** @var array<string, mixed> $invalid */
+        $invalid = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
+        unset($invalid['approved_at']);
+        file_put_contents($path, json_encode($invalid, JSON_THROW_ON_ERROR));
+        $before = $this->recordSnapshot();
+
+        try {
+            $manager->reanchorTarget($this->root, 'MEMORY.md', 'lars', 'Corrupt approval must not commit.', [self::FIRST_ID => $id]);
+            self::fail('Invalid approval evidence must roll back retirement and reanchoring.');
+        } catch (ValidationException $exception) {
+            self::assertStringContainsString('rolled back', $exception->getMessage());
+            self::assertStringContainsString('approved_by and approved_at', $exception->getMessage());
+        }
+        self::assertSame($before, $this->recordSnapshot());
+        self::assertFileDoesNotExist($this->root . '/proposals/retired/' . self::FIRST_ID . '.json');
+        self::assertFileDoesNotExist($this->root . '/history/retired-proposals.jsonl');
+    }
+
     public function testTheReplacementMustNameTheSupersededTarget(): void
     {
         $deepened = 'Keep the packaged entrypoint callable and covered by a smoke test.';
@@ -430,7 +535,7 @@ final class ProposalReanchorTest extends TestCase
         $this->writeMemory($deepened, self::SECOND_RULE);
 
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessageMatches('/approved REPLACE on the same target/');
+        $this->expectExceptionMessageMatches('/approved REPLACE on the same target and guidance type/');
 
         (new ProposalTransitionManager())->reanchorTarget(
             $this->root,
@@ -441,7 +546,7 @@ final class ProposalReanchorTest extends TestCase
         );
     }
 
-    private function writeCandidateReplacement(string $proposalId, string $target, string $old, string $new): void
+    private function writeCandidateReplacement(string $proposalId, string $target, string $old, string $new, GuidanceType $targetType = GuidanceType::MEMORY, Action $action = Action::REPLACE): void
     {
         /** @var array<string, mixed> $proposal */
         $proposal = json_decode(
@@ -455,8 +560,8 @@ final class ProposalReanchorTest extends TestCase
         }
         $proposal['id'] = $proposalId;
         $proposal['status'] = 'candidate';
-        $proposal['action'] = 'REPLACE';
-        $proposal['target_type'] = 'memory';
+        $proposal['action'] = $action->value;
+        $proposal['target_type'] = $targetType->value;
         $proposal['target'] = $target;
         $proposal['old'] = $old;
         $proposal['new'] = $new;
@@ -468,6 +573,25 @@ final class ProposalReanchorTest extends TestCase
             $this->root . '/proposals/candidate/' . $proposalId . '.json',
             json_encode($proposal, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR),
         );
+    }
+
+    /** @return array<string, string> */
+    private function recordSnapshot(): array
+    {
+        $records = [];
+        foreach (['proposals', 'history'] as $directory) {
+            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->root . '/' . $directory, \FilesystemIterator::SKIP_DOTS));
+            foreach ($files as $file) {
+                if ($file->isFile()) {
+                    $content = file_get_contents($file->getPathname());
+                    self::assertIsString($content);
+                    $records[substr($file->getPathname(), strlen($this->root) + 1)] = $content;
+                }
+            }
+        }
+        ksort($records);
+
+        return $records;
     }
 
     private function hashMemory(): string

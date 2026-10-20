@@ -255,8 +255,7 @@ final class ProposalTransitionManager
         string $actor,
         string $reason,
         ?string $supersededByProposalId = null,
-    ): void
-    {
+    ): void {
         if (trim($actor) === '') {
             throw new ValidationException('', null, $proposalId, 'actor name must be explicit');
         }
@@ -502,11 +501,13 @@ final class ProposalTransitionManager
                 $replacementId = trim($supersessions[$record->id]);
                 $replacement = $parser->parseFile($this->resolveProposalPath($replacementId, $root));
                 if (
-                    !in_array($replacement->status, [ProposalStatus::APPROVED, ProposalStatus::APPLIED], true)
+                    $replacement->id !== $replacementId
+                    || !in_array($replacement->status, [ProposalStatus::APPROVED, ProposalStatus::APPLIED], true)
                     || $replacement->action !== Action::REPLACE
+                    || $replacement->targetType !== $record->targetType
                     || $replacement->target !== $record->target
                 ) {
-                    throw new ValidationException($proposalPath, null, $record->id, 'superseding proposal must be an approved REPLACE on the same target: ' . $replacementId);
+                    throw new ValidationException($proposalPath, null, $record->id, 'superseding proposal must identify an approved REPLACE on the same target and guidance type: ' . $replacementId);
                 }
 
                 $retiredId = $record->id;
