@@ -255,8 +255,7 @@ final class ProposalTransitionManager
         string $actor,
         string $reason,
         ?string $supersededByProposalId = null,
-    ): void
-    {
+    ): void {
         if (trim($actor) === '') {
             throw new ValidationException('', null, $proposalId, 'actor name must be explicit');
         }
@@ -426,7 +425,7 @@ final class ProposalTransitionManager
      * root. `$supersessions` names such proofs explicitly, each with the proposal
      * that replaces it: they are retired in the same transaction instead of being
      * re-pinned, so the file's remaining proofs can commit. Nothing is approved
-     * or applied here; the replacement still goes through its own transitions.
+     * or applied here; supersession requires a previously approved replacement.
      *
      * @param array<string, string> $supersessions superseded applied proposal id => replacement proposal id
      * @return list<string> the repaired proposal ids, in stable order
@@ -502,11 +501,13 @@ final class ProposalTransitionManager
                 $replacementId = trim($supersessions[$record->id]);
                 $replacement = $parser->parseFile($this->resolveProposalPath($replacementId, $root));
                 if (
-                    $replacement->status === ProposalStatus::RETIRED
-                    || $replacement->status->value === 'rejected'
+                    $replacement->id !== $replacementId
+                    || !in_array($replacement->status, [ProposalStatus::APPROVED, ProposalStatus::APPLIED], true)
+                    || $replacement->action !== Action::REPLACE
+                    || $replacement->targetType !== $record->targetType
                     || $replacement->target !== $record->target
                 ) {
-                    throw new ValidationException($proposalPath, null, $record->id, 'superseding proposal must be active and name the same target: ' . $replacementId);
+                    throw new ValidationException($proposalPath, null, $record->id, 'superseding proposal must identify an approved REPLACE on the same target and guidance type: ' . $replacementId);
                 }
 
                 $retiredId = $record->id;
