@@ -121,9 +121,6 @@ final class HistoryProjectionBuilder
         if (!is_dir($historyDirectory) && !mkdir($historyDirectory, 0777, true) && !is_dir($historyDirectory)) {
             throw new ValidationException($historyDirectory, null, null, 'cannot create history projection directory');
         }
-        if (is_link($historyDirectory)) {
-            throw new ValidationException($historyDirectory, null, null, 'refusing to write history projection through a symlink');
-        }
 
         $files = [
             $historyDirectory . '/active-guidance.snapshot.json' => $projection->snapshot,
