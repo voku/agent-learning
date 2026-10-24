@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.18.36] - 2026-10-24
+
+### Security
+
+- Validate rule IDs, contain example-rule paths within the Learning root, and refuse history writes through symlinked destinations.
+
 ## [0.18.35] - 2026-10-20
 
 ### Fixed
