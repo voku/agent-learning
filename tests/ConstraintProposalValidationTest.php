@@ -495,6 +495,37 @@ final class ConstraintProposalValidationTest extends TestCase
         }
     }
 
+    public function testActivationRejectsRuleIdThatCouldEscapeTheActiveManifestDirectory(): void
+    {
+        $project = sys_get_temp_dir() . '/constraint_manifest_unsafe_rule_' . bin2hex(random_bytes(8));
+        $root = $project . '/.agent-loop/learning';
+        mkdir($root . '/proposals/approved', 0777, true);
+        mkdir($project . '/infra/githooks/StandardProject/PHPStan', 0777, true);
+        file_put_contents($project . '/infra/githooks/StandardProject/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
+        file_put_contents($project . '/infra/githooks/phpstan_bootstrap.php', "<?php\n");
+
+        $findings = [
+            'finding.2026-06-13.001' => $this->finding('finding.2026-06-13.001'),
+            'finding.2026-06-13.002' => $this->finding('finding.2026-06-13.002'),
+        ];
+        $record = $this->approvedProposalRecord();
+        $record['constraint']['rule_id'] = '../unsafe/name';
+        $proposalPath = $root . '/proposals/approved/proposal.2026-06-13.001.json';
+        file_put_contents($proposalPath, json_encode($record, JSON_THROW_ON_ERROR));
+
+        try {
+            try {
+                (new ConstraintManifestActivator())->activate($root, $proposalPath, null, $findings, projectRoot: $project);
+                self::fail('An unsafe rule_id must not become part of a manifest path.');
+            } catch (ValidationException $exception) {
+                self::assertStringContainsString('rule_id', $exception->getMessage());
+            }
+            self::assertDirectoryDoesNotExist($root . '/constraints');
+        } finally {
+            $this->removeDirectory($project);
+        }
+    }
+
     public function testActivatesConstraintManifestFromApprovedProposalUsingBareIdThroughCli(): void
     {
         // Reproduces a real bug: constraint-export/constraint-activate/proposal-validate all

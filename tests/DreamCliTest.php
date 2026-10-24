@@ -6,6 +6,8 @@ namespace voku\AgentLearning\Tests;
 
 use PHPUnit\Framework\TestCase;
 use voku\AgentLearning\Cli;
+use voku\AgentLearning\HistoryProjectionBuilder;
+use voku\AgentLearning\ValidationException;
 
 final class DreamCliTest extends TestCase
 {
@@ -151,6 +153,28 @@ final class DreamCliTest extends TestCase
         self::assertSame(0, (new Cli())->run([
             'agent-learning', 'history-status', '--root', $this->root,
         ]));
+    }
+
+    public function testHistoryProjectionRebuildRefusesSymlinkedDestination(): void
+    {
+        $outside = $this->root . '/outside.json';
+        file_put_contents($outside, 'must not be replaced');
+        $target = $this->root . '/history/active-guidance.snapshot.json';
+        if (!@symlink($outside, $target)) {
+            self::markTestSkipped('symlink() is not available.');
+        }
+
+        $builder = new HistoryProjectionBuilder();
+        $projection = $builder->build($this->root, [], []);
+        try {
+            $builder->write($this->root, $projection);
+            self::fail('History projection rebuild must refuse a symlinked destination.');
+        } catch (ValidationException $exception) {
+            self::assertStringContainsString('through a symlink', $exception->getMessage());
+        }
+
+        self::assertSame('must not be replaced', file_get_contents($outside));
+        self::assertTrue(is_link($target));
     }
 
     public function testGuidanceConsistencyRendersAMarkdownReviewTableWithoutVerdicts(): void

@@ -90,6 +90,30 @@ final class ConstraintGenerationPackageAdoptionTest extends TestCase
         $this->assertGenerationPackage($output);
     }
 
+    public function testAbsoluteExamplePathOutsideProjectIsNotRead(): void
+    {
+        $outside = $this->project . '-outside.php';
+        file_put_contents($outside, 'PRIVATE_EXAMPLE_CONTENT');
+        $proposalPath = $this->writeProposal();
+        $proposal = $this->readJson($proposalPath);
+        $proposal['constraint']['example_rule_paths'] = [$outside];
+        file_put_contents($proposalPath, json_encode($proposal, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+
+        $output = $this->root . '/constraint-generation/proposal.absolute-path';
+        try {
+            (new ConstraintGenerationPackageExporter())->export(
+                $this->root,
+                $proposalPath,
+                $output,
+                $this->findings(),
+            );
+            $examplesJson = (string) file_get_contents($output . '/examples.json');
+            self::assertStringNotContainsString('PRIVATE_EXAMPLE_CONTENT', $examplesJson);
+        } finally {
+            unlink($outside);
+        }
+    }
+
     private function assertGenerationPackage(string $output): void
     {
         $specification = $this->readJson($output . '/specification.json');
