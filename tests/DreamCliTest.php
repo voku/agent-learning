@@ -177,6 +177,69 @@ final class DreamCliTest extends TestCase
         self::assertTrue(is_link($target));
     }
 
+    public function testHistoryProjectionRebuildRefusesSymlinkedHistoryDirectory(): void
+    {
+        $builder = new HistoryProjectionBuilder();
+        $projection = $builder->build($this->root, [], []);
+        $historyDirectory = $this->root . '/history';
+        $outsideDirectory = sys_get_temp_dir() . '/dream-cli-history-' . bin2hex(random_bytes(8));
+        mkdir($outsideDirectory, 0777, true);
+        $sentinel = $outsideDirectory . '/sentinel.txt';
+        file_put_contents($sentinel, 'must remain untouched');
+        rmdir($historyDirectory);
+        if (!@symlink($outsideDirectory, $historyDirectory)) {
+            mkdir($historyDirectory, 0777, true);
+            $this->removeDirectory($outsideDirectory);
+            self::markTestSkipped('symlink() is not available.');
+        }
+
+        try {
+            try {
+                $builder->write($this->root, $projection);
+                self::fail('History projection rebuild must refuse a symlinked history directory.');
+            } catch (ValidationException $exception) {
+                self::assertStringContainsString('through a symlink', $exception->getMessage());
+            }
+            self::assertSame('must remain untouched', file_get_contents($sentinel));
+        } finally {
+            if (is_link($historyDirectory)) {
+                unlink($historyDirectory);
+            }
+            if (is_dir($outsideDirectory)) {
+                $this->removeDirectory($outsideDirectory);
+            }
+        }
+    }
+
+    public function testHistoryProjectionPreflightsAllDestinationsBeforeWriting(): void
+    {
+        $builder = new HistoryProjectionBuilder();
+        $projection = $builder->build($this->root, [], []);
+        $historyDirectory = $this->root . '/history';
+        $snapshot = $historyDirectory . '/active-guidance.snapshot.json';
+        $chronicle = $historyDirectory . '/chronicle.jsonl';
+        $manifest = $historyDirectory . '/projection-manifest.json';
+        $outside = $this->root . '/outside-manifest.json';
+        file_put_contents($snapshot, 'old snapshot');
+        file_put_contents($chronicle, 'old chronicle');
+        file_put_contents($outside, 'must not be replaced');
+        if (!@symlink($outside, $manifest)) {
+            self::markTestSkipped('symlink() is not available.');
+        }
+
+        try {
+            $builder->write($this->root, $projection);
+            self::fail('History projection rebuild must preflight every destination before writing.');
+        } catch (ValidationException $exception) {
+            self::assertStringContainsString('through a symlink', $exception->getMessage());
+        }
+
+        self::assertSame('old snapshot', file_get_contents($snapshot));
+        self::assertSame('old chronicle', file_get_contents($chronicle));
+        self::assertSame('must not be replaced', file_get_contents($outside));
+        self::assertTrue(is_link($manifest));
+    }
+
     public function testGuidanceConsistencyRendersAMarkdownReviewTableWithoutVerdicts(): void
     {
         $project = $this->root . '/project';
@@ -200,11 +263,11 @@ final class DreamCliTest extends TestCase
         }
         foreach (array_diff(scandir($directory) ?: [], ['.', '..']) as $name) {
             $path = $directory . '/' . $name;
-            if (is_dir($path)) {
-                $this->removeDirectory($path);
+            if (is_link($path) || !is_dir($path)) {
+                unlink($path);
                 continue;
             }
-            unlink($path);
+            $this->removeDirectory($path);
         }
         rmdir($directory);
     }
