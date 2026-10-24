@@ -91,12 +91,44 @@ final readonly class ProposalReviewQueue
 
         $files = [];
         if ($proposal->targetType === GuidanceType::SKILL->value && $proposal->target !== null) {
-            $targetPath = $this->absolutePath($projectRoot, $proposal->target);
-            if (is_file($targetPath)) {
-                $content = file_get_contents($targetPath);
-                $files[$proposal->target] = $content === false ? null : $content;
+            $target = str_replace('\\', '/', $proposal->target);
+            if (str_contains($target, '/') || str_ends_with(strtolower($target), '.md')) {
+                // Older proposals used a physical path as `target`. Keep reporting
+                // that shape while new proposals use a semantic identity such as
+                // `agent-loop-discipline` or `skill.auth-context`.
+                $content = $this->projectFileContents($projectRoot, $proposal->target);
+                if ($content !== null) {
+                    $files[$proposal->target] = $content;
+                } elseif (is_file($this->absolutePath($projectRoot, $proposal->target))) {
+                    $signals[] = 'target_file_unavailable:' . $proposal->target;
+                } else {
+                    $signals[] = 'target_file_missing:' . $proposal->target;
+                }
             } else {
-                $signals[] = 'target_file_missing:' . $proposal->target;
+                // A semantic skill target is not a path. A unique SKILL.md in
+                // proposal scope is the physical file whose proposed wording
+                // the queue can inspect; otherwise report that mapping as unknown.
+                $skillPaths = [];
+                foreach ($proposal->scope as $scopePath) {
+                    if (basename(str_replace('\\', '/', $scopePath)) !== 'SKILL.md') {
+                        continue;
+                    }
+                    if (file_exists($this->absolutePath($projectRoot, $scopePath))) {
+                        $skillPaths[] = $scopePath;
+                    }
+                }
+
+                if (count($skillPaths) === 1) {
+                    $scopePath = $skillPaths[0];
+                    $content = $this->projectFileContents($projectRoot, $scopePath);
+                    if ($content !== null) {
+                        $files[$scopePath] = $content;
+                    } else {
+                        $signals[] = 'target_source_unresolved:' . $proposal->target;
+                    }
+                } else {
+                    $signals[] = 'target_source_unresolved:' . $proposal->target;
+                }
             }
         }
         foreach ($probeTexts as $probeFile => $probeText) {
@@ -110,9 +142,6 @@ final readonly class ProposalReviewQueue
         $matches = [];
         if ($proposal->proposedChange !== null && trim($proposal->proposedChange) !== '') {
             foreach ($files as $file => $text) {
-                if ($text === null) {
-                    continue;
-                }
                 $matches[] = (new WordingOverlap())->match($file, $proposal->proposedChange, $text);
             }
             usort(
@@ -182,5 +211,24 @@ final readonly class ProposalReviewQueue
         }
 
         return rtrim($projectRoot, '/\\') . '/' . ltrim($path, '/');
+    }
+
+    private function projectFileContents(string $projectRoot, string $path): ?string
+    {
+        $realProjectRoot = realpath($projectRoot);
+        $realPath = realpath($this->absolutePath($projectRoot, $path));
+        if ($realProjectRoot === false || $realPath === false || !is_file($realPath)) {
+            return null;
+        }
+
+        $projectPrefix = rtrim(str_replace('\\', '/', $realProjectRoot), '/') . '/';
+        $normalizedPath = str_replace('\\', '/', $realPath);
+        if (!str_starts_with($normalizedPath, $projectPrefix)) {
+            return null;
+        }
+
+        $contents = file_get_contents($realPath);
+
+        return $contents === false ? null : $contents;
     }
 }
