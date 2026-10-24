@@ -15,6 +15,8 @@ final class ProposalReviewQueueTest extends TestCase
 
     private string $root;
 
+    private ?string $outsideSkillFile = null;
+
     protected function setUp(): void
     {
         $this->root = sys_get_temp_dir() . '/proposal-review-queue-' . bin2hex(random_bytes(8));
@@ -30,6 +32,9 @@ final class ProposalReviewQueueTest extends TestCase
     protected function tearDown(): void
     {
         $this->removeDirectory($this->root);
+        if ($this->outsideSkillFile !== null && is_file($this->outsideSkillFile)) {
+            unlink($this->outsideSkillFile);
+        }
     }
 
     public function testOnlyCandidateAndApprovedProposalsAreListedAndRejectedOnesAreNot(): void
@@ -76,6 +81,63 @@ final class ProposalReviewQueueTest extends TestCase
         self::assertSame('src/skill.md', $match->file);
         self::assertTrue($match->exact);
         self::assertSame(100, $match->containmentPercent);
+    }
+
+    public function testSemanticSkillTargetUsesItsUniqueScopedSkillFile(): void
+    {
+        $skillPath = 'resources/skills/agent-loop-discipline/SKILL.md';
+        $absoluteSkillPath = $this->root . '/' . $skillPath;
+        mkdir(dirname($absoluteSkillPath), 0777, true);
+        file_put_contents($absoluteSkillPath, "# Skill\n\n" . self::WORDING . "\n");
+        $this->writeSkillProposal(
+            'proposal.2026-06-08.001',
+            'candidate',
+            'agent-loop-discipline',
+            [$skillPath],
+        );
+
+        $row = $this->queue()[0];
+
+        self::assertNotContains('target_file_missing:agent-loop-discipline', $row->signals);
+        self::assertNotContains('target_source_unresolved:agent-loop-discipline', $row->signals);
+        self::assertSame($skillPath, $row->wordingMatches[0]->file);
+        self::assertTrue($row->wordingMatches[0]->exact);
+    }
+
+    public function testSemanticSkillTargetWithoutOneScopedSkillFileIsUnresolvedRatherThanMissing(): void
+    {
+        $this->writeSkillProposal(
+            'proposal.2026-06-08.001',
+            'candidate',
+            'skill.auth-context',
+            ['src/gone.php'],
+        );
+
+        $signals = $this->queue()[0]->signals;
+
+        self::assertContains('target_source_unresolved:skill.auth-context', $signals);
+        self::assertNotContains('target_file_missing:skill.auth-context', $signals);
+    }
+
+    public function testSemanticSkillTargetDoesNotReadScopedSkillSymlinkOutsideProject(): void
+    {
+        $skillPath = 'resources/skills/agent-loop-discipline/SKILL.md';
+        $absoluteSkillPath = $this->root . '/' . $skillPath;
+        mkdir(dirname($absoluteSkillPath), 0777, true);
+        $this->outsideSkillFile = dirname($this->root) . '/proposal-review-queue-outside-' . basename($this->root);
+        file_put_contents($this->outsideSkillFile, "# Skill\n\n" . self::WORDING . "\n");
+        symlink($this->outsideSkillFile, $absoluteSkillPath);
+        $this->writeSkillProposal(
+            'proposal.2026-06-08.001',
+            'candidate',
+            'agent-loop-discipline',
+            [$skillPath],
+        );
+
+        $row = $this->queue()[0];
+
+        self::assertContains('target_source_unresolved:agent-loop-discipline', $row->signals);
+        self::assertSame([], $row->wordingMatches);
     }
 
     public function testPartialOverlapIsMeasuredAsShareOfFourWordPhrasesAndMissingFilesAreSignalled(): void
@@ -186,14 +248,15 @@ final class ProposalReviewQueueTest extends TestCase
         ]);
     }
 
-    private function writeSkillProposal(string $id, string $status, string $target): void
+    /** @param list<string> $scope */
+    private function writeSkillProposal(string $id, string $status, string $target, array $scope = ['src/gone.php']): void
     {
         $this->write($id, $status, [
             'action' => 'ADD',
             'reason' => 'A repeated defect class deserves one reviewable rule in the owning skill.',
             'target_type' => 'skill',
             'target' => $target,
-            'scope' => ['src/gone.php'],
+            'scope' => $scope,
             'old' => null,
             'new' => self::WORDING,
             'boundary' => 'Only immutable request builders.',
