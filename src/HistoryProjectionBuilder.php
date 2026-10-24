@@ -264,7 +264,10 @@ final class HistoryProjectionBuilder
 
     private function writeFile(string $path, string $contents): void
     {
-        $temporary = $path . '.tmp';
+        if (is_link($path)) {
+            throw new ValidationException($path, null, null, 'refusing to write history projection through a symlink');
+        }
+        $temporary = $path . '.' . bin2hex(random_bytes(6)) . '.tmp';
         if (file_put_contents($temporary, $contents) === false || !rename($temporary, $path)) {
             throw new ValidationException($path, null, null, 'cannot write history projection');
         }
