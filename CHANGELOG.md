@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.18.37] - 2026-10-24
+
 ### Fixed
 
 - `proposal-queue` no longer treats a semantic skill target as a filesystem path. It resolves wording checks through a unique scoped `SKILL.md` and reports an unresolved mapping when that file cannot be identified.
