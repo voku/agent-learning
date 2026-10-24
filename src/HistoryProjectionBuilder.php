@@ -106,13 +106,38 @@ final class HistoryProjectionBuilder
 
     public function write(string $root, HistoryProjection $projection): void
     {
+        if (!is_dir($root) && !mkdir($root, 0777, true) && !is_dir($root)) {
+            throw new ValidationException($root, null, null, 'cannot create history projection root');
+        }
+        $root = realpath($root);
+        if (!is_string($root) || !is_dir($root)) {
+            throw new ValidationException('.', null, null, 'cannot resolve history projection root');
+        }
+
         $historyDirectory = rtrim($root, '/') . '/history';
+        if (is_link($historyDirectory)) {
+            throw new ValidationException($historyDirectory, null, null, 'refusing to write history projection through a symlink');
+        }
         if (!is_dir($historyDirectory) && !mkdir($historyDirectory, 0777, true) && !is_dir($historyDirectory)) {
             throw new ValidationException($historyDirectory, null, null, 'cannot create history projection directory');
         }
-        $this->writeFile($historyDirectory . '/active-guidance.snapshot.json', $projection->snapshot);
-        $this->writeFile($historyDirectory . '/chronicle.jsonl', $projection->chronicle);
-        $this->writeFile($historyDirectory . '/projection-manifest.json', $projection->manifest);
+
+        $files = [
+            $historyDirectory . '/active-guidance.snapshot.json' => $projection->snapshot,
+            $historyDirectory . '/chronicle.jsonl' => $projection->chronicle,
+            $historyDirectory . '/projection-manifest.json' => $projection->manifest,
+        ];
+        foreach (array_keys($files) as $path) {
+            if (is_link($path)) {
+                throw new ValidationException($path, null, null, 'refusing to write history projection through a symlink');
+            }
+            if (file_exists($path) && !is_file($path)) {
+                throw new ValidationException($path, null, null, 'cannot write history projection');
+            }
+        }
+        foreach ($files as $path => $contents) {
+            $this->writeFile($path, $contents);
+        }
     }
 
     /**
@@ -264,7 +289,10 @@ final class HistoryProjectionBuilder
 
     private function writeFile(string $path, string $contents): void
     {
-        $temporary = $path . '.tmp';
+        if (is_link($path)) {
+            throw new ValidationException($path, null, null, 'refusing to write history projection through a symlink');
+        }
+        $temporary = $path . '.' . bin2hex(random_bytes(6)) . '.tmp';
         if (file_put_contents($temporary, $contents) === false || !rename($temporary, $path)) {
             throw new ValidationException($path, null, null, 'cannot write history projection');
         }

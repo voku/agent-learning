@@ -90,6 +90,40 @@ final class ConstraintGenerationPackageAdoptionTest extends TestCase
         $this->assertGenerationPackage($output);
     }
 
+    public function testSymlinkedExamplePathOutsideProjectIsNotRead(): void
+    {
+        $outside = $this->project . '-outside.php';
+        file_put_contents($outside, 'PRIVATE_EXAMPLE_CONTENT');
+        $symlink = $this->project . '/escape.php';
+        if (!@symlink($outside, $symlink)) {
+            unlink($outside);
+            self::markTestSkipped('symlink() is not available.');
+        }
+        $proposalPath = $this->writeProposal();
+        $proposal = $this->readJson($proposalPath);
+        $proposal['constraint']['example_rule_paths'] = ['escape.php'];
+        file_put_contents($proposalPath, json_encode($proposal, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+
+        $output = $this->root . '/constraint-generation/proposal.symlink-path';
+        try {
+            (new ConstraintGenerationPackageExporter())->export(
+                $this->root,
+                $proposalPath,
+                $output,
+                $this->findings(),
+            );
+            $examplesJson = (string) file_get_contents($output . '/examples.json');
+            self::assertStringNotContainsString('PRIVATE_EXAMPLE_CONTENT', $examplesJson);
+        } finally {
+            if (is_link($symlink)) {
+                unlink($symlink);
+            }
+            if (is_file($outside)) {
+                unlink($outside);
+            }
+        }
+    }
+
     private function assertGenerationPackage(string $output): void
     {
         $specification = $this->readJson($output . '/specification.json');

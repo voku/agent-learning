@@ -125,12 +125,19 @@ final class ConstraintGenerationPackageExporter
         $examples = [];
         $projectRoot = (new LearningProjectPaths())->projectRootForLearningRoot($root, $configuredProjectRoot);
         foreach ($examplePaths as $path) {
-            $absolute = is_file($path) ? $path : $projectRoot . '/' . ltrim($path, '/');
-            if (!is_file($absolute)) {
+            $absolute = $projectRoot . '/' . ltrim($path, '/');
+            $realRoot = realpath($projectRoot);
+            $realAbsolute = realpath($absolute);
+            if (
+                $realRoot === false
+                || $realAbsolute === false
+                || !str_starts_with($realAbsolute, rtrim($realRoot, '/\\') . DIRECTORY_SEPARATOR)
+                || !is_file($realAbsolute)
+            ) {
                 $examples[] = ['path' => $path, 'content' => ''];
                 continue;
             }
-            $content = file_get_contents($absolute);
+            $content = file_get_contents($realAbsolute);
             $examples[] = ['path' => $path, 'content' => $content === false ? '' : $content];
         }
 

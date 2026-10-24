@@ -38,6 +38,9 @@ final class ConstraintManifestActivator
 
         $manifestPath = $outputPath;
         if ($manifestPath === null || trim($manifestPath) === '') {
+            if (preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*$/', $proposal->constraint->ruleId) !== 1 || str_contains($proposal->constraint->ruleId, '..')) {
+                throw new ValidationException($proposalPath, null, $proposal->id, 'constraint rule_id may only contain letters, digits, dots, underscores and hyphens');
+            }
             $manifestPath = $paths->activeConstraintsDirectory($root, $activeConstraintsDir) . '/constraint.' . $proposal->constraint->ruleId . '.json';
         }
 
