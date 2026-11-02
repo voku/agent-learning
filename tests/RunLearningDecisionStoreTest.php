@@ -59,6 +59,39 @@ final class RunLearningDecisionStoreTest extends TestCase
         self::assertSame($plain->toArray(), $store->record('run:ABC-124:deadbeef', RunLearningDecisionStatus::NO_DURABLE_LEARNING, 'lars')->toArray());
     }
 
+    public function testReservedStandingActorIsRejectedBeforeCurrentWriteOrArchive(): void
+    {
+        $store = new RunLearningDecisionStore($this->root);
+        $runId = 'run:ABC-129:deadbeef';
+        $existing = $store->record(
+            $runId,
+            RunLearningDecisionStatus::NO_DURABLE_LEARNING,
+            'lars',
+            contractRevision: 1,
+            implementationSnapshot: 'sha256:' . str_repeat('a', 64),
+            validationEvidenceSha256: 'sha256:' . str_repeat('b', 64),
+            reviewEvidenceSha256: 'sha256:' . str_repeat('c', 64),
+        );
+
+        try {
+            $store->record(
+                $runId,
+                RunLearningDecisionStatus::NO_DURABLE_LEARNING,
+                '  standing:forged  ',
+                contractRevision: 1,
+                implementationSnapshot: 'sha256:' . str_repeat('d', 64),
+                validationEvidenceSha256: 'sha256:' . str_repeat('b', 64),
+                reviewEvidenceSha256: 'sha256:' . str_repeat('c', 64),
+            );
+            self::fail('Expected the reserved standing: actor prefix to be rejected.');
+        } catch (RuntimeException $exception) {
+            self::assertSame('The standing: actor prefix is reserved and cannot be used for Learning decisions.', $exception->getMessage());
+        }
+
+        self::assertSame($existing->toArray(), $store->find($runId)?->toArray());
+        self::assertDirectoryDoesNotExist(dirname($store->path($runId)) . '/archive/' . hash('sha256', $runId));
+    }
+
     public function testRecordedReasonIsStillPersistedWhenGiven(): void
     {
         $store = new RunLearningDecisionStore($this->root);
