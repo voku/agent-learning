@@ -92,6 +92,140 @@ final class RunLearningDecisionStoreTest extends TestCase
         self::assertDirectoryDoesNotExist(dirname($store->path($runId)) . '/archive/' . hash('sha256', $runId));
     }
 
+    public function testNamedDecisionCanReplaceBoundLegacyReservedDecisionAndArchiveIt(): void
+    {
+        $store = new RunLearningDecisionStore($this->root);
+        $runId = 'run:ABC-130:deadbeef';
+        $binding = [
+            'contractRevision' => 4,
+            'implementationSnapshot' => 'sha256:' . str_repeat('a', 64),
+            'validationEvidenceSha256' => 'sha256:' . str_repeat('b', 64),
+            'reviewEvidenceSha256' => 'sha256:' . str_repeat('c', 64),
+        ];
+        $legacy = $store->record(
+            $runId,
+            RunLearningDecisionStatus::NO_DURABLE_LEARNING,
+            'fixture-reviewer',
+            'Historical decision from a pre-reservation release.',
+            ...$binding,
+        );
+        $legacyData = json_decode((string) file_get_contents($legacy->path), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($legacyData);
+        $legacyData['decided_by'] = 'standing:legacy-actor';
+        self::assertNotFalse(file_put_contents(
+            $legacy->path,
+            json_encode($legacyData, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT) . "\n",
+        ));
+
+        $persistedLegacy = $store->find($runId);
+        self::assertNotNull($persistedLegacy);
+        self::assertSame('standing:legacy-actor', $persistedLegacy->decidedBy);
+
+        $replacement = $store->record(
+            $runId,
+            RunLearningDecisionStatus::FOLLOW_UP_REQUIRED,
+            'named-reviewer',
+            'Replace the invalid legacy pseudo-actor at the same verified evidence boundary.',
+            [],
+            'issue://voku/agent-loop/879',
+            ...$binding,
+        );
+
+        self::assertSame(RunLearningDecisionStatus::FOLLOW_UP_REQUIRED, $replacement->decision);
+        self::assertSame('named-reviewer', $replacement->decidedBy);
+        self::assertSame($binding['contractRevision'], $replacement->contractRevision);
+        self::assertSame($binding['implementationSnapshot'], $replacement->implementationSnapshot);
+        self::assertSame($binding['validationEvidenceSha256'], $replacement->validationEvidenceSha256);
+        self::assertSame($binding['reviewEvidenceSha256'], $replacement->reviewEvidenceSha256);
+        self::assertSame($replacement->toArray(), $store->find($runId)?->toArray());
+
+        $archive = glob(dirname($store->path($runId)) . '/archive/' . hash('sha256', $runId) . '/*.json') ?: [];
+        self::assertCount(1, $archive);
+        $archived = json_decode((string) file_get_contents($archive[0]), true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame('standing:legacy-actor', $archived['decided_by'] ?? null);
+        self::assertSame($binding['contractRevision'], $archived['contract_revision'] ?? null);
+        self::assertSame($binding['implementationSnapshot'], $archived['implementation_snapshot'] ?? null);
+        self::assertSame($binding['validationEvidenceSha256'], $archived['validation_evidence_sha256'] ?? null);
+        self::assertSame($binding['reviewEvidenceSha256'], $archived['review_evidence_sha256'] ?? null);
+    }
+
+    public function testDifferentNamedDecisionAtSameCompleteBindingRemainsImmutable(): void
+    {
+        $store = new RunLearningDecisionStore($this->root);
+        $runId = 'run:ABC-131:deadbeef';
+        $binding = [
+            'contractRevision' => 4,
+            'implementationSnapshot' => 'sha256:' . str_repeat('a', 64),
+            'validationEvidenceSha256' => 'sha256:' . str_repeat('b', 64),
+            'reviewEvidenceSha256' => 'sha256:' . str_repeat('c', 64),
+        ];
+        $existing = $store->record(
+            $runId,
+            RunLearningDecisionStatus::NO_DURABLE_LEARNING,
+            'first-reviewer',
+            ...$binding,
+        );
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('already has a different durable learning decision');
+        $store->record(
+            $runId,
+            RunLearningDecisionStatus::FOLLOW_UP_REQUIRED,
+            'second-reviewer',
+            null,
+            [],
+            'issue://voku/agent-loop/879',
+            ...$binding,
+        );
+    }
+
+    public function testBoundLegacyReservedDecisionCannotMoveToAnotherContractRevision(): void
+    {
+        $store = new RunLearningDecisionStore($this->root);
+        $runId = 'run:ABC-132:deadbeef';
+        $binding = [
+            'contractRevision' => 4,
+            'implementationSnapshot' => 'sha256:' . str_repeat('a', 64),
+            'validationEvidenceSha256' => 'sha256:' . str_repeat('b', 64),
+            'reviewEvidenceSha256' => 'sha256:' . str_repeat('c', 64),
+        ];
+        $existing = $store->record(
+            $runId,
+            RunLearningDecisionStatus::NO_DURABLE_LEARNING,
+            'fixture-reviewer',
+            ...$binding,
+        );
+        $legacyData = json_decode((string) file_get_contents($existing->path), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($legacyData);
+        $legacyData['decided_by'] = 'standing:legacy-actor';
+        self::assertNotFalse(file_put_contents(
+            $existing->path,
+            json_encode($legacyData, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT) . "\n",
+        ));
+
+        try {
+            $store->record(
+                $runId,
+                RunLearningDecisionStatus::NO_DURABLE_LEARNING,
+                'named-reviewer',
+                'Do not change the evidence Contract revision.',
+                contractRevision: 5,
+                implementationSnapshot: 'sha256:' . str_repeat('d', 64),
+                validationEvidenceSha256: $binding['validationEvidenceSha256'],
+                reviewEvidenceSha256: $binding['reviewEvidenceSha256'],
+            );
+            self::fail('A legacy reserved decision cannot move to another Contract revision.');
+        } catch (RuntimeException $exception) {
+            self::assertStringContainsString(
+                'cannot move its durable learning decision from Contract revision 4 to revision 5',
+                $exception->getMessage(),
+            );
+        }
+
+        self::assertSame('standing:legacy-actor', $store->find($runId)?->decidedBy);
+        self::assertDirectoryDoesNotExist(dirname($store->path($runId)) . '/archive/' . hash('sha256', $runId));
+    }
+
     public function testRecordedReasonIsStillPersistedWhenGiven(): void
     {
         $store = new RunLearningDecisionStore($this->root);
