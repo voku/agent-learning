@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.18.38] - 2026-11-02
+
+### Security
+
+- Reject caller-supplied `standing:` actors in `RunLearningDecisionStore::record` before writing or archiving a Learning decision.
+
 ## [0.18.37] - 2026-10-24
 
 ### Fixed
