@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.18.39] - 2026-11-02
+
+### Fixed
+
+- Allow a named Learning decision to replace and archive a legacy reserved-actor decision at the same complete evidence binding, while preserving same-binding immutability for named decisions and the Contract-revision lock (#188).
+
 ## [0.18.38] - 2026-11-02
 
 ### Security
