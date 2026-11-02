@@ -71,15 +71,24 @@ final class RunLearningDecisionStore
                     . $existing->contractRevision . ' to revision ' . $contractRevision . '.',
                 );
             }
-            if ($sameBinding || $contractRevision === null) {
+            if (
+                $sameBinding
+                && $existing->contractRevision !== null
+                && str_starts_with($existing->decidedBy, 'standing:')
+            ) {
+                // A reserved pseudo-actor cannot authorize this decision. Keep
+                // the legacy artifact in immutable history before replacing it
+                // at the same complete evidence boundary.
+                $this->archive($existing);
+            } elseif ($sameBinding || $contractRevision === null) {
                 throw new RuntimeException('Run ' . $runId . ' already has a different durable learning decision.');
+            } else {
+                // A changed complete evidence boundary makes the previous conclusion
+                // stale. Preserve it as immutable run lineage before replacing the
+                // current conclusion; changing implementation must not erase what was
+                // truthfully decided for the prior snapshot.
+                $this->archive($existing);
             }
-
-            // A changed complete evidence boundary makes the previous conclusion
-            // stale. Preserve it as immutable run lineage before replacing the
-            // current conclusion; changing implementation must not erase what was
-            // truthfully decided for the prior snapshot.
-            $this->archive($existing);
         }
 
         $record = new RunLearningDecision(
