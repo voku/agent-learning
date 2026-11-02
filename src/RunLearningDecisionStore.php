@@ -32,6 +32,9 @@ final class RunLearningDecisionStore
     ): RunLearningDecision {
         $runId = $this->nonEmpty($runId, 'run_id');
         $decidedBy = $this->nonEmpty($decidedBy, 'decided_by');
+        if (str_starts_with($decidedBy, 'standing:')) {
+            throw new RuntimeException('The standing: actor prefix is reserved and cannot be used for Learning decisions.');
+        }
         $reason = $this->optionalReason($reason);
         $findingIds = $this->normalizeFindingIds($findingIds);
         $followUpRef = $followUpRef === null ? null : $this->nonEmpty($followUpRef, 'follow_up_ref');
