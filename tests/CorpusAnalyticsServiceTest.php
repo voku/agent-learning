@@ -118,6 +118,11 @@ final class CorpusAnalyticsServiceTest extends TestCase
         self::assertSame(1, $groups['guidance-evaluate:STALE_CANDIDATE']['total']['pure_1_to_1_count']);
         self::assertSame(2, $groups['consolidation']['total']['proposal_count']);
         self::assertSame(1, $groups['consolidation']['total']['no_source_count']);
+        self::assertSame(
+            2,
+            $result->cohorts['2026-07']['findings_per_proposal']['multi_finding_count'],
+            'Zero-source proposals must not count as multi-finding consolidation.',
+        );
         self::assertSame(1, $groups['consolidation']['actions']['NO_DURABLE_LEARNING']['pure_1_to_1_count']);
         self::assertSame(1, $groups['consolidation']['actions']['ADD']['no_source_count']);
         self::assertSame(1, $groups['guidance-evaluate:PROMOTION_CANDIDATE']['actions']['ADD']['multi_task_count']);
