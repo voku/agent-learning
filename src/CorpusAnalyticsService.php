@@ -182,7 +182,7 @@ final class CorpusAnalyticsService
                 $findingsPerP[] = $fCount;
                 if ($fCount === 1) {
                     ++$pSingleFinding;
-                } else {
+                } elseif ($fCount > 1) {
                     ++$pMultiFinding;
                 }
 
