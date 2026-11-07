@@ -52,6 +52,83 @@ final class CorpusAnalyticsServiceTest extends TestCase
         self::assertStringContainsString('Compiled Down to Active Constraint: 1', $outputText);
     }
 
+    public function testConsolidationReportSeparatesRecordedProposalOriginsAndDecisionTypes(): void
+    {
+        $root = $this->createFixtureLearningRoot();
+        self::assertTrue(mkdir($root . '/proposals/candidate', 0777, true));
+
+        $records = [
+            [
+                'id' => 'proposal.2026-07-03.100',
+                'proposed_by' => 'guidance-evaluate',
+                'evolution_decision' => ['decision_type' => 'PROMOTION_CANDIDATE'],
+                'source_findings' => ['finding.2026-06-01.001', 'finding.2026-06-02.002'],
+            ],
+            [
+                'id' => 'proposal.2026-07-03.101',
+                'proposed_by' => 'guidance-evaluate',
+                'evolution_decision' => ['decision_type' => 'STALE_CANDIDATE'],
+                'source_findings' => ['finding.2026-07-01.001'],
+            ],
+            [
+                'id' => 'proposal.2026-07-03.102',
+                'proposed_by' => 'consolidation',
+                'source_findings' => ['finding.2026-07-01.001'],
+            ],
+            [
+                'id' => 'proposal.2026-07-03.103',
+                'proposed_by' => 'guidance-evaluate',
+                'evolution_decision' => ['decision_type' => 'PROMOTION_CANDIDATE'],
+                'source_findings' => ['finding.2026-07-01.001', 'finding.missing'],
+            ],
+            [
+                'id' => 'proposal.2026-07-03.104',
+                'proposed_by' => 'consolidation',
+                'source_findings' => [],
+            ],
+        ];
+
+        foreach ($records as $record) {
+            $record += [
+                'status' => 'candidate',
+                'action' => 'ADD',
+                'created_at' => '2026-07-03T10:00:00+00:00',
+            ];
+            file_put_contents(
+                $root . '/proposals/candidate/' . $record['id'] . '.json',
+                json_encode($record, JSON_THROW_ON_ERROR),
+            );
+        }
+
+        $result = (new CorpusAnalyticsService())->analyze($root);
+        $groups = $result->consolidation['by_provenance'];
+
+        // Legacy proposals without provenance remain unknown, not relabelled as Dream.
+        self::assertSame(2, $groups['unknown']['total']['proposal_count']);
+        self::assertSame(2, $groups['unknown']['total']['pure_1_to_1_count']);
+
+        // Decision types are separated; guidance-evaluate alone is not a Dream-only label.
+        $promotion = $groups['guidance-evaluate:PROMOTION_CANDIDATE'];
+        self::assertSame(2, $promotion['total']['proposal_count']);
+        self::assertSame(1, $promotion['total']['multi_finding_count']);
+        self::assertSame(1, $promotion['total']['multi_task_count']);
+        self::assertSame(1, $promotion['total']['unresolved_source_count']);
+        self::assertSame(2, $promotion['cohorts']['2026-07']['proposal_count']);
+        self::assertSame(1, $groups['guidance-evaluate:STALE_CANDIDATE']['total']['pure_1_to_1_count']);
+        self::assertSame(2, $groups['consolidation']['total']['proposal_count']);
+        self::assertSame(1, $groups['consolidation']['total']['no_source_count']);
+
+        [$exit, $json] = $this->runCli($root, ['corpus-analyze', '--format', 'json']);
+        self::assertSame(0, $exit, $json);
+        /** @var array{consolidation: array{by_provenance: array<string, array{total: array{multi_task_count: int}}>}} $data */
+        $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        self::assertSame(1, $data['consolidation']['by_provenance']['guidance-evaluate:PROMOTION_CANDIDATE']['total']['multi_task_count']);
+
+        [$textExit, $textReport] = $this->runCli($root, ['corpus-analyze']);
+        self::assertSame(0, $textExit, $textReport);
+        self::assertStringContainsString('guidance-evaluate:PROMOTION_CANDIDATE: proposals=2', $textReport);
+    }
+
     public function testTerminalLifecycleIsDerivedFromCommittedProposalStateWithoutHistoryFiles(): void
     {
         $root = sys_get_temp_dir() . '/agent-learning-corpus-nohistory-' . bin2hex(random_bytes(8)) . '/.agent-loop/learning';
