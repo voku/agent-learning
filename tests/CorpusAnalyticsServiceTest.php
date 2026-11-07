@@ -73,6 +73,7 @@ final class CorpusAnalyticsServiceTest extends TestCase
             [
                 'id' => 'proposal.2026-07-03.102',
                 'proposed_by' => 'consolidation',
+                'action' => 'NO_DURABLE_LEARNING',
                 'source_findings' => ['finding.2026-07-01.001'],
             ],
             [
@@ -117,6 +118,9 @@ final class CorpusAnalyticsServiceTest extends TestCase
         self::assertSame(1, $groups['guidance-evaluate:STALE_CANDIDATE']['total']['pure_1_to_1_count']);
         self::assertSame(2, $groups['consolidation']['total']['proposal_count']);
         self::assertSame(1, $groups['consolidation']['total']['no_source_count']);
+        self::assertSame(1, $groups['consolidation']['actions']['NO_DURABLE_LEARNING']['pure_1_to_1_count']);
+        self::assertSame(1, $groups['consolidation']['actions']['ADD']['no_source_count']);
+        self::assertSame(1, $groups['guidance-evaluate:PROMOTION_CANDIDATE']['actions']['ADD']['multi_task_count']);
 
         [$exit, $json] = $this->runCli($root, ['corpus-analyze', '--format', 'json']);
         self::assertSame(0, $exit, $json);
