@@ -4,6 +4,16 @@ declare(strict_types=1);
 
 namespace voku\AgentLearning;
 
+/**
+ * @phpstan-type ProvenanceMetrics array{
+ *     proposal_count: int,
+ *     pure_1_to_1_count: int,
+ *     multi_finding_count: int,
+ *     multi_task_count: int,
+ *     unresolved_source_count: int,
+ *     no_source_count: int
+ * }
+ */
 final readonly class CorpusAnalysisResult
 {
     /**
@@ -49,6 +59,7 @@ final readonly class CorpusAnalysisResult
      *     findings_per_proposal_distribution: array<int, int>,
      *     distinct_tasks_per_proposal_distribution: array<int, int>,
      *     classification?: string,
+     *     by_provenance: array<string, array{total: ProvenanceMetrics, cohorts: array<string, ProvenanceMetrics>, actions: array<string, ProvenanceMetrics>}>,
      * } $consolidation
      */
     public function __construct(
@@ -139,6 +150,31 @@ final readonly class CorpusAnalysisResult
         $out .= "Findings per Proposal distribution: " . json_encode($this->consolidation['findings_per_proposal_distribution']) . "\n";
         $out .= "Tasks per Proposal distribution: " . json_encode($this->consolidation['distinct_tasks_per_proposal_distribution']) . "\n";
         $out .= "Proposals per Finding distribution: " . json_encode($this->consolidation['proposals_per_finding_distribution']) . "\n";
+        $out .= "\n--- Proposal Provenance (source-backed counts, not a Dream verdict) ---\n";
+        foreach ($this->consolidation['by_provenance'] as $origin => $group) {
+            $metrics = $group['total'];
+            $out .= sprintf(
+                "%s: proposals=%d pure_1_to_1=%d multi_finding=%d multi_task=%d unresolved_source=%d no_source=%d\n",
+                $origin,
+                $metrics['proposal_count'],
+                $metrics['pure_1_to_1_count'],
+                $metrics['multi_finding_count'],
+                $metrics['multi_task_count'],
+                $metrics['unresolved_source_count'],
+                $metrics['no_source_count'],
+            );
+            foreach ($group['actions'] as $action => $actionMetrics) {
+                $out .= sprintf(
+                    "  action=%s proposals=%d pure_1_to_1=%d multi_task=%d unresolved=%d no_source=%d\n",
+                    $action,
+                    $actionMetrics['proposal_count'],
+                    $actionMetrics['pure_1_to_1_count'],
+                    $actionMetrics['multi_task_count'],
+                    $actionMetrics['unresolved_source_count'],
+                    $actionMetrics['no_source_count'],
+                );
+            }
+        }
 
         return $out;
     }
