@@ -56,6 +56,21 @@ jobs:
                 $row = "| {$name} | {$findings} | {$proposals} | " . count($origins) . " |\n";
                 echo trim($row), PHP_EOL;
                 file_put_contents(getenv("GITHUB_STEP_SUMMARY"), $row, FILE_APPEND);
+                foreach ($origins as $origin => $group) {
+                    $metrics = $group["total"];
+                    $detail = sprintf(
+                        "  %s: proposals=%d 1:1=%d multi-finding=%d multi-task=%d unresolved=%d no-source=%d\n",
+                        $origin,
+                        $metrics["proposal_count"],
+                        $metrics["pure_1_to_1_count"],
+                        $metrics["multi_finding_count"],
+                        $metrics["multi_task_count"],
+                        $metrics["unresolved_source_count"],
+                        $metrics["no_source_count"],
+                    );
+                    echo $detail;
+                    file_put_contents(getenv("GITHUB_STEP_SUMMARY"), "<pre>" . htmlspecialchars($detail, ENT_QUOTES) . "</pre>\n", FILE_APPEND);
+                }
             }
           '
 
