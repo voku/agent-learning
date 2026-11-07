@@ -77,6 +77,17 @@ jobs:
                     );
                     echo $detail;
                     file_put_contents(getenv("GITHUB_STEP_SUMMARY"), "<pre>" . htmlspecialchars($detail, ENT_QUOTES) . "</pre>\n", FILE_APPEND);
+                    foreach ($group["actions"] as $action => $actionMetrics) {
+                        $actionLine = sprintf(
+                            "    action=%s proposals=%d 1:1=%d multi-task=%d\n",
+                            $action,
+                            $actionMetrics["proposal_count"],
+                            $actionMetrics["pure_1_to_1_count"],
+                            $actionMetrics["multi_task_count"],
+                        );
+                        echo $actionLine;
+                        file_put_contents(getenv("GITHUB_STEP_SUMMARY"), "<pre>" . htmlspecialchars($actionLine, ENT_QUOTES) . "</pre>\n", FILE_APPEND);
+                    }
                 }
             }
           '
