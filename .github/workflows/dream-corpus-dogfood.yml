@@ -81,6 +81,35 @@ jobs:
             }
           '
 
+      - name: Test current deterministic Dream against pinned corpus (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          php bin/agent-learning dream \
+            --root="$PWD/corpus/agent-loop/.agent-loop/learning" \
+            --project-root="$PWD/corpus/agent-loop" \
+            --dry-run --format=json > dream-reports/agent-loop-dream.json
+          php -r '
+            $data = json_decode((string) file_get_contents("dream-reports/agent-loop-dream.json"), true, flags: JSON_THROW_ON_ERROR);
+            $summary = sprintf(
+                "Dream preview: evaluated=%d reviewable=%d suppressed=%d warnings=%d\n",
+                $data["evaluated_guidance_count"],
+                count($data["decisions"]),
+                count($data["suppressed_decisions"]),
+                count($data["warnings"]),
+            );
+            echo $summary;
+            file_put_contents(getenv("GITHUB_STEP_SUMMARY"), "<pre>" . htmlspecialchars($summary, ENT_QUOTES) . "</pre>\n", FILE_APPEND);
+            $types = [];
+            foreach ($data["decisions"] as $decision) {
+                $types[$decision["type"]] = ($types[$decision["type"]] ?? 0) + 1;
+            }
+            ksort($types);
+            foreach ($types as $type => $count) {
+                echo "  {$type}: {$count}\n";
+            }
+          '
+
       - name: Upload aggregate reports
         uses: actions/upload-artifact@v4
         with:
