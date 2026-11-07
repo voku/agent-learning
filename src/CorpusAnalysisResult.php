@@ -59,7 +59,7 @@ final readonly class CorpusAnalysisResult
      *     findings_per_proposal_distribution: array<int, int>,
      *     distinct_tasks_per_proposal_distribution: array<int, int>,
      *     classification?: string,
-     *     by_provenance: array<string, array{total: ProvenanceMetrics, cohorts: array<string, ProvenanceMetrics>}>,
+     *     by_provenance: array<string, array{total: ProvenanceMetrics, cohorts: array<string, ProvenanceMetrics>, actions: array<string, ProvenanceMetrics>}>,
      * } $consolidation
      */
     public function __construct(
@@ -163,6 +163,17 @@ final readonly class CorpusAnalysisResult
                 $metrics['unresolved_source_count'],
                 $metrics['no_source_count'],
             );
+            foreach ($group['actions'] as $action => $actionMetrics) {
+                $out .= sprintf(
+                    "  action=%s proposals=%d pure_1_to_1=%d multi_task=%d unresolved=%d no_source=%d\n",
+                    $action,
+                    $actionMetrics['proposal_count'],
+                    $actionMetrics['pure_1_to_1_count'],
+                    $actionMetrics['multi_task_count'],
+                    $actionMetrics['unresolved_source_count'],
+                    $actionMetrics['no_source_count'],
+                );
+            }
         }
 
         return $out;
