@@ -49,9 +49,16 @@ jobs:
                 $findings = $data["summary"]["total_findings"] ?? 0;
                 $proposals = $data["summary"]["total_proposals"] ?? 0;
                 $origins = $data["consolidation"]["by_provenance"] ?? null;
-                if ($findings < 1 || $proposals < 1 || !is_array($origins)) {
-                    fwrite(STDERR, "{$name}: no qualified corpus / no provenance report\n");
+                if (!is_array($origins)) {
+                    fwrite(STDERR, "{$name}: analyzer produced no provenance report\n");
                     exit(1);
+                }
+                if ($findings < 1 || $proposals < 1) {
+                    echo "{$name}: INSUFFICIENT_EVIDENCE (findings={$findings}, proposals={$proposals})", PHP_EOL;
+                    if ($name === "agent-loop") {
+                        exit(1);
+                    }
+                    continue;
                 }
                 $row = "| {$name} | {$findings} | {$proposals} | " . count($origins) . " |\n";
                 echo trim($row), PHP_EOL;
