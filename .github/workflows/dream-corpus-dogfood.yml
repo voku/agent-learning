@@ -1,0 +1,68 @@
+name: Dream provenance corpus dogfood
+
+on:
+  push:
+    branches:
+      - research/dream-provenance-117-20261107
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-real-corpora:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout proposed analyzer
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install analyzer dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Checkout pinned real agent-loop Learning corpus
+        uses: actions/checkout@v7
+        with:
+          repository: voku/agent-loop
+          ref: 6eded862fdcbafe2ffa565c15a474815625fa325
+          path: corpus/agent-loop
+          persist-credentials: false
+
+      - name: Analyze committed real Learning roots (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dream-reports
+          php bin/agent-learning corpus-analyze --root="$PWD/infra/doc/agent-learning" --format=json > dream-reports/agent-learning.json
+          php bin/agent-learning corpus-analyze --root="$PWD/corpus/agent-loop/.agent-loop/learning" --format=json > dream-reports/agent-loop.json
+          php -r '
+            foreach (["agent-learning", "agent-loop"] as $name) {
+                $file = "dream-reports/{$name}.json";
+                $data = json_decode((string) file_get_contents($file), true, flags: JSON_THROW_ON_ERROR);
+                $findings = $data["summary"]["total_findings"] ?? 0;
+                $proposals = $data["summary"]["total_proposals"] ?? 0;
+                $origins = $data["consolidation"]["by_provenance"] ?? null;
+                if ($findings < 1 || $proposals < 1 || !is_array($origins)) {
+                    fwrite(STDERR, "{$name}: no qualified corpus / no provenance report\n");
+                    exit(1);
+                }
+                $row = "| {$name} | {$findings} | {$proposals} | " . count($origins) . " |\n";
+                echo trim($row), PHP_EOL;
+                file_put_contents(getenv("GITHUB_STEP_SUMMARY"), $row, FILE_APPEND);
+            }
+          '
+
+      - name: Upload aggregate reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: dream-provenance-real-corpus
+          path: dream-reports/*.json
+          if-no-files-found: error
+          retention-days: 14
