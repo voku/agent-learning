@@ -72,7 +72,7 @@ final class CorpusAnalyticsService
             }
         }
 
-        /** @var array<string, array{id: string, status: string, action: string, target_type: ?string, target: ?string, created_at: ?DateTimeImmutable, cohort: string, source_findings: list<string>, reason: string, superseded_by: ?string, terminal_info: array<string, mixed>|null}> $proposals */
+        /** @var array<string, array{id: string, status: string, action: string, target_type: ?string, target: ?string, created_at: ?DateTimeImmutable, cohort: string, source_findings: list<string>, proposed_by: string, evolution_decision_type: ?string, reason: string, superseded_by: ?string, terminal_info: array<string, mixed>|null}> $proposals */
         $proposals = [];
         $proposalDirs = ['acknowledged', 'applied', 'approved', 'candidate', 'rejected', 'retired'];
         foreach ($proposalDirs as $dir) {
@@ -107,6 +107,13 @@ final class CorpusAnalyticsService
                     'created_at' => $createdAt,
                     'cohort' => $cohort,
                     'source_findings' => $sourceFindings,
+                    'proposed_by' => is_string($data['proposed_by'] ?? null) && trim($data['proposed_by']) !== ''
+                        ? $data['proposed_by']
+                        : 'unknown',
+                    'evolution_decision_type' => is_array($data['evolution_decision'] ?? null)
+                        && is_string($data['evolution_decision']['decision_type'] ?? null)
+                        ? $data['evolution_decision']['decision_type']
+                        : null,
                     'reason' => is_string($data['reason'] ?? null) ? (string)$data['reason'] : '',
                     'superseded_by' => is_string($data['superseded_by'] ?? null) ? (string)$data['superseded_by'] : null,
                     'terminal_info' => $retiredHistory[$id] ?? $rejectedHistory[$id] ?? $acknowledgedHistory[$id] ?? $this->terminalInfoFromRecord($data),
@@ -369,7 +376,36 @@ final class CorpusAnalyticsService
         }
         ksort($pToTCounts);
 
+        // Partition before drawing conclusions from historical mixed-origin proposals.
+        // In particular, guidance-evaluate may emit several decision types.
+        /** @var array<string, array<string, list<array{source_findings: list<string>}>>> $provenanceCohorts */
+        $provenanceCohorts = [];
+        foreach ($proposals as $proposal) {
+            $origin = $proposal['proposed_by'];
+            if ($origin === 'guidance-evaluate' && $proposal['evolution_decision_type'] !== null) {
+                $origin .= ':' . $proposal['evolution_decision_type'];
+            }
+            $provenanceCohorts[$origin][$proposal['cohort']][] = $proposal;
+        }
+        ksort($provenanceCohorts);
+
+        $byProvenance = [];
+        foreach ($provenanceCohorts as $origin => $originCohorts) {
+            ksort($originCohorts);
+            $allProposals = [];
+            $cohortMetrics = [];
+            foreach ($originCohorts as $cohort => $cohortProposals) {
+                array_push($allProposals, ...$cohortProposals);
+                $cohortMetrics[$cohort] = self::consolidationMetrics($cohortProposals, $findings);
+            }
+            $byProvenance[$origin] = [
+                'total' => self::consolidationMetrics($allProposals, $findings),
+                'cohorts' => $cohortMetrics,
+            ];
+        }
+
         $consolidation = [
+            'by_provenance' => $byProvenance,
             'proposals_per_finding_distribution' => $fToPCounts,
             'findings_per_proposal_distribution' => $pToFCounts,
             'distinct_tasks_per_proposal_distribution' => $pToTCounts,
@@ -388,6 +424,69 @@ final class CorpusAnalyticsService
             lifecycleBreakdown: $lifecycleBreakdown,
             consolidation: $consolidation,
         );
+    }
+
+    /**
+     * @param list<array{source_findings: list<string>}> $proposals
+     * @param array<string, array{task_id: string}> $findings
+     * @return array{
+     *     proposal_count: int,
+     *     pure_1_to_1_count: int,
+     *     multi_finding_count: int,
+     *     multi_task_count: int,
+     *     unresolved_source_count: int,
+     *     no_source_count: int
+     * }
+     */
+    private static function consolidationMetrics(array $proposals, array $findings): array
+    {
+        $pureOneToOne = 0;
+        $multiFinding = 0;
+        $multiTask = 0;
+        $unresolvedSource = 0;
+        $noSource = 0;
+
+        foreach ($proposals as $proposal) {
+            $sources = array_values(array_unique($proposal['source_findings']));
+            if ($sources === []) {
+                ++$noSource;
+                continue;
+            }
+
+            $taskIds = [];
+            $hasUnresolvedSource = false;
+            foreach ($sources as $sourceId) {
+                if (!isset($findings[$sourceId]) || $findings[$sourceId]['task_id'] === 'unknown') {
+                    $hasUnresolvedSource = true;
+                    continue;
+                }
+                $taskIds[$findings[$sourceId]['task_id']] = true;
+            }
+
+            if ($hasUnresolvedSource) {
+                ++$unresolvedSource;
+                continue;
+            }
+
+            if (count($sources) === 1 && count($taskIds) === 1) {
+                ++$pureOneToOne;
+            }
+            if (count($sources) > 1) {
+                ++$multiFinding;
+            }
+            if (count($taskIds) > 1) {
+                ++$multiTask;
+            }
+        }
+
+        return [
+            'proposal_count' => count($proposals),
+            'pure_1_to_1_count' => $pureOneToOne,
+            'multi_finding_count' => $multiFinding,
+            'multi_task_count' => $multiTask,
+            'unresolved_source_count' => $unresolvedSource,
+            'no_source_count' => $noSource,
+        ];
     }
 
     /**
