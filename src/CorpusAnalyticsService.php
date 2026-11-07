@@ -378,7 +378,7 @@ final class CorpusAnalyticsService
 
         // Partition before drawing conclusions from historical mixed-origin proposals.
         // In particular, guidance-evaluate may emit several decision types.
-        /** @var array<string, array<string, list<array{source_findings: list<string>}>>> $provenanceCohorts */
+        /** @var array<string, array<string, list<array{source_findings: list<string>, action: string}>>> $provenanceCohorts */
         $provenanceCohorts = [];
         foreach ($proposals as $proposal) {
             $origin = $proposal['proposed_by'];
@@ -398,9 +398,20 @@ final class CorpusAnalyticsService
                 array_push($allProposals, ...$cohortProposals);
                 $cohortMetrics[$cohort] = self::consolidationMetrics($cohortProposals, $findings);
             }
+            $byAction = [];
+            foreach ($allProposals as $proposal) {
+                $byAction[$proposal['action']][] = $proposal;
+            }
+            ksort($byAction);
+            $actionMetrics = [];
+            foreach ($byAction as $action => $actionProposals) {
+                $actionMetrics[$action] = self::consolidationMetrics($actionProposals, $findings);
+            }
+
             $byProvenance[$origin] = [
                 'total' => self::consolidationMetrics($allProposals, $findings),
                 'cohorts' => $cohortMetrics,
+                'actions' => $actionMetrics,
             ];
         }
 
