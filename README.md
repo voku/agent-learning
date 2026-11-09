@@ -13,6 +13,20 @@ Reviewable finding, precedent, proposal, redaction, and decision-history tooling
 
 This library provides core domain logic and validation classes to support structured post-session learning for coding agents. It separates raw experiences (Findings), reusable solved-case precedent (LearningNotes), and potential guideline changes (Proposals), keeping the agent's knowledge extraction workflow structured, secure, and fully auditable.
 
+## Where to work in this repository
+
+Learning records outlive a working Session, but they do not authorize workflow actions. For a change, start with the narrowest record owner and its validation:
+
+| Concern | Source of truth |
+| --- | --- |
+| Finding intake and validation | [`src/Finding.php`](src/Finding.php), [`src/FindingRepository.php`](src/FindingRepository.php) and [`src/FindingValidator.php`](src/FindingValidator.php) |
+| Durable case precedent | [`src/LearningNote.php`](src/LearningNote.php) and [`src/LearningNoteRepository.php`](src/LearningNoteRepository.php) |
+| Reviewed guidance changes | [`src/Proposal.php`](src/Proposal.php), [`src/ProposalRepository.php`](src/ProposalRepository.php) and [`src/ConstraintPromotionValidator.php`](src/ConstraintPromotionValidator.php) |
+| Maintenance and usage signals | [`src/DreamService.php`](src/DreamService.php), [`src/GuidanceUsageProjector.php`](src/GuidanceUsageProjector.php) and [guidance evaluation](docs/guidance-evaluation.md) |
+| Real behavior and fixtures | [`tests/`](tests/) and [`examples/`](examples/) |
+
+Treat generated candidates and usage counts as evidence for review, never as automatically approved project policy.
+
 ## Requirements
 
 | Requirement | Version |
