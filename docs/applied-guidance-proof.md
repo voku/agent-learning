@@ -42,9 +42,14 @@ as `MEMORY.md` can distinguish two different failures:
   target-scoped `proposal-reanchor` owner transition.
 
 `proposal-reanchor` does not weaken validation or silently follow a changed file.
-It requires an explicit actor and reason, re-pins every applied memory/skill proof
-for that target in one transaction, and refuses the repair when any applied
-proposal's own guidance is no longer present. Do not hand-edit proposal hashes.
+When target files change legitimately while reviewed guidance remains unchanged or
+moved, `proposal-reanchor --auto` (or `proposal-reanchor <target> --auto`) automatically
+verifies that all applied rules on the target are demonstrably satisfied before
+updating hashes and appending audit records. Manual re-anchoring with explicit actor
+and reason (`proposal-reanchor <target> --by ACTOR --reason TEXT`) is also supported.
+Both modes re-pin applied memory/skill proofs for targets in atomic transactions,
+and refuse the repair (failing closed) when any applied proposal's guidance is no
+longer present or has drifted semantically. Do not hand-edit proposal hashes.
 
 A semantically drifted proof can block the repair of every stale proof on the
 same target, because each transition validates the whole root. For that case

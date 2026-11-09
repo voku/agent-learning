@@ -122,7 +122,7 @@ final readonly class AppliedGuidanceTargetValidator
                 $proposal->id,
                 'applied guidance target_content_hash does not match target file: ' . $sourceRef
                 . '; the target still satisfies this proposal\'s applied guidance. If the file changed legitimately, repair the stale target proof with '
-                . 'proposal-reanchor ' . $sourceRef . ' --by ACTOR --reason TEXT. The target-scoped repair fails closed if any applied guidance on that file is missing.',
+                . 'proposal-reanchor ' . $sourceRef . ' --auto (or proposal-reanchor ' . $sourceRef . ' --by ACTOR --reason TEXT). The target-scoped repair fails closed if any applied guidance on that file is missing.',
             );
         }
     }
