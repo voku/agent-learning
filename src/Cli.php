@@ -1278,7 +1278,11 @@ final class Cli
         $sourceRef = $parsed['arguments'][0] ?? $this->stringOption($parsed['options'], 'target');
         $actor = $this->stringOption($parsed['options'], 'by');
         $reason = $this->stringOption($parsed['options'], 'reason');
-        $isAuto = $this->boolOption($parsed['options'], 'auto');
+        $autoRaw = $parsed['options']['auto'] ?? false;
+        $isAuto = $autoRaw === true || (is_string($autoRaw) && trim($autoRaw) !== '');
+        if (is_string($autoRaw) && trim($autoRaw) !== '' && $sourceRef === null) {
+            $sourceRef = trim($autoRaw);
+        }
 
         if ($isAuto) {
             $actor ??= 'auto-reanchor';

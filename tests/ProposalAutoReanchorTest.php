@@ -410,6 +410,77 @@ final class ProposalAutoReanchorTest extends TestCase
     }
 
     /**
+     * CLI integration: `proposal-reanchor --auto <target>` syntax.
+     */
+    public function testCliAutoOptionWithTargetArgument(): void
+    {
+        $this->writeMemory(self::FIRST_RULE, self::SECOND_RULE, 'An unrelated row.');
+
+        $cli = new Cli();
+        ob_start();
+        try {
+            $code = $cli->run([
+                'agent-learning',
+                'proposal-reanchor',
+                '--root',
+                $this->root,
+                '--auto',
+                'MEMORY.md',
+            ]);
+        } finally {
+            ob_end_clean();
+        }
+
+        self::assertSame(0, $code);
+
+        foreach ([self::FIRST_ID, self::SECOND_ID] as $id) {
+            $path = $this->root . '/proposals/applied/' . $id . '.json';
+            /** @var array<string, mixed> $record */
+            $record = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+            self::assertSame($this->hashMemory(), $record['applied_validation']['target_content_hash']);
+        }
+    }
+
+    /**
+     * Pre-policy records must fail closed during auto-reanchor to prevent
+     * silently re-pinning hashes without semantic verification.
+     */
+    public function testPrePolicyRecordRefusesAutoReanchorAndDemandsManualReview(): void
+    {
+        $prePolicyId = 'proposal.2026-06-01.001';
+        $this->writeAppliedProposal($prePolicyId, 'Legacy pre-policy rule.', $this->hashMemory());
+
+        // Mark as pre-policy (before 2026-08-09)
+        $prePolicyPath = $this->root . '/proposals/applied/' . $prePolicyId . '.json';
+        /** @var array<string, mixed> $record */
+        $record = json_decode((string) file_get_contents($prePolicyPath), true, 512, JSON_THROW_ON_ERROR);
+        $record['applied_at'] = '2026-06-01T10:00:00+00:00';
+        file_put_contents($prePolicyPath, json_encode($record, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+
+        // Change memory to trigger stale check
+        $this->writeMemory(self::FIRST_RULE, self::SECOND_RULE, 'Legacy pre-policy rule.', 'A new row.');
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessageMatches('/pre-policy applied guidance requires manual review/s');
+
+        (new ProposalTransitionManager())->autoReanchor($this->root);
+    }
+
+    /**
+     * Post-policy proposal with missing or invalid target fails closed instead of being silently skipped.
+     */
+    public function testPostPolicyProposalWithMissingTargetFailsClosed(): void
+    {
+        $invalidId = 'proposal.2026-08-25.099';
+        $this->writeAppliedProposal($invalidId, 'Some rule.', 'dummy_hash', 'non-existent-target.md');
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessageMatches('/applied guidance target does not exist: non-existent-target\.md/s');
+
+        (new ProposalTransitionManager())->autoReanchor($this->root);
+    }
+
+    /**
      * @return array<string, string>
      */
     private function snapshotState(): array

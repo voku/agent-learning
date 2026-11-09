@@ -127,7 +127,7 @@ final readonly class AppliedGuidanceTargetValidator
         }
     }
 
-    private function isPreProofPolicyRecord(Proposal $proposal): bool
+    public function isPreProofPolicyRecord(Proposal $proposal): bool
     {
         $appliedAt = $proposal->raw['applied_at'] ?? null;
         if (!is_string($appliedAt) || trim($appliedAt) === '') {

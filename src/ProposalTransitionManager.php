@@ -465,17 +465,49 @@ final class ProposalTransitionManager
 
             $validation = $record->raw['applied_validation'] ?? null;
             if (!is_array($validation)) {
-                continue;
+                if ($guidanceValidator->isPreProofPolicyRecord($record)) {
+                    continue;
+                }
+                throw new ValidationException(
+                    $proposalPath,
+                    null,
+                    $record->id,
+                    'applied memory/skill proposal requires applied_validation evidence for automatic re-anchor',
+                );
             }
 
             $recordRef = $validation['target_source_ref'] ?? null;
-            if (!is_string($recordRef) || $this->escapesProjectRoot($recordRef)) {
-                continue;
+            if (!is_string($recordRef) || trim($recordRef) === '') {
+                if ($guidanceValidator->isPreProofPolicyRecord($record)) {
+                    continue;
+                }
+                throw new ValidationException(
+                    $proposalPath,
+                    null,
+                    $record->id,
+                    'applied memory/skill proposal requires target_source_ref for automatic re-anchor',
+                );
+            }
+            if ($this->escapesProjectRoot($recordRef)) {
+                throw new ValidationException(
+                    $proposalPath,
+                    null,
+                    $record->id,
+                    'applied guidance target escapes project root: ' . $recordRef,
+                );
             }
 
             $canonicalTarget = $this->canonicalTargetPath($projectRoot, $recordRef);
             if ($canonicalTarget === null) {
-                continue;
+                if ($guidanceValidator->isPreProofPolicyRecord($record)) {
+                    continue;
+                }
+                throw new ValidationException(
+                    $proposalPath,
+                    null,
+                    $record->id,
+                    'applied guidance target does not exist: ' . $recordRef,
+                );
             }
 
             if ($canonicalFilterTarget !== null && $canonicalTarget !== $canonicalFilterTarget) {
@@ -529,6 +561,14 @@ final class ProposalTransitionManager
                 $data['applied_validation'] = $validation;
 
                 try {
+                    if ($guidanceValidator->isPreProofPolicyRecord($record)) {
+                        throw new ValidationException(
+                            $proposalPath,
+                            null,
+                            $record->id,
+                            'pre-policy applied guidance requires manual review',
+                        );
+                    }
                     $guidanceValidator->validate($parser->parseRecord($data, $proposalPath), $root, $proposalPath);
                 } catch (ValidationException $exception) {
                     throw new ValidationException(
