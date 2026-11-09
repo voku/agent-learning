@@ -88,6 +88,13 @@ An applied `memory` or `skill` proposal pins its canonical target file. If valid
 Follow the owner diagnostic. When the target still satisfies the proposal's reviewed ADD/REPLACE/DELETE effect and the file changed legitimately, repair the target-scoped proof through the supported owner transition:
 
 ```bash
+# Automated verification and re-anchoring when guidance wording is unchanged:
+vendor/bin/agent-learning proposal-reanchor --auto
+
+# Or targeted to one file:
+vendor/bin/agent-learning proposal-reanchor MEMORY.md --auto
+
+# Or with explicit actor and reason:
 vendor/bin/agent-learning proposal-reanchor MEMORY.md \
   --root infra/doc/agent-learning \
   --by maintainer \

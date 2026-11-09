@@ -1278,9 +1278,36 @@ final class Cli
         $sourceRef = $parsed['arguments'][0] ?? $this->stringOption($parsed['options'], 'target');
         $actor = $this->stringOption($parsed['options'], 'by');
         $reason = $this->stringOption($parsed['options'], 'reason');
+        $autoRaw = $parsed['options']['auto'] ?? false;
+        $isAuto = $autoRaw === true || (is_string($autoRaw) && trim($autoRaw) !== '');
+        if (is_string($autoRaw) && trim($autoRaw) !== '' && $sourceRef === null) {
+            $sourceRef = trim($autoRaw);
+        }
+
+        if ($isAuto) {
+            $actor ??= 'auto-reanchor';
+            $reason ??= 'Automated re-anchor: target file changed, anchored guidance content demonstrably identical';
+
+            $repaired = (new ProposalTransitionManager())->autoReanchor($root, $sourceRef, $actor, $reason);
+            if ($repaired === []) {
+                $this->write(sprintf(
+                    "All applied guidance proofs are already up to date%s.\n",
+                    $sourceRef !== null ? ' for ' . $sourceRef : '',
+                ));
+            } else {
+                $this->write(sprintf(
+                    "Automatically re-anchored %d applied guidance proof(s)%s: %s\n",
+                    count($repaired),
+                    $sourceRef !== null ? ' for ' . $sourceRef : '',
+                    implode(', ', $repaired),
+                ));
+            }
+
+            return 0;
+        }
 
         if ($sourceRef === null || trim($sourceRef) === '') {
-            throw new ValidationException($root, null, null, 'proposal-reanchor requires the target source ref argument');
+            throw new ValidationException($root, null, null, 'proposal-reanchor requires the target source ref argument (or use --auto)');
         }
         if ($actor === null || trim($actor) === '') {
             throw new ValidationException($root, null, null, 'proposal-reanchor requires --by actor option');
@@ -1364,9 +1391,10 @@ final class Cli
             . "  proposal-acknowledge Formally close a candidate NO_DURABLE_LEARNING proposal without approving or rejecting it.\n"
             . "  proposal-mark-applied Mark an approved proposal as applied externally.\n"
             . "  proposal-retire      Retire an applied proposal once its target fully captures the change.\n"
-            . "  proposal-reanchor    Re-pin every applied memory/skill proof on one target file after it legitimately changed.\n"
+            . "  proposal-reanchor    Re-pin every applied memory/skill proof on target file(s) after legitimate changes (--auto for automated verification of unchanged guidance).\n"
             . "  corpus-analyze       Analyze workflow evolution, proposal lifecycle outcomes, and consolidation metrics.\n\n"
             . "Options:\n"
+            . "  --auto                   Automatically verify semantic satisfaction and re-anchor without manual supersession.\n"
             . "  --root PATH              Learning root or project root. Defaults to auto-discovery.\n"
             . "  --task-id-pattern REGEX  Override finding task id validation.\n"
             . "  --finding ID             Finding id selector for prepare. Repeatable.\n"

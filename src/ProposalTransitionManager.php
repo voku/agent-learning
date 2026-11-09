@@ -401,6 +401,236 @@ final class ProposalTransitionManager
     }
 
     /**
+     * Automatically re-anchor applied guidance proofs whose target files have changed,
+     * provided all applied guidance rules on the target are demonstrably satisfied
+     * (Situations 1 & 2: file changed with rules unchanged, or rules moved with identical content).
+     *
+     * If any applied proposal on a target fails semantic verification (Situation 3:
+     * guidance wording was altered or deleted), this method fails closed and throws
+     * ValidationException without modifying any file or history record.
+     *
+     * @param string $root The learning root
+     * @param string|null $targetSourceRef Optional single target ref to restrict auto-reanchoring
+     * @param string $actor The actor recording the re-anchor (defaults to 'auto-reanchor')
+     * @param string $reason The reason for re-anchoring
+     *
+     * @return list<string> The repaired proposal IDs in stable deterministic order
+     *
+     * @throws ValidationException when target doesn't exist, escapes root, has missing guidance wording,
+     *                             or repository validation fails
+     */
+    public function autoReanchor(
+        string $root,
+        ?string $targetSourceRef = null,
+        string $actor = 'auto-reanchor',
+        string $reason = 'Automated re-anchor: target file changed, anchored guidance content demonstrably identical',
+    ): array {
+        $actor = trim($actor);
+        if ($actor === '') {
+            throw new ValidationException($root, null, null, 'actor name must be explicit');
+        }
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw new ValidationException($root, null, null, 're-anchor reason must be explicit');
+        }
+
+        $projectRoot = (new LearningRootResolver())->resolve($root)->projectRoot;
+        $canonicalFilterTarget = null;
+        if ($targetSourceRef !== null) {
+            $targetSourceRef = trim(str_replace('\\', '/', $targetSourceRef));
+            if ($targetSourceRef === '') {
+                throw new ValidationException($root, null, null, 'target source ref must be explicit');
+            }
+            if ($this->escapesProjectRoot($targetSourceRef)) {
+                throw new ValidationException($root, null, null, 'target source ref must stay inside the project root: ' . $targetSourceRef);
+            }
+            $canonicalFilterTarget = $this->canonicalTargetPath($projectRoot, $targetSourceRef);
+            if ($canonicalFilterTarget === null) {
+                throw new ValidationException($root, null, null, 'applied guidance target does not exist: ' . $targetSourceRef);
+            }
+        }
+
+        $now = new DateTimeImmutable('now');
+        $nowStr = $now->format(DateTimeInterface::ATOM);
+        $parser = new ProposalParser();
+        $guidanceValidator = new AppliedGuidanceTargetValidator();
+
+        /** @var array<string, list<array{path: string, record: Proposal, ref: string}>> $byTarget */
+        $byTarget = [];
+        foreach ($this->appliedGuidanceFiles($root) as $proposalPath) {
+            $record = $parser->parseFile($proposalPath);
+            if (!in_array($record->targetType, [GuidanceType::MEMORY->value, GuidanceType::SKILL->value], true)) {
+                continue;
+            }
+
+            $validation = $record->raw['applied_validation'] ?? null;
+            if (!is_array($validation)) {
+                if ($guidanceValidator->isPreProofPolicyRecord($record)) {
+                    continue;
+                }
+                throw new ValidationException(
+                    $proposalPath,
+                    null,
+                    $record->id,
+                    'applied memory/skill proposal requires applied_validation evidence for automatic re-anchor',
+                );
+            }
+
+            $recordRef = $validation['target_source_ref'] ?? null;
+            if (!is_string($recordRef) || trim($recordRef) === '') {
+                if ($guidanceValidator->isPreProofPolicyRecord($record)) {
+                    continue;
+                }
+                throw new ValidationException(
+                    $proposalPath,
+                    null,
+                    $record->id,
+                    'applied memory/skill proposal requires target_source_ref for automatic re-anchor',
+                );
+            }
+            if ($this->escapesProjectRoot($recordRef)) {
+                throw new ValidationException(
+                    $proposalPath,
+                    null,
+                    $record->id,
+                    'applied guidance target escapes project root: ' . $recordRef,
+                );
+            }
+
+            $canonicalTarget = $this->canonicalTargetPath($projectRoot, $recordRef);
+            if ($canonicalTarget === null) {
+                if ($guidanceValidator->isPreProofPolicyRecord($record)) {
+                    continue;
+                }
+                throw new ValidationException(
+                    $proposalPath,
+                    null,
+                    $record->id,
+                    'applied guidance target does not exist: ' . $recordRef,
+                );
+            }
+
+            if ($canonicalFilterTarget !== null && $canonicalTarget !== $canonicalFilterTarget) {
+                continue;
+            }
+
+            $byTarget[$canonicalTarget][] = [
+                'path' => $proposalPath,
+                'record' => $record,
+                'ref' => $recordRef,
+            ];
+        }
+
+        if ($canonicalFilterTarget !== null && !isset($byTarget[$canonicalFilterTarget])) {
+            throw new ValidationException($root, null, null, 'no applied memory/skill proof names target: ' . $targetSourceRef);
+        }
+
+        $writes = [];
+        $repairedEntries = [];
+
+        foreach ($byTarget as $canonicalTarget => $entries) {
+            $currentHash = hash_file('sha256', $canonicalTarget);
+            if ($currentHash === false) {
+                throw new ValidationException($root, null, null, 'cannot hash applied guidance target: ' . $entries[0]['ref']);
+            }
+            $currentHash = strtolower($currentHash);
+
+            $staleEntries = [];
+            foreach ($entries as $entry) {
+                $expectedHash = strtolower((string) ($entry['record']->raw['applied_validation']['target_content_hash'] ?? ''));
+                if (!hash_equals($expectedHash, $currentHash)) {
+                    $staleEntries[] = $entry;
+                }
+            }
+
+            if ($staleEntries === []) {
+                continue;
+            }
+
+            // Verify ALL entries for this target (both stale and current) still satisfy semantic guidance.
+            // If any proposal fails (Situation 3), fail closed immediately!
+            foreach ($entries as $entry) {
+                $record = $entry['record'];
+                $proposalPath = $entry['path'];
+                $data = $record->raw;
+                $validation = $data['applied_validation'];
+                $validation['target_content_hash'] = $currentHash;
+                $validation['reanchored_by'] = $actor;
+                $validation['reanchored_at'] = $nowStr;
+                $validation['reanchor_reason'] = $reason;
+                $data['applied_validation'] = $validation;
+
+                try {
+                    if ($guidanceValidator->isPreProofPolicyRecord($record)) {
+                        throw new ValidationException(
+                            $proposalPath,
+                            null,
+                            $record->id,
+                            'pre-policy applied guidance requires manual review',
+                        );
+                    }
+                    $guidanceValidator->validate($parser->parseRecord($data, $proposalPath), $root, $proposalPath);
+                } catch (ValidationException $exception) {
+                    throw new ValidationException(
+                        $proposalPath,
+                        null,
+                        $record->id,
+                        'automatic re-anchor refused for target ' . $entry['ref'] . ': ' . $exception->getMessage() . '. Manual review required.',
+                    );
+                }
+            }
+
+            // All proposals on this target passed semantic verification!
+            // Prepare writes and history entries for the stale proposals on this target:
+            foreach ($staleEntries as $entry) {
+                $record = $entry['record'];
+                $proposalPath = $entry['path'];
+                $data = $record->raw;
+                $validation = $data['applied_validation'];
+                $validation['target_content_hash'] = $currentHash;
+                $validation['reanchored_by'] = $actor;
+                $validation['reanchored_at'] = $nowStr;
+                $validation['reanchor_reason'] = $reason;
+                $data['applied_validation'] = $validation;
+
+                $writes[$proposalPath] = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+                $repairedEntries[] = [
+                    'id' => $record->id,
+                    'ref' => $entry['ref'],
+                    'hash' => $currentHash,
+                ];
+            }
+        }
+
+        if ($repairedEntries === []) {
+            return [];
+        }
+
+        usort($repairedEntries, static fn (array $a, array $b): int => strcmp($a['id'], $b['id']));
+
+        $historyLines = function () use ($root, $now, $repairedEntries, $actor, $nowStr, $reason): string {
+            $lines = '';
+            foreach ($repairedEntries as $sequence => $entry) {
+                $lines .= json_encode([
+                    'id' => $this->generateReanchorId($root, $now, $sequence),
+                    'proposal_id' => $entry['id'],
+                    'reanchored_by' => $actor,
+                    'reanchored_at' => $nowStr,
+                    'reason' => $reason,
+                    'target_source_ref' => $entry['ref'],
+                    'target_content_hash' => $entry['hash'],
+                ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
+            }
+
+            return $lines;
+        };
+
+        $this->persistReanchor($root, $writes, $historyLines, []);
+
+        return array_column($repairedEntries, 'id');
+    }
+
+    /**
      * Re-anchor every applied guidance proof pinned to one target file.
      *
      * `applied_validation.target_content_hash` pins the whole target, so a shared
