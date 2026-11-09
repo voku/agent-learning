@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-09
+
+### Added
+
+- Add automated proof re-anchoring via `proposal-reanchor --auto` (#192). Automatically discovers matching applied guidance targets across files and re-anchors occurrences when target file content is proven equivalent.
+- Partition Dream consolidation metrics by provenance (#191).
+
+### Security
+
+- Enforce fail-closed verification for automated re-anchoring (#192). Pre-proof policy records created before policy enforcement cutoff strictly refuse automatic re-anchoring and require manual review. Malformed or non-existent target paths fail closed.
+
+### Validation
+
+- Full PHPUnit test suite passing across PHP 8.3/8.4/8.5 with 524 tests and 2,043 assertions. PHPStan clean.
+
 ## [0.18.39] - 2026-11-02
 
 ### Fixed
