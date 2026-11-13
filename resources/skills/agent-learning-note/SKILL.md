@@ -226,7 +226,7 @@ A LearningNote may reveal that repeated evidence deserves stronger durable treat
 - approve or apply a Proposal;
 - create a Skill automatically;
 - create or activate a Constraint automatically;
-- rewrite MEMORY.md, ADRs, README, project policy, or other durable guidance;
+- rewrite `MEMORY.md`, ADRs, README, project policy, or other durable guidance;
 - change `ADD_LEARNING_NOTE` into `UPDATE_SKILL`/`CREATE_SKILL` silently;
 - retire a note because stronger guidance exists.
 
