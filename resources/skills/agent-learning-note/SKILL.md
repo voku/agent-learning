@@ -2,6 +2,8 @@
 name: agent-learning-note
 description: Author or update one evidence-grounded voku/agent-learning LearningNote from explicit validated Finding IDs, using the typed prepare/publish owner boundary and current repository evidence without promoting the note into active guidance.
 argument-hint: "[validated Finding ID ...] [optional: existing LearningNote ID]"
+metadata:
+  author: Lars Moelleken <lars@moelleken.org>
 ---
 
 # Agent LearningNote Author
@@ -142,16 +144,16 @@ Do not turn the note into a backlog/work package. Future executable work belongs
 
 ## 7. Build the owner candidate
 
-Write a temporary authoring candidate outside Learning-private `notes/**`. The candidate contains only the public authoring input accepted by the owner, for example:
+Write a temporary authoring candidate outside Learning-private `notes/**`. The candidate contains only the public authoring input accepted by the owner. Replace the example's Finding ID and repository-relative source path with verified values before invoking the owner:
 
 ```json
 {
-  "source_findings": ["finding.2026-08-31.001"],
+  "source_findings": ["REPLACE_WITH_VERIFIED_FINDING_ID"],
   "source_proposals": [],
   "tags": ["workflow", "ownership"],
   "repository_evidence": [
     {
-      "source_ref": "src/Workflow/Example.php",
+      "source_ref": "REPLACE_WITH_VERIFIED_SOURCE_PATH",
       "sha256": "<lowercase-sha256>"
     }
   ],
@@ -224,7 +226,7 @@ A LearningNote may reveal that repeated evidence deserves stronger durable treat
 - approve or apply a Proposal;
 - create a Skill automatically;
 - create or activate a Constraint automatically;
-- rewrite `MEMORY.md`, ADRs, README, project policy, or other durable guidance;
+- rewrite MEMORY.md, ADRs, README, project policy, or other durable guidance;
 - change `ADD_LEARNING_NOTE` into `UPDATE_SKILL`/`CREATE_SKILL` silently;
 - retire a note because stronger guidance exists.
 

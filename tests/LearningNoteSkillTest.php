@@ -40,7 +40,7 @@ final class LearningNoteSkillTest extends TestCase
         self::assertStringContainsString('must never:', $skill);
         self::assertStringContainsString('approve or apply a Proposal', $skill);
         self::assertStringContainsString('create or activate a Constraint automatically', $skill);
-        self::assertStringContainsString('rewrite `MEMORY.md`', $skill);
+        self::assertStringContainsString('rewrite MEMORY.md', $skill);
         self::assertStringContainsString('Do not persist raw chat/session transcripts', $skill);
     }
 
