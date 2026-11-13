@@ -91,7 +91,7 @@ Keep guidance together when its parts always trigger together and cannot be reus
 
 A separate skill boundary is justified when the behavior has a distinct trigger and can be reused or evolve independently. File length and topic adjacency are not evidence for another skill.
 
-For `CREATE_SKILL`, reflect this reasoning in `overlap_check.decision` and the proposal boundary.
+For `CREATE_SKILL`, reflect this reasoning in the overlap_check.decision field and the proposal boundary.
 
 ## 5. Use progressive disclosure
 
