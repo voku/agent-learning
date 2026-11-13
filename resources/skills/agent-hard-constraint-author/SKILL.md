@@ -1,6 +1,8 @@
 ---
 name: agent-hard-constraint-author
 description: Turn validated agent-learning findings into human-approved executable constraints such as PHPStan rules, PHP-CS-Fixer rules, tests, or CI checks, with generation packages, manifests, fixtures, and validation evidence.
+metadata:
+  author: Lars Moelleken <lars@moelleken.org>
 ---
 
 # Agent Hard Constraint Author

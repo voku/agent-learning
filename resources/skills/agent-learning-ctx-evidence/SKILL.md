@@ -1,6 +1,8 @@
 ---
 name: agent-learning-ctx-evidence
 description: Use ctx-backed local agent-history search as bounded evidence references while creating, validating, or consolidating voku/agent-learning findings.
+metadata:
+  author: Lars Moelleken <lars@moelleken.org>
 ---
 
 # Agent Learning ctx Evidence

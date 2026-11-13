@@ -1,6 +1,8 @@
 ---
 name: agent-learning-consumer
 description: Set up and operate voku/agent-learning in a consuming repository, including learning-root config.json, typed Finding creation, LearningNotes, findings, proposals, consolidation prompts, validation, and lifecycle commands. Use for end-user learning-loop workflows, not package source development.
+metadata:
+  author: Lars Moelleken <lars@moelleken.org>
 ---
 
 # Agent Learning Consumer

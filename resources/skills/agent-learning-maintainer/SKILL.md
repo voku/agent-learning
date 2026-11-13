@@ -1,6 +1,8 @@
 ---
 name: agent-learning-maintainer
 description: Maintain voku/agent-learning package source, tests, docs, CLI behavior, configurable paths, constraint lifecycle code, and local vendor syncs in consuming projects.
+metadata:
+  author: Lars Moelleken <lars@moelleken.org>
 ---
 
 # Agent Learning Maintainer

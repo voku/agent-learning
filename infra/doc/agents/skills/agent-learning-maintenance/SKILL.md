@@ -1,6 +1,8 @@
 ---
 name: agent-learning-maintenance
 description: Capture, validate, and transition package-specific findings and proposals for voku/agent-learning.
+metadata:
+  author: Lars Moelleken <lars@moelleken.org>
 ---
 
 # Agent Learning Maintenance Skill

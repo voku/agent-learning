@@ -2,6 +2,8 @@
 name: agent-skill-promotion
 description: Author a bounded UPDATE_SKILL or CREATE_SKILL consolidation result from validated voku/agent-learning evidence, then import it through the existing candidate-Proposal owner boundary without approving or applying guidance.
 argument-hint: "[validated Finding ID ...]"
+metadata:
+  author: Lars Moelleken <lars@moelleken.org>
 ---
 
 # Agent Skill Promotion

@@ -2,6 +2,8 @@
 name: agent-learning-note
 description: Author or update one evidence-grounded voku/agent-learning LearningNote from explicit validated Finding IDs, using the typed prepare/publish owner boundary and current repository evidence without promoting the note into active guidance.
 argument-hint: "[validated Finding ID ...] [optional: existing LearningNote ID]"
+metadata:
+  author: Lars Moelleken <lars@moelleken.org>
 ---
 
 # Agent LearningNote Author
