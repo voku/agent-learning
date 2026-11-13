@@ -63,7 +63,7 @@ vendor/bin/agent-learning guidance-evaluate --root infra/doc/agent-learning --se
 
 ## From validated Finding to applied memory or skill guidance
 
-Never write a lesson straight into `MEMORY.md`, a skill or a doc. That leaves no evidence, no overlap check, no named approver and no proof that the wording landed. The path below produces all four, and each step fails closed when the one before it was skipped.
+Never write a lesson straight into MEMORY.md, a skill or a doc. That leaves no evidence, no overlap check, no named approver and no proof that the wording landed. The path below produces all four, and each step fails closed when the one before it was skipped.
 
 1. `finding-create` with real text: observation, hypothesis, conclusion, scope, evidence. The tools write immutable records, so never run it with placeholder arguments just to learn the syntax.
 2. `validate`, then `prepare --finding <id>`. `prepare` only writes a consolidation prompt; it does not produce the result.
