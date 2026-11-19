@@ -50,6 +50,7 @@ final class ProposalAcknowledgementTest extends TestCase
         self::assertSame('lars', $data['acknowledged_by']);
         self::assertSame('Correctly classified, closing formally', $data['reason']);
         self::assertIsString($data['acknowledged_at']);
+        self::assertSame($this->noDurableLearningProposalData()['reason'], $data['proposal_reason'], 'the proposal rationale survives the closing reason');
 
         // The typed projection carries the moment the writer recorded, so a
         // consumer never has to read the record's private shape to date it.
