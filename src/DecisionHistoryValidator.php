@@ -20,21 +20,23 @@ final class DecisionHistoryValidator
         $approvedPath = $root . '/history/decisions.jsonl';
         $rejectedPath = $root . '/history/rejected-proposals.jsonl';
         $retiredPath = $root . '/history/retired-proposals.jsonl';
-        $approvedProposals = [];
+        // The version-controlled proposal is the canonical record of its approval;
+        // the history journal is a supplementary, possibly machine-local audit trail.
+        // A journal may therefore be absent, but whatever it says must agree with the
+        // committed proposal: it can never stand in for, or contradict, the approval.
         foreach ($this->jsonRecords($approvedPath) as $record) {
             $proposalId = $this->requireString($record, 'proposal_id', $approvedPath, null);
             $status = $this->requireString($record, 'status', $approvedPath, $proposalId);
             if (!isset($proposalsById[$proposalId])) {
                 throw new ValidationException($approvedPath, null, $proposalId, 'history references unknown proposal');
             }
-            if (($status === 'approved' || $status === 'applied') && (trim((string)($record['approved_by'] ?? '')) === '' || trim((string)($record['approved_at'] ?? '')) === '')) {
-                throw new ValidationException($approvedPath, null, $proposalId, 'approved proposal requires approved_by and approved_at');
-            }
-            if ($status === 'approved') {
-                $approvedProposals[$proposalId] = true;
-            }
-            if ($status === 'applied' && !isset($approvedProposals[$proposalId])) {
-                throw new ValidationException($approvedPath, null, $proposalId, 'applied decision requires prior approved decision');
+            if ($status === 'approved' || $status === 'applied') {
+                $approvedBy = $this->nonEmptyString($record, 'approved_by');
+                $approvedAt = $this->nonEmptyString($record, 'approved_at');
+                if ($approvedBy === null || $approvedAt === null) {
+                    throw new ValidationException($approvedPath, null, $proposalId, 'approved proposal requires approved_by and approved_at');
+                }
+                $this->assertAgreesWithCommittedApproval($proposalsById[$proposalId], $approvedBy, $approvedAt, $approvedPath);
             }
         }
 
@@ -42,6 +44,9 @@ final class DecisionHistoryValidator
             $proposalId = $this->requireString($record, 'proposal_id', $rejectedPath, null);
             if (!isset($proposalsById[$proposalId])) {
                 throw new ValidationException($rejectedPath, null, $proposalId, 'history references unknown proposal');
+            }
+            if ($proposalsById[$proposalId]->status !== ProposalStatus::REJECTED) {
+                throw new ValidationException($rejectedPath, null, $proposalId, 'history rejection contradicts committed proposal status: ' . $proposalsById[$proposalId]->status->value);
             }
             if (trim((string)($record['reason'] ?? '')) === '') {
                 throw new ValidationException($rejectedPath, null, $proposalId, 'rejected proposal requires a reason');
@@ -87,6 +92,32 @@ final class DecisionHistoryValidator
                 throw new ValidationException($reanchoredPath, null, $proposalId, 're-anchored proposal requires target_content_hash as sha256 hex');
             }
         }
+    }
+
+    private function assertAgreesWithCommittedApproval(Proposal $proposal, string $approvedBy, string $approvedAt, string $file): void
+    {
+        if ($proposal->approvedBy === null || $proposal->approvedAt === null) {
+            throw new ValidationException($file, null, $proposal->id, 'history approval has no committed approval on the proposal');
+        }
+        if ($approvedBy !== $proposal->approvedBy || $approvedAt !== $proposal->approvedAt) {
+            throw new ValidationException(
+                $file,
+                null,
+                $proposal->id,
+                'history approval contradicts the committed proposal approval: ' . $approvedBy . ' at ' . $approvedAt
+                . ' vs ' . $proposal->approvedBy . ' at ' . $proposal->approvedAt,
+            );
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $record
+     */
+    private function nonEmptyString(array $record, string $field): ?string
+    {
+        $value = $record[$field] ?? null;
+
+        return is_string($value) && trim($value) !== '' ? $value : null;
     }
 
     /**

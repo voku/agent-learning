@@ -1078,6 +1078,13 @@ final class ProposalTransitionManager
         if ($proposal->status !== ProposalStatus::APPROVED) {
             throw new ValidationException($proposalPath, null, $proposalId, 'proposal is not approved');
         }
+        // Applying records that an approved change landed; it must never stand in
+        // for the approval itself, so the approval comes only from the proposal.
+        $approvedBy = $proposal->approvedBy;
+        $approvedAt = $proposal->approvedAt;
+        if ($approvedBy === null || trim($approvedBy) === '' || $approvedAt === null || trim($approvedAt) === '') {
+            throw new ValidationException($proposalPath, null, $proposalId, 'approved proposal requires approved_by and approved_at');
+        }
 
         if (!in_array($proposal->targetType, [
             GuidanceType::MEMORY->value,
@@ -1120,8 +1127,8 @@ final class ProposalTransitionManager
             'id' => $this->generateDecisionId($root, $now),
             'proposal_id' => $proposalId,
             'status' => 'applied',
-            'approved_by' => $proposal->approvedBy ?? $actor,
-            'approved_at' => $proposal->approvedAt ?? $nowStr,
+            'approved_by' => $approvedBy,
+            'approved_at' => $approvedAt,
             'applied_by' => $actor,
             'applied_at' => $nowStr,
             'commit' => $commit,
