@@ -970,10 +970,15 @@ final class Cli
             throw new ValidationException($root, null, $findingId, 'finding-classify takes finding ID and learning classification arguments only');
         }
 
-        $fromProposal = $this->stringOption($parsed['options'], 'from-proposal');
-        if ($fromProposal !== null) {
+        // Decide by presence, not by parsed value: a bare or empty `--from-proposal` must not fall
+        // back to ordinary classification, which for IGNORE would drop existing triage.
+        if (array_key_exists('from-proposal', $parsed['options'])) {
+            $fromProposal = $this->stringOption($parsed['options'], 'from-proposal');
+            if ($fromProposal === null) {
+                throw new ValidationException($root, null, $findingId, 'finding-classify --from-proposal requires a proposal ID');
+            }
             foreach (['pattern-key', 'given', 'when', 'then'] as $option) {
-                if ($this->stringOption($parsed['options'], $option) !== null) {
+                if (array_key_exists($option, $parsed['options'])) {
                     throw new ValidationException(
                         $root,
                         null,

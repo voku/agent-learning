@@ -106,7 +106,7 @@ vendor/bin/agent-learning finding-classify finding.2026-06-15.001 \
   --root infra/doc/agent-learning
 ```
 
-It requires a candidate Proposal that cites the Finding, refuses `--pattern-key`/`--given`/`--when`/`--then` alongside it, and checks an explicit classification argument against the Proposal. It does not approve, reject or apply the Proposal: a Memory candidate whose `learning_decision` is `ADD_LEARNING_NOTE` still needs its own named rejection or acknowledgement once the LearningNote exists.
+It requires a candidate Proposal that cites the Finding, refuses `--pattern-key`/`--given`/`--when`/`--then` alongside it, and checks an explicit classification argument against the Proposal. It does not approve, reject or apply the Proposal: a Memory candidate whose `learning_decision` is `ADD_LEARNING_NOTE` still needs its own named closure once the LearningNote exists. Close it with `proposal-reject`; `proposal-acknowledge` only accepts candidates whose `action` is `NO_DURABLE_LEARNING` and refuses any other action.
 
 For a Finding already classified `ADD_LEARNING_NOTE`, the deterministic LearningNote boundary is separate:
 

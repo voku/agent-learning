@@ -178,6 +178,7 @@ final class FindingClassifyCliTest extends TestCase
         yield 'proposal already decided' => ['rejected', [], [], 'requires a candidate proposal; current status is rejected'];
         yield 'explicit classification disagrees' => ['candidate', [], ['UPDATE_SKILL'], 'proposal learning_decision is ADD_LEARNING_NOTE, not the requested UPDATE_SKILL'];
         yield 'manual triage mixed in' => ['candidate', [], ['--pattern-key', 'other.key'], 'do not combine it with --pattern-key'];
+        yield 'empty manual option mixed in' => ['candidate', [], ['--given='], 'do not combine it with --given'];
     }
 
     /**
@@ -198,6 +199,29 @@ final class FindingClassifyCliTest extends TestCase
         self::assertNotSame(0, $exitCode, $output);
         self::assertStringContainsString($expectedError, $output);
         self::assertSame($before, file_get_contents($findingPath));
+    }
+
+    public function testBareFromProposalIsRefusedInsteadOfFallingBackToOrdinaryClassification(): void
+    {
+        $root = $this->createLearningRoot();
+        $findingId = $this->createFinding($root, 'finding.2026-11-19.f00004');
+        [$classifyExit, $classifyOutput] = $this->runCli($root, [
+            'finding-classify', $findingId, 'ADD_LEARNING_NOTE',
+            '--pattern-key', 'existing.triage',
+            '--given', 'g', '--when', 'w', '--then', 't',
+        ]);
+        self::assertSame(0, $classifyExit, $classifyOutput);
+        $findingPath = $root . '/findings/validated/' . $findingId . '.json';
+        $before = file_get_contents($findingPath);
+
+        // Without the presence check this ran an ordinary IGNORE classification and dropped the triage.
+        foreach ([['--from-proposal'], ['--from-proposal=']] as $option) {
+            [$exitCode, $output] = $this->runCli($root, ['finding-classify', $findingId, 'IGNORE', ...$option]);
+
+            self::assertNotSame(0, $exitCode, $output);
+            self::assertStringContainsString('--from-proposal requires a proposal ID', $output);
+            self::assertSame($before, file_get_contents($findingPath));
+        }
     }
 
     /**
