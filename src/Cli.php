@@ -966,11 +966,47 @@ final class Cli
         if ($findingId === null || trim($findingId) === '') {
             throw new ValidationException($root, null, null, 'finding-classify requires finding ID argument');
         }
-        if ($classificationValue === null || trim($classificationValue) === '') {
-            throw new ValidationException($root, null, $findingId, 'finding-classify requires learning classification argument');
-        }
         if (count($parsed['arguments']) > 2) {
             throw new ValidationException($root, null, $findingId, 'finding-classify takes finding ID and learning classification arguments only');
+        }
+
+        $fromProposal = $this->stringOption($parsed['options'], 'from-proposal');
+        if ($fromProposal !== null) {
+            foreach (['pattern-key', 'given', 'when', 'then'] as $option) {
+                if ($this->stringOption($parsed['options'], $option) !== null) {
+                    throw new ValidationException(
+                        $root,
+                        null,
+                        $findingId,
+                        'finding-classify --from-proposal takes triage from the proposal; do not combine it with --' . $option,
+                    );
+                }
+            }
+            $expected = null;
+            if ($classificationValue !== null && trim($classificationValue) !== '') {
+                $expected = LearningClassification::tryFrom($classificationValue);
+                if (!$expected instanceof LearningClassification) {
+                    throw new ValidationException($root, null, $findingId, 'unsupported learning classification: ' . $classificationValue);
+                }
+            }
+
+            $finding = (new FindingClassifier())->classifyFromProposal(
+                root: $root,
+                findingId: $findingId,
+                proposalId: $fromProposal,
+                expected: $expected,
+                taskIdPattern: $this->stringOption($parsed['options'], 'task-id-pattern'),
+            );
+            $this->write(json_encode(
+                $this->findingIntakeResult($finding),
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
+            ) . "\n");
+
+            return 0;
+        }
+
+        if ($classificationValue === null || trim($classificationValue) === '') {
+            throw new ValidationException($root, null, $findingId, 'finding-classify requires learning classification argument');
         }
 
         $classification = LearningClassification::tryFrom($classificationValue);
@@ -1411,6 +1447,7 @@ final class Cli
             . "  --sensitivity VALUE      Explicit sensitivity; capture defaults to internal.\n"
             . "  --evidence-json JSON     Evidence object for finding-create. Repeatable.\n"
             . "  --pattern-key KEY        Reusable pattern identity for finding-classify.\n"
+            . "  --from-proposal ID       For finding-classify: copy learning_decision, pattern_key and validation_case from a candidate proposal citing the finding.\n"
             . "  --given TEXT             Validation precondition for finding-classify.\n"
             . "  --when TEXT              Validation action for finding-classify.\n"
             . "  --then TEXT              Validation expectation for finding-classify.\n"

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `finding-classify <finding> --from-proposal <proposal>` copies `learning_decision`, `pattern_key` and `validation_case` from a candidate Proposal that cites the Finding. Consolidation already records that triage on the Proposal, while `agent-learning-note prepare` reads it from the Finding, so `ADD_LEARNING_NOTE` candidates could only reach a LearningNote after a reviewer retyped the same three values. The command refuses non-candidate Proposals, uncited Findings, a disagreeing explicit classification and mixed manual triage options, and never transitions the Proposal.
+
 ## [0.19.0] - 2026-11-09
 
 ### Added

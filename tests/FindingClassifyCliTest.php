@@ -138,6 +138,112 @@ final class FindingClassifyCliTest extends TestCase
         self::assertSame($before, file_get_contents($path));
     }
 
+    public function testFromProposalCopiesConsolidationTriageAndMakesFindingNoteReady(): void
+    {
+        $root = $this->createLearningRoot();
+        $findingId = $this->createFinding($root, 'finding.2026-11-19.f00001');
+        $this->writeProposal($root, 'candidate', 'proposal.2026-11-19.p00001', [$findingId]);
+
+        self::assertFalse((new LearningNoteService())->promotionReadiness($root, $findingId)->promotable);
+
+        [$exitCode, $output] = $this->runCli($root, ['finding-classify', $findingId, '--from-proposal', 'proposal.2026-11-19.p00001']);
+
+        self::assertSame(0, $exitCode, $output);
+        $finding = (new FindingValidator())->validateFile($root . '/findings/validated/' . $findingId . '.json');
+        self::assertSame(LearningClassification::ADD_LEARNING_NOTE, $finding->classification);
+        self::assertSame('process.runner.selects.host.wrapper', $finding->patternKey);
+        self::assertNotNull($finding->validationCase);
+        self::assertSame('a Composer bin directory with both wrappers', $finding->validationCase->given);
+        self::assertTrue((new LearningNoteService())->promotionReadiness($root, $findingId)->promotable);
+        self::assertFileExists($root . '/proposals/candidate/proposal.2026-11-19.p00001.json', 'the proposal is not transitioned');
+    }
+
+    public function testFromProposalAcceptsMatchingExplicitClassification(): void
+    {
+        $root = $this->createLearningRoot();
+        $findingId = $this->createFinding($root, 'finding.2026-11-19.f00002');
+        $this->writeProposal($root, 'candidate', 'proposal.2026-11-19.p00002', [$findingId]);
+
+        [$exitCode, $output] = $this->runCli($root, ['finding-classify', $findingId, 'ADD_LEARNING_NOTE', '--from-proposal', 'proposal.2026-11-19.p00002']);
+
+        self::assertSame(0, $exitCode, $output);
+    }
+
+    /**
+     * @return iterable<string, array{0: string, 1: list<string>, 2: list<string>, 3: string}>
+     */
+    public static function rejectedFromProposalCases(): iterable
+    {
+        yield 'proposal does not cite the finding' => ['candidate', ['finding.2026-11-19.f00999'], [], 'proposal does not cite finding'];
+        yield 'proposal already decided' => ['rejected', [], [], 'requires a candidate proposal; current status is rejected'];
+        yield 'explicit classification disagrees' => ['candidate', [], ['UPDATE_SKILL'], 'proposal learning_decision is ADD_LEARNING_NOTE, not the requested UPDATE_SKILL'];
+        yield 'manual triage mixed in' => ['candidate', [], ['--pattern-key', 'other.key'], 'do not combine it with --pattern-key'];
+    }
+
+    /**
+     * @param list<string> $citedOverride
+     * @param list<string> $extraArguments
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('rejectedFromProposalCases')]
+    public function testFromProposalRefusesAndLeavesFindingUnchanged(string $status, array $citedOverride, array $extraArguments, string $expectedError): void
+    {
+        $root = $this->createLearningRoot();
+        $findingId = $this->createFinding($root, 'finding.2026-11-19.f00003');
+        $this->writeProposal($root, $status, 'proposal.2026-11-19.p00003', $citedOverride === [] ? [$findingId] : $citedOverride);
+        $findingPath = $root . '/findings/validated/' . $findingId . '.json';
+        $before = file_get_contents($findingPath);
+
+        [$exitCode, $output] = $this->runCli($root, ['finding-classify', $findingId, ...$extraArguments, '--from-proposal', 'proposal.2026-11-19.p00003']);
+
+        self::assertNotSame(0, $exitCode, $output);
+        self::assertStringContainsString($expectedError, $output);
+        self::assertSame($before, file_get_contents($findingPath));
+    }
+
+    /**
+     * @param list<string> $sourceFindings
+     */
+    private function writeProposal(string $root, string $status, string $id, array $sourceFindings): void
+    {
+        $directory = $root . '/proposals/' . $status;
+        if (!is_dir($directory)) {
+            self::assertTrue(mkdir($directory, 0777, true));
+        }
+        $record = [
+            'id' => $id,
+            'created_at' => '2026-11-19T10:00:00+00:00',
+            'action' => 'ADD',
+            'source_findings' => $sourceFindings,
+            'reason' => 'Consolidation classified the lesson as LearningNote material.',
+            'remaining_uncertainty' => ['Single manifestation.'],
+            'status' => $status,
+            'proposed_by' => 'consolidation',
+            'approved_by' => null,
+            'approved_at' => null,
+            'target_type' => 'memory',
+            'target' => 'Host-appropriate executable selection',
+            'scope' => ['src/'],
+            'old' => null,
+            'new' => 'Select the host-appropriate wrapper before Windows .bat files.',
+            'boundary' => 'Host-side process selection only.',
+            'validation' => ['composer ci'],
+            'scope_justification' => 'Repeatable host-boundary lesson.',
+            'learning_decision' => 'ADD_LEARNING_NOTE',
+            'pattern_key' => 'process.runner.selects.host.wrapper',
+            'validation_case' => [
+                'given' => 'a Composer bin directory with both wrappers',
+                'when' => 'a Linux runner picks the first existing file',
+                'then' => 'it selects the host-appropriate executable',
+            ],
+        ];
+        if ($status === 'rejected') {
+            $record['rejected_by'] = 'tester';
+            $record['rejected_at'] = '2026-11-19T11:00:00+00:00';
+            $record['rejection_reason'] = 'Not durable.';
+        }
+        file_put_contents($directory . '/' . $id . '.json', json_encode($record, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR) . "\n");
+    }
+
     private function createLearningRoot(): string
     {
         $root = sys_get_temp_dir() . '/agent-learning-finding-classify-cli-' . bin2hex(random_bytes(8)) . '/.agent-loop/learning';

@@ -14,7 +14,65 @@ final readonly class FindingClassifier
     public function __construct(
         private FindingParser $parser = new FindingParser(),
         private FindingLifecycle $lifecycle = new FindingLifecycle(),
+        private ProposalParser $proposalParser = new ProposalParser(),
+        private ProposalLifecycle $proposalLifecycle = new ProposalLifecycle(),
     ) {
+    }
+
+    /**
+     * Classify a validated Finding with the triage a candidate Proposal already recorded.
+     *
+     * Consolidation writes `learning_decision`, `pattern_key` and `validation_case` onto the
+     * candidate Proposal, but LearningNote preparation reads the classification from the
+     * Finding. Without this, a reviewer had to retype the same three values by hand, and
+     * Proposals classified ADD_LEARNING_NOTE stayed stuck as Memory candidates. This copies
+     * the recorded triage; it neither approves, rejects nor applies the Proposal, and
+     * publishing a LearningNote remains a separate explicit step.
+     */
+    public function classifyFromProposal(
+        string $root,
+        string $findingId,
+        string $proposalId,
+        ?LearningClassification $expected = null,
+        ?string $taskIdPattern = null,
+    ): Finding {
+        $path = $this->resolveProposalPath($root, $proposalId);
+        $proposal = $this->proposalParser->parseFile($path);
+        if ($proposal->id !== $proposalId) {
+            throw new ValidationException($path, null, $proposalId, 'proposal file does not carry the requested ID');
+        }
+        if ($proposal->status !== ProposalStatus::CANDIDATE) {
+            throw new ValidationException(
+                $path,
+                null,
+                $proposalId,
+                'finding-classify --from-proposal requires a candidate proposal; current status is ' . $proposal->status->value,
+            );
+        }
+        if (!in_array($findingId, $proposal->sourceFindings, true)) {
+            throw new ValidationException($path, null, $proposalId, 'proposal does not cite finding ' . $findingId);
+        }
+        $classification = $proposal->learningDecision;
+        if (!$classification instanceof LearningClassification) {
+            throw new ValidationException($path, null, $proposalId, 'proposal records no learning_decision to classify from');
+        }
+        if ($expected instanceof LearningClassification && $expected !== $classification) {
+            throw new ValidationException(
+                $path,
+                null,
+                $proposalId,
+                sprintf('proposal learning_decision is %s, not the requested %s', $classification->value, $expected->value),
+            );
+        }
+
+        return $this->classify(
+            root: $root,
+            findingId: $findingId,
+            classification: $classification,
+            patternKey: $proposal->patternKey,
+            validationCase: $proposal->validationCase,
+            taskIdPattern: $taskIdPattern,
+        );
     }
 
     public function classify(
@@ -66,6 +124,18 @@ final readonly class FindingClassifier
         $this->replaceAtomically($path, $encoded, $findingId);
 
         return $updated;
+    }
+
+    private function resolveProposalPath(string $root, string $proposalId): string
+    {
+        foreach ($this->proposalLifecycle->directories() as $directory) {
+            $path = $root . '/proposals/' . $directory . '/' . $proposalId . '.json';
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+
+        throw new ValidationException($root, null, $proposalId, 'proposal file not found: ' . $proposalId);
     }
 
     private function resolveFindingPath(string $root, string $findingId): string
