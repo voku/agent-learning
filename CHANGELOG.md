@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-19
+
+### Added
+
+- `finding-classify <finding> --from-proposal <proposal>` copies `learning_decision`, `pattern_key` and `validation_case` from a candidate Proposal that cites the Finding. Consolidation already records that triage on the Proposal, while `agent-learning-note prepare` reads it from the Finding, so `ADD_LEARNING_NOTE` candidates could only reach a LearningNote after a reviewer retyped the same three values. The command refuses non-candidate Proposals, uncited Findings, a disagreeing explicit classification and mixed manual triage options, and never transitions the Proposal.
+
+### Fixed
+
+- The tag workflow no longer reports a present changelog section as missing. Under `pipefail`, `git show <target>:CHANGELOG.md | grep -Fq` failed with SIGPIPE (141) once `grep` matched the newest section and exited early on a CHANGELOG larger than the pipe buffer (75 KB here), which would have blocked this release. The target CHANGELOG is now captured once and matched in-shell, as voku/agent-loop already does (finding `2026-09-19.95209d`). `tests/ReleaseTagWorkflowTest.php` runs the real workflow script against a real repository with a local bare `origin`.
+
 ## [0.19.0] - 2026-11-09
 
 ### Added

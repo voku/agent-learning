@@ -98,6 +98,16 @@ vendor/bin/agent-learning proposal-reanchor MEMORY.md \
 
 `proposal-reanchor` repairs every applied `memory`/`skill` proof resolving to that target in one transaction and fails closed if any applied guidance on the file is missing. It preserves approval/application evidence and records the repair provenance. If the reviewed guidance itself changed or disappeared, do **not** re-anchor it; treat that as semantic drift and use the normal reviewed replace/retire path. When that drifted proof and stale proofs share one target and block each other, create and validate the reviewed REPLACE proposal, then obtain a named human's approval **before editing or committing the target** and before running `proposal-reanchor --supersede`. After committing the approved final target text, run `proposal-reanchor <target> --supersede <drifted-id>=<replacement-id>` so the drifted proof is retired and the remaining proofs are re-pinned in one transaction. Apply the already approved replacement only after reanchoring, through the normal `proposal-mark-applied` flow. Never retire applied guidance in favor of an unapproved replacement.
 
+When consolidation already recorded the triage on a candidate Proposal (`learning_decision`, `pattern_key`, `validation_case`), copy it onto the cited Finding instead of retyping it:
+
+```bash
+vendor/bin/agent-learning finding-classify finding.2026-06-15.001 \
+  --from-proposal proposal.2026-06-16.001 \
+  --root infra/doc/agent-learning
+```
+
+It requires a candidate Proposal that cites the Finding, refuses `--pattern-key`/`--given`/`--when`/`--then` alongside it, and checks an explicit classification argument against the Proposal. It does not approve, reject or apply the Proposal: a Memory candidate whose `learning_decision` is `ADD_LEARNING_NOTE` still needs its own named closure once the LearningNote exists. Close it with `proposal-reject`; `proposal-acknowledge` only accepts candidates whose `action` is `NO_DURABLE_LEARNING` and refuses any other action.
+
 For a Finding already classified `ADD_LEARNING_NOTE`, the deterministic LearningNote boundary is separate:
 
 ```bash
