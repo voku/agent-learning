@@ -139,11 +139,13 @@ final class ProposalTransitionManager
         }
 
         $now = new DateTimeImmutable('now');
+        $nowStr = $now->format(DateTimeInterface::ATOM);
         $rejectedPath = $root . '/history/rejected-proposals.jsonl';
 
-        $data = $proposal->raw;
+        $data = $this->withTerminalReason($proposal->raw, $reason);
         $data['status'] = ProposalStatus::REJECTED->value;
-        $data['reason'] = $reason;
+        $data['rejected_by'] = $actor;
+        $data['rejected_at'] = $nowStr;
 
         $updatedContent = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
@@ -156,6 +158,8 @@ final class ProposalTransitionManager
         $rejectionLine = fn (): string => json_encode([
             'id' => $this->generateRejectionId($root, $now),
             'proposal_id' => $proposalId,
+            'rejected_by' => $actor,
+            'rejected_at' => $nowStr,
             'reason' => $reason,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
@@ -202,11 +206,10 @@ final class ProposalTransitionManager
 
         $acknowledgedPath = $root . '/history/acknowledged-proposals.jsonl';
 
-        $data = $proposal->raw;
+        $data = $this->withTerminalReason($proposal->raw, $reason);
         $data['status'] = ProposalStatus::ACKNOWLEDGED->value;
         $data['acknowledged_by'] = $actor;
         $data['acknowledged_at'] = $nowStr;
-        $data['reason'] = $reason;
 
         $updatedContent = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
@@ -226,6 +229,28 @@ final class ProposalTransitionManager
 
         $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $acknowledgedPath, $acknowledgementLine, 'acknowledgement');
         $this->consolidateSourceFindings($root, $proposal, $actor, 'acknowledgement');
+    }
+
+    /**
+     * Set the terminal decision's reason without losing why the proposal was made.
+     *
+     * Readers treat `reason` on a terminal proposal as the decision reason, so it is
+     * replaced; the proposal's own rationale moves to `proposal_reason` once and is
+     * never overwritten by a later decision. The committed proposal file is then the
+     * complete audit record, even where `history/` is not version-controlled.
+     *
+     * @param array<array-key, mixed> $data
+     *
+     * @return array<array-key, mixed>
+     */
+    private function withTerminalReason(array $data, string $reason): array
+    {
+        if (!array_key_exists('proposal_reason', $data) && is_string($data['reason'] ?? null)) {
+            $data['proposal_reason'] = $data['reason'];
+        }
+        $data['reason'] = $reason;
+
+        return $data;
     }
 
     public function generateAcknowledgementId(string $root, ?DateTimeImmutable $date = null): string
@@ -284,9 +309,8 @@ final class ProposalTransitionManager
 
         $retiredPath = $root . '/history/retired-proposals.jsonl';
 
-        $data = $proposal->raw;
+        $data = $this->withTerminalReason($proposal->raw, $reason);
         $data['status'] = ProposalStatus::RETIRED->value;
-        $data['reason'] = $reason;
         $data['retired_by'] = $actor;
         $data['retired_at'] = $nowStr;
         if ($supersededByProposalId !== null && trim($supersededByProposalId) !== '') {
@@ -741,9 +765,8 @@ final class ProposalTransitionManager
                 }
 
                 $retiredId = $record->id;
-                $retiredData = $record->raw;
+                $retiredData = $this->withTerminalReason($record->raw, $reason);
                 $retiredData['status'] = ProposalStatus::RETIRED->value;
-                $retiredData['reason'] = $reason;
                 $retiredData['retired_by'] = $actor;
                 $retiredData['retired_at'] = $nowStr;
                 $retiredData['superseded_by'] = $replacementId;

@@ -52,6 +52,30 @@ final class ProposalRejectionTest extends TestCase
         self::assertStringContainsString('proposal.2026-06-08.001', $rejections);
     }
 
+    public function testRejectionKeepsTheProposalRationaleAndRecordsWhoDecided(): void
+    {
+        $candidate = json_decode((string)file_get_contents($this->root . '/proposals/candidate/proposal.2026-06-08.001.json'), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($candidate);
+        $originalReason = $candidate['reason'];
+        self::assertIsString($originalReason);
+        self::assertNotSame('', trim($originalReason));
+
+        (new ProposalTransitionManager())->reject($this->root, 'proposal.2026-06-08.001', 'lars', 'Scope too broad');
+
+        $rejected = json_decode((string)file_get_contents($this->root . '/proposals/rejected/proposal.2026-06-08.001.json'), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($rejected);
+        self::assertSame('Scope too broad', $rejected['reason']);
+        self::assertSame($originalReason, $rejected['proposal_reason']);
+        self::assertSame('lars', $rejected['rejected_by']);
+        self::assertIsString($rejected['rejected_at']);
+        self::assertNotFalse(\DateTimeImmutable::createFromFormat(\DateTimeInterface::ATOM, $rejected['rejected_at']));
+
+        $record = json_decode(trim((string)file_get_contents($this->root . '/history/rejected-proposals.jsonl')), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($record);
+        self::assertSame('lars', $record['rejected_by']);
+        self::assertSame($rejected['rejected_at'], $record['rejected_at']);
+    }
+
     public function testTargetCollisionPreservesCandidateAndExistingTarget(): void
     {
         $candidatePath = $this->root . '/proposals/candidate/proposal.2026-06-08.001.json';

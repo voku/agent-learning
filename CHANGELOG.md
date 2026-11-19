@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Rejecting, acknowledging or retiring a Proposal no longer erases why it was proposed: the closing reason still replaces `reason`, and the original rationale moves once to `proposal_reason`. A rejection also records `rejected_by` and `rejected_at` on the Proposal and in its history record, as approval, acknowledgement and retirement already did. The committed Proposal file is now a complete audit record even where `history/` is not version-controlled.
+
 ## [0.20.0] - 2026-11-19
 
 ### Added
