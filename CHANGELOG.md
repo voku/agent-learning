@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- `proposal-mark-applied` works from a fresh clone. The committed Proposal is now the canonical record of its approval and `history/decisions.jsonl` a supplementary journal that may be absent (consumers such as voku/agent-loop keep `history/` out of version control). Before, applying required a prior `approved` line in that local journal, so an approval made on another machine could never be applied. History that exists must agree with the committed Proposal: an `approved` or `applied` line whose approver or approval time differs, or a rejection line for a Proposal that is not rejected, is refused.
+- Applying no longer manufactures an approval: the `applied` history line used to fall back to the applying actor and the current time when the Proposal had no approval metadata. It now copies `approved_by`/`approved_at` from the Proposal and refuses to apply without them. The shared test fixture recorded exactly that fallback (approval time = apply time) and is corrected.
+
 - Rejecting, acknowledging or retiring a Proposal no longer erases why it was proposed: the closing reason still replaces `reason`, and the original rationale moves once to `proposal_reason`. A rejection also records `rejected_by` and `rejected_at` on the Proposal and in its history record, as approval, acknowledgement and retirement already did. The committed Proposal file is now a complete audit record even where `history/` is not version-controlled.
 
 ## [0.20.0] - 2026-11-19
