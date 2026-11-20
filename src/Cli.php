@@ -875,8 +875,16 @@ final class Cli
             taskIdPattern: $this->stringOption($parsed['options'], 'task-id-pattern'),
         );
 
+        $output = ['id' => $result->finding->id, 'path' => $result->path];
+        $advisories = (new FindingScopeAdvisor())->advise(
+            $result->finding->scope,
+            (new LearningProjectPaths())->projectRootForLearningRoot($root),
+        );
+        if ($advisories !== []) {
+            $output['scope_advisories'] = $advisories;
+        }
         $this->write(json_encode(
-            ['id' => $result->finding->id, 'path' => $result->path],
+            $output,
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR,
         ) . "\n");
 
