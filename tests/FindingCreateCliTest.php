@@ -7,6 +7,7 @@ namespace voku\AgentLearning\Tests;
 use PHPUnit\Framework\TestCase;
 use voku\AgentLearning\EvidenceValidator;
 use voku\AgentLearning\FindingRepository;
+use voku\AgentLearning\FindingScopeAdvisor;
 use voku\AgentLearning\FindingStatus;
 use voku\AgentLearning\FindingValidator;
 use voku\AgentLearning\LearningClassification;
@@ -47,6 +48,37 @@ final class FindingCreateCliTest extends TestCase
         self::assertSame(['src/', 'tests/'], $finding->scope);
         self::assertArrayHasKey($finding->id, (new FindingRepository())->loadValidated($root));
         $this->assertNoTemporaryFindingFiles($root);
+    }
+
+    /**
+     * Regression for agent-learning#203: the H1 holdout note inherited exactly
+     * these incident files and never reached the next change to the same decision.
+     */
+    public function testFileOnlyScopeIsAdvisedButStillCreated(): void
+    {
+        $root = $this->createFreshLearningRoot();
+        $incidentFiles = ['.github/workflows/ci.yml', 'src/Init/InitStatusCommand.php', 'src/Init/InitSyncHooksCommand.php'];
+
+        [$exitCode, $output] = $this->runFindingCreate($root, $this->scopedArguments('finding.2026-08-14.43dc53', $incidentFiles));
+
+        self::assertSame(0, $exitCode, $output);
+        /** @var array{id: string, path: string, scope_advisories?: list<array{code: string, message: string}>} $result */
+        $result = json_decode($output, true, 512, JSON_THROW_ON_ERROR);
+        self::assertFileExists($result['path']);
+        self::assertSame([FindingScopeAdvisor::SCOPE_NAMES_ONLY_FILES], array_column($result['scope_advisories'] ?? [], 'code'));
+    }
+
+    public function testScopeNamingTheDecisionHomeHasNoAdvisory(): void
+    {
+        $root = $this->createFreshLearningRoot();
+
+        [$exitCode, $output] = $this->runFindingCreate($root, $this->scopedArguments(
+            'finding.2026-08-14.43dc54',
+            ['src/Init/InitStatusCommand.php', 'src/Init'],
+        ));
+
+        self::assertSame(0, $exitCode, $output);
+        self::assertSame(['id', 'path'], array_keys(json_decode($output, true, 512, JSON_THROW_ON_ERROR)));
     }
 
     public function testCapturesUnverifiedHumanReportWithoutSessionOrEvidenceJson(): void
@@ -402,6 +434,22 @@ final class FindingCreateCliTest extends TestCase
             '--sensitivity', 'public',
             '--evidence-json', $this->evidenceJson(),
         ];
+    }
+
+    /**
+     * @param list<string> $scope
+     *
+     * @return list<string>
+     */
+    private function scopedArguments(string $id, array $scope): array
+    {
+        $arguments = $this->validArguments($id);
+        foreach ($scope as $entry) {
+            $arguments[] = '--scope';
+            $arguments[] = $entry;
+        }
+
+        return $arguments;
     }
 
     private function assertNoTemporaryFindingFiles(string $root): void

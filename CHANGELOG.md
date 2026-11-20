@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `finding-create` reports a non-blocking `scope_advisories` entry (`scope_names_only_files`) when every `--scope` entry is a single file. A LearningNote inherits its Findings' scope, so a lesson scoped only to the incident's files cannot reach the next change to the same decision in a sibling file (#203). The record is still created, and existing output is unchanged when the scope names a directory, pattern or nothing. The `agent-learning-consumer` and `agent-learning-note` skills now say to scope a lesson to its decision's home.
+
 ## [0.20.1] - 2026-11-19
 
 ### Fixed
