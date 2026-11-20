@@ -876,7 +876,10 @@ final class Cli
         );
 
         $output = ['id' => $result->finding->id, 'path' => $result->path];
-        $advisories = (new FindingScopeAdvisor())->advise($result->finding->scope);
+        $advisories = (new FindingScopeAdvisor())->advise(
+            $result->finding->scope,
+            (new LearningProjectPaths())->projectRootForLearningRoot($root),
+        );
         if ($advisories !== []) {
             $output['scope_advisories'] = $advisories;
         }

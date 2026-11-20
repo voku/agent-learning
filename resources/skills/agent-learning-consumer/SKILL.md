@@ -122,7 +122,7 @@ vendor/bin/agent-learning-note publish \
   --input learning-note-candidate.json
 ```
 
-`finding-create` writes one `status=validated` record, allocates its ID when `--id` is omitted, and creates `findings/validated/` when needed. Repeat `--scope` and `--evidence-json` for multiple values. Scope decides where the lesson can be delivered later: a LearningNote inherits it, and Recall selects the note only for tasks touching that scope. When the lesson is about a decision whose home is wider than the incident's files, add that home (its directory, or the owner class file) as another `--scope`. If every entry is a single file, the output carries a non-blocking `scope_advisories` entry `scope_names_only_files`. `finding-id` remains available when an ID must be allocated before the record can be created.
+`finding-create` writes one `status=validated` record, allocates its ID when `--id` is omitted, and creates `findings/validated/` when needed. Repeat `--scope` and `--evidence-json` for multiple values. Scope decides where the lesson can be delivered later: a LearningNote inherits it, and Recall selects the note only for tasks touching that scope. When the lesson is about a decision whose home is wider than the incident's files, add that home as another `--scope`. A file scope matches only that file, so use the directory when the lesson must reach sibling files; add the owner class file as well only when tasks touching that file also need the note. If every entry is a single file, the output carries a non-blocking `scope_advisories` entry `scope_names_only_files`. `finding-id` remains available when an ID must be allocated before the record can be created.
 
 Use `--task-id-pattern` when the consuming project does not use the default ticket format.
 

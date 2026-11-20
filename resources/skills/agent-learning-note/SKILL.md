@@ -42,7 +42,7 @@ Treat the JSON result as the bounded authoring input. It owns:
 - source Finding validity and lifecycle;
 - one stable `pattern_key`;
 - the concrete validation case;
-- source scope, inherited from the source Findings (a note cannot widen it; if the lesson's decision lives outside the incident's files, record a validated Finding for the same pattern whose scope names that home, and include it as a source Finding);
+- source scope, inherited from the source Findings (a note cannot widen it; if the lesson's decision lives outside the incident's files, record a validated Finding for the same pattern whose scope names that home (the directory when sibling files must receive the note), and include it as a source Finding);
 - existing active same-pattern LearningNote;
 - deterministic overlap candidates;
 - Finding evidence and validated conclusions.
