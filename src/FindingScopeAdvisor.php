@@ -52,7 +52,7 @@ final class FindingScopeAdvisor
         if ($entry === '' || str_ends_with($entry, '/') || strpbrk($entry, '*?[') !== false) {
             return false;
         }
-        if ($projectRoot !== null && !str_starts_with($entry, '/') && !str_contains($entry, '..')) {
+        if ($projectRoot !== null && !str_starts_with($entry, '/') && !in_array('..', explode('/', str_replace('\\', '/', $entry)), true)) {
             $path = rtrim($projectRoot, '/\\') . '/' . $entry;
             if (is_dir($path)) {
                 return false;

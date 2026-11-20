@@ -25,11 +25,13 @@ final class FindingScopeAdvisorTest extends TestCase
     {
         $root = sys_get_temp_dir() . '/agent-learning-scope-advisor-' . bin2hex(random_bytes(6));
         mkdir($root . '/src/Init.v2', 0o777, true);
+        mkdir($root . '/src/Init..v3', 0o777, true);
         file_put_contents($root . '/Dockerfile', "FROM php\n");
         $advisor = new FindingScopeAdvisor();
 
         try {
             self::assertSame([], $advisor->advise(['src/Init.v2'], $root), 'an existing dotted directory is a directory');
+            self::assertSame([], $advisor->advise(['src/Init..v3'], $root), 'a double dot inside a name is not a parent segment');
             self::assertSame(
                 [FindingScopeAdvisor::SCOPE_NAMES_ONLY_FILES],
                 array_column($advisor->advise(['Dockerfile'], $root), 'code'),
@@ -39,6 +41,7 @@ final class FindingScopeAdvisorTest extends TestCase
         } finally {
             unlink($root . '/Dockerfile');
             rmdir($root . '/src/Init.v2');
+            rmdir($root . '/src/Init..v3');
             rmdir($root . '/src');
             rmdir($root);
         }
