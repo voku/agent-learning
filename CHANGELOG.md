@@ -6,7 +6,7 @@
 
 ### Changed
 
-- The default Finding task-id pattern (`FindingValidator::DEFAULT_TASK_ID_PATTERN`, now public) accepts every id a governed agent-loop task can carry, in any letter case: one letter or digit followed by letters, digits, `.`, `_` or `-`, plus `TODO@<ref>`. Before, two-segment ids such as `OBS-5E1F07`, `PROBE-POINTER` or `some-task` and single words were rejected as "missing task references". A Run learned this only at its final Learning decision, after the whole pipeline (voku/agent-loop#1123). A task id exists to keep records from parallel branches apart, so the default now rejects only what cannot be a reference: an empty id, whitespace, a leading separator or a path separator. An explicit `--task-id-pattern` still narrows it.
+- The default Finding task-id pattern (`FindingValidator::DEFAULT_TASK_ID_PATTERN`, now public) accepts every id a governed agent-loop task can carry, in any letter case: one letter or digit followed by letters, digits, `.`, `_` or `-`, plus `TODO@<ref>`. Before, two-segment ids such as `OBS-5E1F07`, `PROBE-POINTER` or `some-task` and single words were rejected as "missing task references". A Run learned this only at its final Learning decision, after the whole pipeline (voku/agent-loop#1123). A task id exists to keep records from parallel branches apart, so the default now rejects only what cannot be a reference: an empty id, whitespace, a leading separator, or a path separator in a governed task id (`TODO@<ref>` references keep their `/`). An explicit `--task-id-pattern` still narrows it.
 
 ## [0.21.0] - 2026-11-20
 
