@@ -10,6 +10,16 @@ use DateTimeInterface;
 final class FindingValidator
 {
     /**
+     * Any id a governed agent-loop task can carry, in any letter case, plus
+     * `TODO@<ref>`. A task id exists to keep records from parallel branches
+     * apart, so the default only rejects what cannot be a reference: empty,
+     * whitespace, or a leading separator. Format rules beyond that (letter case,
+     * segment counts) made agents' own task ids unable to carry a Finding, which
+     * was only discovered at the end of a Run.
+     */
+    public const string DEFAULT_TASK_ID_PATTERN = '/^(?:TODO@[\w:\/.-]+|[A-Za-z0-9][A-Za-z0-9._-]*)$/D';
+
+    /**
      * @var list<string>
      */
     private const array CONFIDENCE = ['low', 'medium', 'high'];
@@ -25,13 +35,7 @@ final class FindingValidator
         private readonly FindingParser $parser = new FindingParser(),
         private readonly EvidenceValidator $evidenceValidator = new EvidenceValidator(),
         private readonly RedactionGuard $redactionGuard = new RedactionGuard(),
-        // Accepted shapes include ticket keys (ITPNG-426), numeric governed
-        // workflow task ids (805), explicit TODO references
-        // (TODO@agent-loop/map-artifact-layout), and descriptive governed
-        // workflow task ids (roles-impact-approver-view-001). Descriptive ids
-        // need at least three hyphen-separated segments so a work slug stays
-        // distinguishable from malformed ticket keys such as "project-123".
-        private readonly string $taskIdPattern = '/^(?:[A-Z][A-Z0-9_-]*-\d+|[0-9]+|TODO@[\w:\/.-]+|[A-Za-z0-9][A-Za-z0-9._]*(?:-[A-Za-z0-9._]+){2,})$/',
+        private readonly string $taskIdPattern = self::DEFAULT_TASK_ID_PATTERN,
     ) {
     }
 
