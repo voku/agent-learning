@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-21
+
 ### Fixed
 
 - Retiring an applied constraint proposal now deactivates its active manifest (#206). `proposal-retire` removes every manifest whose `source_proposal` is the retired proposal from each directory voku/agent-recall-compiler selects manifests from: the configured `active_constraints_dir` (or `--active-constraints-dir`), `constraints/active` and `constraints`. Finding them does not require the project root to exist. The removal runs under the transition root lock together with the proposal move and history append, and is restored if the transition fails; `constraint-activate` does not take that lock, so a manifest rewritten after the ownership check aborts the retirement instead of being deleted. A newer manifest that shares the rule identity but names another proposal is kept. An unreadable manifest in those directories blocks constraint retirement, naming the file, until it is fixed or removed. Before, the manifest stayed in place and Recall kept selecting a retired, possibly deleted rule as a hard constraint. Approval, application and retirement history are unchanged. Rerunning `proposal-retire` on an already retired constraint proposal removes a manifest left behind by an earlier version or an interrupted run, without recording a second retirement.
