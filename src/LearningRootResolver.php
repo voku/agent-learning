@@ -30,6 +30,27 @@ final class LearningRootResolver
         );
     }
 
+    /**
+     * Every directory whose `*.json` files voku/agent-recall-compiler selects as active
+     * constraint manifests: the configured (or overridden) directory, `constraints/active`
+     * and `constraints`. Resolving them never requires the project root to exist, so
+     * retirement can deactivate a constraint whose project was moved or removed.
+     *
+     * @return list<string>
+     */
+    public function activeConstraintDirectories(string $root, ?string $override = null): array
+    {
+        $learningRoot = $this->resolveExplicit($root);
+        $config = $this->loadConfig($learningRoot);
+        $directories = [
+            $this->configuredPath($learningRoot, $override, $config, 'active_constraints_dir', 'constraints/active'),
+            $learningRoot . '/constraints/active',
+            $learningRoot . '/constraints',
+        ];
+
+        return array_values(array_unique($directories));
+    }
+
     private function discover(?string $startDirectory): string
     {
         $start = $startDirectory ?? getcwd();

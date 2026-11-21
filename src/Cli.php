@@ -555,6 +555,7 @@ final class Cli
             $root,
             $result->proposalsById,
             $this->stringOption($parsed['options'], 'project-root'),
+            $this->stringOption($parsed['options'], 'active-constraints-dir'),
         );
 
         $this->write(
@@ -1317,7 +1318,14 @@ final class Cli
             throw new ValidationException($root, null, null, 'proposal-retire requires --reason option');
         }
 
-        $deactivated = (new ProposalTransitionManager())->retire($root, $proposalId, $actor, $reason, $supersededBy);
+        $deactivated = (new ProposalTransitionManager())->retire(
+            $root,
+            $proposalId,
+            $actor,
+            $reason,
+            $supersededBy,
+            $this->stringOption($parsed['options'], 'active-constraints-dir'),
+        );
         $this->write(sprintf("Retired proposal: %s\n", $proposalId));
         foreach ($deactivated as $manifestPath) {
             $this->write(sprintf("Deactivated constraint manifest: %s\n", $manifestPath));

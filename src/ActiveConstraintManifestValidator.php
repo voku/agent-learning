@@ -14,8 +14,9 @@ use RuntimeException;
  * project root. Recall selects every manifest in the active directory as a hard constraint,
  * so a stale one would tell agents to run validation for a rule that no longer exists.
  *
- * The check runs in `validate` only, not inside every transition, so the repair route
- * (`proposal-retire`) stays available while a stale manifest exists.
+ * Manifests are read from every directory Recall selects them from. The check runs in
+ * `validate` only, not inside every transition, so the repair route (`proposal-retire`)
+ * stays available while a stale manifest exists.
  */
 final readonly class ActiveConstraintManifestValidator
 {
@@ -28,22 +29,30 @@ final readonly class ActiveConstraintManifestValidator
      * @return int number of active constraint manifests checked
      * @throws ValidationException
      */
-    public function validate(string $root, array $proposalsById, ?string $projectRootOverride = null): int
-    {
-        try {
-            $config = $this->rootResolver->resolveWithOverrides(new CliOverrides(root: $root, projectRoot: $projectRootOverride));
-        } catch (RuntimeException $exception) {
-            throw new ValidationException($root, null, null, 'cannot resolve project root to check active constraint manifests: ' . $exception->getMessage());
+    public function validate(
+        string $root,
+        array $proposalsById,
+        ?string $projectRootOverride = null,
+        ?string $activeConstraintsDirectory = null,
+    ): int {
+        $files = [];
+        foreach ($this->rootResolver->activeConstraintDirectories($root, $activeConstraintsDirectory) as $directory) {
+            foreach (is_dir($directory) ? (glob($directory . '/*.json') ?: []) : [] as $file) {
+                $files[] = $file;
+            }
         }
-        $directory = $config->activeConstraintsDirectory;
-        if (!is_dir($directory)) {
+        sort($files);
+        if ($files === []) {
             return 0;
         }
 
-        $files = glob($directory . '/*.json') ?: [];
-        sort($files);
+        try {
+            $projectRoot = $this->rootResolver->resolveWithOverrides(new CliOverrides(root: $root, projectRoot: $projectRootOverride))->projectRoot;
+        } catch (RuntimeException $exception) {
+            throw new ValidationException($root, null, null, 'cannot resolve project root to check active constraint manifests: ' . $exception->getMessage());
+        }
         foreach ($files as $manifestPath) {
-            $this->validateManifest($manifestPath, $proposalsById, rtrim($config->projectRoot, '/\\'));
+            $this->validateManifest($manifestPath, $proposalsById, rtrim($projectRoot, '/\\'));
         }
 
         return count($files);
@@ -105,7 +114,8 @@ final readonly class ActiveConstraintManifestValidator
                         null,
                         $sourceProposal,
                         'active constraint ' . $label . ' does not exist under project root ' . $projectRoot . ': ' . $relativePath
-                        . '; restore it, or retire the constraint with proposal-retire ' . $sourceProposal . ' --by ACTOR --reason TEXT',
+                        . '; restore it, or retire the constraint with proposal-retire ' . $sourceProposal . ' --by ACTOR --reason TEXT'
+                        . ' (if that is not the project directory, pass --project-root or set project_root in config.json)',
                     );
                 }
             }

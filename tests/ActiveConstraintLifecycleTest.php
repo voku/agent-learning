@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace voku\AgentLearning\Tests;
 
 use PHPUnit\Framework\TestCase;
+use voku\AgentLearning\ProposalTransitionManager;
 
 /**
  * Regression coverage for voku/agent-learning#206 and #207 through the installed CLI:
@@ -145,6 +146,54 @@ final class ActiveConstraintLifecycleTest extends TestCase
         [$code, $output] = $this->cli($this->project, ['proposal-retire', 'proposal.2026-06-09.001', '--root', '.agent-loop/learning', '--by', 'maintainer', '--reason', 'Removed.']);
         self::assertSame(0, $code, $output);
         self::assertFileDoesNotExist($manifest);
+    }
+
+    public function testRetirementCoversEveryDirectoryRecallSelectsFromAndIgnoresAMissingProjectRoot(): void
+    {
+        file_put_contents($this->root . '/config.json', json_encode(['active_constraints_dir' => 'custom-active'], JSON_THROW_ON_ERROR));
+        $this->addAppliedConstraint('proposal.2026-06-09.001', 'project.removed.rule', 'RemovedRule');
+        $configured = $this->root . '/custom-active/constraint.project.removed.rule.json';
+        self::assertFileExists($configured);
+        // Copies left in the other locations Recall reads, e.g. activated before config.json changed.
+        $legacyActive = $this->root . '/constraints/active/constraint.project.removed.rule.json';
+        $legacyFlat = $this->root . '/constraints/constraint.project.removed.rule.json';
+        copy($configured, $legacyActive);
+        copy($configured, $legacyFlat);
+
+        [$code, $output] = $this->cli($this->project, ['validate', '--root', '.agent-loop/learning']);
+        self::assertSame(0, $code, $output);
+        self::assertStringContainsString('Active constraints: 3', $output);
+
+        // The project root configured for this learning root no longer exists (project moved).
+        file_put_contents($this->root . '/config.json', json_encode(['active_constraints_dir' => 'custom-active', 'project_root' => '../../moved-away'], JSON_THROW_ON_ERROR));
+        [$code, $output] = $this->cli($this->project, ['validate', '--root', '.agent-loop/learning']);
+        self::assertNotSame(0, $code);
+        self::assertStringContainsString('configured directory does not exist for project_root: ../../moved-away', $output);
+        self::assertStringNotContainsString('does not exist under project root', $output);
+
+        // Locating the manifests to deactivate never needs the project root.
+        $deactivated = (new ProposalTransitionManager())->retire($this->root, 'proposal.2026-06-09.001', 'maintainer', 'Project moved; rule retired.');
+        sort($deactivated);
+        $expected = [$configured, $legacyActive, $legacyFlat];
+        sort($expected);
+        self::assertSame($expected, $deactivated);
+        foreach ($expected as $manifest) {
+            self::assertFileDoesNotExist($manifest);
+        }
+    }
+
+    public function testAnUnreadableManifestBlocksRetirementAndIsNamed(): void
+    {
+        $this->addAppliedConstraint('proposal.2026-06-09.001', 'project.removed.rule', 'RemovedRule');
+        $broken = $this->root . '/constraints/active/constraint.broken.json';
+        file_put_contents($broken, '{not json');
+
+        [$code, $output] = $this->cli($this->project, ['proposal-retire', 'proposal.2026-06-09.001', '--root', '.agent-loop/learning', '--by', 'maintainer', '--reason', 'Removed.']);
+        self::assertNotSame(0, $code);
+        self::assertStringContainsString($broken, $output);
+        self::assertStringContainsString('blocks constraint retirement until the file is fixed or removed', $output);
+        self::assertFileExists($this->root . '/proposals/applied/proposal.2026-06-09.001.json');
+        self::assertFileExists($this->root . '/constraints/active/constraint.project.removed.rule.json');
     }
 
     public function testValidateRejectsAManifestWhoseSourceProposalIsUnknown(): void

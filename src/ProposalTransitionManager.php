@@ -281,6 +281,7 @@ final class ProposalTransitionManager
         string $actor,
         string $reason,
         ?string $supersededByProposalId = null,
+        ?string $activeConstraintsDirectory = null,
     ): array {
         if (trim($actor) === '') {
             throw new ValidationException('', null, $proposalId, 'actor name must be explicit');
@@ -297,8 +298,8 @@ final class ProposalTransitionManager
             // its manifest (or by an interrupted run) may still be selected as active guidance.
             // The retirement is already recorded; only the stale manifest is removed.
             $manifests = [];
-            $this->withRootLock($root, function () use ($root, $proposal, $proposalPath, &$manifests): void {
-                $manifests = $this->activeManifestsOwnedBy($root, $proposal->id);
+            $this->withRootLock($root, function () use ($root, $proposal, $proposalPath, $activeConstraintsDirectory, &$manifests): void {
+                $manifests = $this->activeManifestsOwnedBy($root, $proposal->id, $activeConstraintsDirectory);
                 if ($manifests === []) {
                     throw new ValidationException($proposalPath, null, $proposal->id, 'proposal is already retired and no active constraint manifest names it');
                 }
@@ -365,12 +366,13 @@ final class ProposalTransitionManager
             $updatedContent,
             $retiredPath,
             $retirementLine,
+            $activeConstraintsDirectory,
             &$deactivated,
         ): void {
             // Only manifests that name this proposal as their source are deactivated, so retiring
             // an older proposal never removes a newer active constraint sharing the rule identity.
             $deactivated = $proposal->targetType === GuidanceType::CONSTRAINT->value
-                ? $this->activeManifestsOwnedBy($root, $proposalId)
+                ? $this->activeManifestsOwnedBy($root, $proposalId, $activeConstraintsDirectory)
                 : [];
             $this->persistTransitionLocked($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $retiredPath, $retirementLine, 'retirement', $deactivated);
         });
@@ -379,32 +381,34 @@ final class ProposalTransitionManager
     }
 
     /**
-     * Active constraint manifests whose `source_proposal` is the given proposal.
+     * Active constraint manifests whose `source_proposal` is the given proposal, in every
+     * directory Recall selects manifests from.
      *
      * @return list<string>
      * @throws ValidationException when a manifest cannot be read, so ownership is never guessed
      */
-    private function activeManifestsOwnedBy(string $root, string $proposalId): array
+    private function activeManifestsOwnedBy(string $root, string $proposalId, ?string $activeConstraintsDirectory = null): array
     {
-        $directory = (new LearningProjectPaths())->activeConstraintsDirectory($root);
-        if (!is_dir($directory)) {
-            return [];
-        }
         $owned = [];
-        $files = glob($directory . '/*.json') ?: [];
-        sort($files);
-        foreach ($files as $manifestPath) {
-            $content = file_get_contents($manifestPath);
-            try {
-                $manifest = is_string($content) ? json_decode($content, true, 512, JSON_THROW_ON_ERROR) : null;
-            } catch (\JsonException) {
-                $manifest = null;
+        foreach ((new LearningRootResolver())->activeConstraintDirectories($root, $activeConstraintsDirectory) as $directory) {
+            if (!is_dir($directory)) {
+                continue;
             }
-            if (!is_array($manifest)) {
-                throw new ValidationException($manifestPath, null, $proposalId, 'cannot read active constraint manifest to determine its source proposal');
-            }
-            if (($manifest['source_proposal'] ?? null) === $proposalId) {
-                $owned[] = $manifestPath;
+            $files = glob($directory . '/*.json') ?: [];
+            sort($files);
+            foreach ($files as $manifestPath) {
+                $content = file_get_contents($manifestPath);
+                try {
+                    $manifest = is_string($content) ? json_decode($content, true, 512, JSON_THROW_ON_ERROR) : null;
+                } catch (\JsonException) {
+                    $manifest = null;
+                }
+                if (!is_array($manifest)) {
+                    throw new ValidationException($manifestPath, null, $proposalId, 'cannot read active constraint manifest to determine its source proposal; this blocks constraint retirement until the file is fixed or removed');
+                }
+                if (($manifest['source_proposal'] ?? null) === $proposalId) {
+                    $owned[] = $manifestPath;
+                }
             }
         }
 
@@ -1412,6 +1416,11 @@ final class ProposalTransitionManager
                 }
             }
             foreach ($removeFiles as $removeFile) {
+                // constraint-activate does not take the root lock; never delete a manifest that
+                // was rewritten (for example by a newer proposal) after ownership was checked.
+                if (file_get_contents($removeFile) !== $originalRemovedContent[$removeFile]) {
+                    throw new ValidationException($removeFile, null, $proposalId, 'file changed during proposal ' . $transition . '; rerun the transition');
+                }
                 if (!unlink($removeFile)) {
                     throw new ValidationException($removeFile, null, $proposalId, 'failed to remove file during proposal ' . $transition);
                 }
