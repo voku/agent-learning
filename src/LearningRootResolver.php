@@ -104,7 +104,21 @@ final class LearningRootResolver
     /** @param array<string, mixed> $config */
     private function projectRoot(string $root, ?string $override, array $config): string
     {
-        $configured = $override ?? $this->configuredString($root, $config, 'project_root');
+        if ($override !== null && trim($override) !== '') {
+            // An explicit override (CLI --project-root or PHP API argument) follows the usual
+            // path convention: a relative path is resolved against the current working directory,
+            // never silently against the learning root.
+            $cwd = getcwd();
+            if ($cwd === false) {
+                throw new ValidationException($override, null, null, 'cannot determine current working directory to resolve --project-root');
+            }
+            $realPath = realpath($this->resolvePath(rtrim(str_replace('\\', '/', $cwd), '/'), $override));
+            if ($realPath === false || !is_dir($realPath)) {
+                throw new ValidationException($override, null, null, '--project-root directory does not exist (relative paths resolve against the current working directory ' . $cwd . '): ' . $override);
+            }
+            return rtrim(str_replace('\\', '/', $realPath), '/');
+        }
+        $configured = $this->configuredString($root, $config, 'project_root');
         if ($configured !== null) {
             $resolved = $this->resolvePath($root, $configured);
             $realPath = realpath($resolved);

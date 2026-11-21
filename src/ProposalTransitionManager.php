@@ -272,6 +272,7 @@ final class ProposalTransitionManager
      * @param string $proposalId
      * @param string $actor
      * @param string $reason
+     * @return list<string> active constraint manifests deactivated because they named this proposal as their source
      * @throws ValidationException
      */
     public function retire(
@@ -280,7 +281,7 @@ final class ProposalTransitionManager
         string $actor,
         string $reason,
         ?string $supersededByProposalId = null,
-    ): void {
+    ): array {
         if (trim($actor) === '') {
             throw new ValidationException('', null, $proposalId, 'actor name must be explicit');
         }
@@ -290,6 +291,26 @@ final class ProposalTransitionManager
 
         $proposalPath = $this->resolveProposalPath($proposalId, $root);
         $proposal = (new ProposalParser())->parseFile($proposalPath);
+
+        if ($proposal->status === ProposalStatus::RETIRED) {
+            // Retry/repair route: a constraint proposal retired before retirement deactivated
+            // its manifest (or by an interrupted run) may still be selected as active guidance.
+            // The retirement is already recorded; only the stale manifest is removed.
+            $manifests = [];
+            $this->withRootLock($root, function () use ($root, $proposal, $proposalPath, &$manifests): void {
+                $manifests = $this->activeManifestsOwnedBy($root, $proposal->id);
+                if ($manifests === []) {
+                    throw new ValidationException($proposalPath, null, $proposal->id, 'proposal is already retired and no active constraint manifest names it');
+                }
+                foreach ($manifests as $manifestPath) {
+                    if (!unlink($manifestPath)) {
+                        throw new ValidationException($manifestPath, null, $proposal->id, 'failed to remove stale active constraint manifest');
+                    }
+                }
+            });
+
+            return $manifests;
+        }
 
         if ($proposal->status !== ProposalStatus::APPLIED) {
             if ($proposal->status !== ProposalStatus::APPROVED) {
@@ -334,7 +355,60 @@ final class ProposalTransitionManager
             'superseded_by' => $data['superseded_by'] ?? null,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
 
-        $this->persistTransition($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $retiredPath, $retirementLine, 'retirement');
+        $deactivated = [];
+        $this->withRootLock($root, function () use (
+            $root,
+            $proposal,
+            $proposalId,
+            $proposalPath,
+            $targetPath,
+            $updatedContent,
+            $retiredPath,
+            $retirementLine,
+            &$deactivated,
+        ): void {
+            // Only manifests that name this proposal as their source are deactivated, so retiring
+            // an older proposal never removes a newer active constraint sharing the rule identity.
+            $deactivated = $proposal->targetType === GuidanceType::CONSTRAINT->value
+                ? $this->activeManifestsOwnedBy($root, $proposalId)
+                : [];
+            $this->persistTransitionLocked($root, $proposalId, $proposalPath, $targetPath, $updatedContent, $retiredPath, $retirementLine, 'retirement', $deactivated);
+        });
+
+        return $deactivated;
+    }
+
+    /**
+     * Active constraint manifests whose `source_proposal` is the given proposal.
+     *
+     * @return list<string>
+     * @throws ValidationException when a manifest cannot be read, so ownership is never guessed
+     */
+    private function activeManifestsOwnedBy(string $root, string $proposalId): array
+    {
+        $directory = (new LearningProjectPaths())->activeConstraintsDirectory($root);
+        if (!is_dir($directory)) {
+            return [];
+        }
+        $owned = [];
+        $files = glob($directory . '/*.json') ?: [];
+        sort($files);
+        foreach ($files as $manifestPath) {
+            $content = file_get_contents($manifestPath);
+            try {
+                $manifest = is_string($content) ? json_decode($content, true, 512, JSON_THROW_ON_ERROR) : null;
+            } catch (\JsonException) {
+                $manifest = null;
+            }
+            if (!is_array($manifest)) {
+                throw new ValidationException($manifestPath, null, $proposalId, 'cannot read active constraint manifest to determine its source proposal');
+            }
+            if (($manifest['source_proposal'] ?? null) === $proposalId) {
+                $owned[] = $manifestPath;
+            }
+        }
+
+        return $owned;
     }
 
     /**
@@ -1279,6 +1353,7 @@ final class ProposalTransitionManager
 
     /**
      * @param (Closure(): string)|null $historyLine
+     * @param list<string> $removeFiles files deleted inside the transition and restored on rollback
      * @throws ValidationException
      */
     private function persistTransitionLocked(
@@ -1290,8 +1365,17 @@ final class ProposalTransitionManager
         ?string $historyPath,
         ?Closure $historyLine,
         string $transition,
+        array $removeFiles = [],
     ): void {
         $originalProposalContent = file_get_contents($proposalPath);
+        $originalRemovedContent = [];
+        foreach ($removeFiles as $removeFile) {
+            $content = file_get_contents($removeFile);
+            if ($content === false) {
+                throw new ValidationException($removeFile, null, $proposalId, 'cannot read file to remove during proposal ' . $transition);
+            }
+            $originalRemovedContent[$removeFile] = $content;
+        }
         if ($originalProposalContent === false) {
             throw new ValidationException($proposalPath, null, $proposalId, 'cannot read proposal file');
         }
@@ -1327,9 +1411,19 @@ final class ProposalTransitionManager
                     throw new ValidationException($historyPath, null, $proposalId, 'failed to append proposal history');
                 }
             }
+            foreach ($removeFiles as $removeFile) {
+                if (!unlink($removeFile)) {
+                    throw new ValidationException($removeFile, null, $proposalId, 'failed to remove file during proposal ' . $transition);
+                }
+            }
 
             $this->validateRepository($root);
         } catch (\Throwable $e) {
+            foreach ($originalRemovedContent as $removeFile => $content) {
+                if (!is_file($removeFile)) {
+                    file_put_contents($removeFile, $content);
+                }
+            }
             if ($moved && is_file($targetPath)) {
                 rename($targetPath, $proposalPath);
             }

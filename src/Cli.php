@@ -551,6 +551,11 @@ final class Cli
 
         $result = (new LearningRepositoryValidator($this->findingLifecycle))->validate($root, $taskIdPattern);
         (new GuidanceValidationEntryPointValidator())->validate($root, $result->proposalsById);
+        $activeConstraints = (new ActiveConstraintManifestValidator())->validate(
+            $root,
+            $result->proposalsById,
+            $this->stringOption($parsed['options'], 'project-root'),
+        );
 
         $this->write(
             'Validated agent learning root: ' . $result->root . "\n"
@@ -558,6 +563,7 @@ final class Cli
             . 'Proposals: ' . count($result->proposalsById) . "\n"
             . 'Recall selections: ' . count($result->recallSelectionEvents) . "\n"
             . 'Guidance outcomes: ' . count($result->guidanceOutcomeEvents) . "\n"
+            . 'Active constraints: ' . $activeConstraints . "\n"
         );
 
         return 0;
@@ -1311,8 +1317,11 @@ final class Cli
             throw new ValidationException($root, null, null, 'proposal-retire requires --reason option');
         }
 
-        (new ProposalTransitionManager())->retire($root, $proposalId, $actor, $reason, $supersededBy);
+        $deactivated = (new ProposalTransitionManager())->retire($root, $proposalId, $actor, $reason, $supersededBy);
         $this->write(sprintf("Retired proposal: %s\n", $proposalId));
+        foreach ($deactivated as $manifestPath) {
+            $this->write(sprintf("Deactivated constraint manifest: %s\n", $manifestPath));
+        }
 
         return 0;
     }
@@ -1439,7 +1448,7 @@ final class Cli
             . "  proposal-reject      Reject a candidate proposal.\n"
             . "  proposal-acknowledge Formally close a candidate NO_DURABLE_LEARNING proposal without approving or rejecting it.\n"
             . "  proposal-mark-applied Mark an approved proposal as applied externally.\n"
-            . "  proposal-retire      Retire an applied proposal once its target fully captures the change.\n"
+            . "  proposal-retire      Retire an applied proposal once its target fully captures the change; also deactivates the constraint manifest it sourced (rerun on a retired proposal to remove a stale one).\n"
             . "  proposal-reanchor    Re-pin every applied memory/skill proof on target file(s) after legitimate changes (--auto for automated verification of unchanged guidance).\n"
             . "  corpus-analyze       Analyze workflow evolution, proposal lifecycle outcomes, and consolidation metrics.\n\n"
             . "Options:\n"

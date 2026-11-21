@@ -322,6 +322,8 @@ When a constraint proposal is marked `applied`, its validation JSON must include
 ### Active Constraint Manifests
 After a generated constraint is approved and implemented, run `constraint-activate` to create `constraints/active/constraint.<rule_id>.json`. The command validates the proposal, checks the target rule file and registration files exist relative to the project root, and writes the exact engine, rule identifier, scope, validation commands, and source proposal that `voku/agent-recall-compiler` selects later.
 
+`validate` checks every active manifest against its source proposal: it fails when the proposal is unknown, retired or no longer approved/applied, when the rule identifier disagrees, or when the declared target rule file or a registration file is missing under the project root. To take a constraint out of service, `proposal-retire` its applied proposal: retirement removes the active manifest(s) whose `source_proposal` is that proposal, in the same locked transition (restored if the transition rolls back), and leaves a newer manifest for the same rule identity alone. Running `proposal-retire` again on an already retired constraint proposal removes a stale manifest left by an earlier version without recording a second retirement.
+
 Learning roots may define `config.json` to avoid hard-coding one repository layout:
 
 ```json
@@ -333,7 +335,7 @@ Learning roots may define `config.json` to avoid hard-coding one repository layo
 }
 ```
 
-Relative paths are resolved from the learning root. CLI options `--project-root`, `--constraint-generation-dir`, and `--active-constraints-dir` override `config.json` for one run. Without configuration, the package keeps the legacy project-root inference for `infra/doc/agent-learning`, `.agent-learning`, `docs/agent-learning`, and `agent-learning`.
+Relative paths in `config.json` are resolved from the learning root. CLI options `--project-root`, `--constraint-generation-dir`, and `--active-constraints-dir` override `config.json` for one run. A relative `--project-root` (like a relative `--root`) is resolved from the current working directory, so `--project-root .` from the project directory names that directory; a missing directory is reported as such. `--constraint-generation-dir` and `--active-constraints-dir` remain relative to the learning root. Without configuration, the package keeps the legacy project-root inference for `infra/doc/agent-learning`, `.agent-learning`, `docs/agent-learning`, and `agent-learning`.
 
 ### Redaction Constraints
 All keys and values are checked using [RedactionGuard](src/RedactionGuard.php) against secret assignment patterns. Any matches of standard credential assignments (e.g. `password`, `token`, `api_key`, `ms-Mcs-AdmPwd` patterns) throw a validation exception.

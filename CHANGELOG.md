@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Retiring an applied constraint proposal now deactivates its active manifest (#206). `proposal-retire` removes every manifest in the active constraints directory whose `source_proposal` is the retired proposal, inside the same locked transition; the manifest is restored if the transition rolls back. A newer manifest that shares the rule identity but names another proposal is kept. Before, the manifest stayed in place and Recall kept selecting a retired, possibly deleted rule as a hard constraint. Approval, application and retirement history are unchanged. Rerunning `proposal-retire` on an already retired constraint proposal removes a manifest left behind by an earlier version, without recording a second retirement.
+- `validate` fails closed for an active constraint manifest that no longer describes enforceable guidance (#207): an unknown, retired, rejected or candidate source proposal, a `rule_identifier` that differs from the proposal's `rule_id`, or a declared target rule or registration file missing under the project root. The message names the manifest and the missing path and points to `proposal-retire`. `validate` now accepts `--project-root` and reports the number of active constraints. The check runs in `validate` only, so transitions, including the repairing retirement, are not blocked by an unrelated stale manifest.
+- A relative `--project-root` resolves against the current working directory, as a relative `--root` does (#208). It was resolved against the learning root, so `constraint-activate --project-root .` reported an existing rule file as missing. A missing directory now names the base it used. Relative `project_root` values in `config.json` are still resolved from the learning root. A PHP caller that passed a project root relative to the learning root must pass it relative to the working directory, or absolute.
+
 ## [0.22.0] - 2026-11-21
 
 ### Changed
