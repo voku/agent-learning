@@ -86,13 +86,22 @@ final class LearningRootResolverTest extends TestCase
         self::assertSame($root . '/configured-generation', $fromConfig->constraintGenerationDirectory);
         self::assertSame($root . '/configured-active', $fromConfig->activeConstraintsDirectory);
 
-        $fromCli = (new LearningRootResolver())->resolveWithOverrides(new CliOverrides(
-            root: $root,
-            projectRoot: '../../../cli-project',
-            constraintGenerationDirectory: 'cli-generation',
-            activeConstraintsDirectory: 'cli-active',
-        ));
-        self::assertSame($project . '/cli-project', $fromCli->projectRoot);
+        // An explicit project-root override resolves against the current working directory
+        // (voku/agent-learning#208); only config.json values are relative to the learning root.
+        $previousCwd = getcwd();
+        self::assertIsString($previousCwd);
+        chdir($project);
+        try {
+            $fromCli = (new LearningRootResolver())->resolveWithOverrides(new CliOverrides(
+                root: $root,
+                projectRoot: 'cli-project',
+                constraintGenerationDirectory: 'cli-generation',
+                activeConstraintsDirectory: 'cli-active',
+            ));
+        } finally {
+            chdir($previousCwd);
+        }
+        self::assertSame(realpath($project . '/cli-project'), $fromCli->projectRoot);
         self::assertSame($root . '/cli-generation', $fromCli->constraintGenerationDirectory);
         self::assertSame($root . '/cli-active', $fromCli->activeConstraintsDirectory);
     }

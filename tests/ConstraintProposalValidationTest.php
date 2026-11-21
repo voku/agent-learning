@@ -580,6 +580,64 @@ final class ConstraintProposalValidationTest extends TestCase
         }
     }
 
+    public function testActivatesWithRelativeRootAndProjectRootFromTheProjectDirectory(): void
+    {
+        // Regression for voku/agent-learning#208: `--project-root .` was resolved against the
+        // learning root instead of the current working directory, so an existing rule file was
+        // reported as missing while the equivalent absolute path activated.
+        $project = sys_get_temp_dir() . '/constraint activate relative ' . bin2hex(random_bytes(8));
+        $root = $project . '/.agent-loop/learning';
+        mkdir($root . '/proposals/approved', 0777, true);
+        mkdir($root . '/findings/validated', 0777, true);
+        mkdir($project . '/infra/githooks/StandardProject/PHPStan', 0777, true);
+        file_put_contents($project . '/infra/githooks/StandardProject/PHPStan/ProjectTranslationParametersRule.php', "<?php\n");
+        file_put_contents($project . '/infra/githooks/phpstan_bootstrap.php', "<?php\n");
+        foreach (['finding.2026-06-13.001', 'finding.2026-06-13.002'] as $findingId) {
+            file_put_contents($root . '/findings/validated/' . $findingId . '.json', json_encode($this->findingRecord($findingId), JSON_THROW_ON_ERROR));
+        }
+        file_put_contents($root . '/proposals/approved/proposal.2026-06-13.001.json', json_encode($this->approvedProposalRecord(), JSON_THROW_ON_ERROR));
+        $manifestPath = $root . '/constraints/active/constraint.project.translation.parameters.json';
+
+        try {
+            [$exitCode, $stderr] = $this->runCliIn($project, ['constraint-activate', '--root', '.agent-loop/learning', '--project-root', '.', '--proposal', 'proposal.2026-06-13.001']);
+            self::assertSame(0, $exitCode, $stderr);
+            self::assertFileExists($manifestPath);
+            $relativeManifest = (string) file_get_contents($manifestPath);
+
+            [$exitCode, $stderr] = $this->runCliIn($project, ['constraint-activate', '--root', $root, '--project-root', $project, '--proposal', 'proposal.2026-06-13.001', '--overwrite']);
+            self::assertSame(0, $exitCode, $stderr);
+            self::assertSame($relativeManifest, (string) file_get_contents($manifestPath), 'Relative and absolute paths must produce the same manifest.');
+
+            // From a different working directory, the same relative path must not silently
+            // resolve against the learning root; it fails with the base it actually used.
+            [$exitCode, $stderr] = $this->runCliIn($root, ['constraint-activate', '--root', '.', '--project-root', 'no-such-project', '--proposal', 'proposal.2026-06-13.001', '--overwrite']);
+            self::assertNotSame(0, $exitCode);
+            self::assertStringContainsString('--project-root directory does not exist', $stderr);
+            self::assertStringContainsString('current working directory', $stderr);
+        } finally {
+            $this->removeDirectory($project);
+        }
+    }
+
+    /**
+     * Runs the installed CLI entry point as a real process from $cwd, so relative paths are
+     * resolved exactly as an operator's shell would resolve them.
+     *
+     * @param list<string> $arguments
+     * @return array{int, string}
+     */
+    private function runCliIn(string $cwd, array $arguments): array
+    {
+        $command = implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, dirname(__DIR__) . '/bin/agent-learning', ...$arguments]));
+        $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $cwd);
+        self::assertIsResource($process);
+        $output = (string) stream_get_contents($pipes[1]) . (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($process), $output];
+    }
+
     public function testRejectsConstraintManifestActivationBeforeApproval(): void
     {
         $project = sys_get_temp_dir() . '/constraint_manifest_candidate_' . bin2hex(random_bytes(8));
