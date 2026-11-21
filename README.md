@@ -276,7 +276,7 @@ The package codebase is organized under the `voku\AgentLearning` namespace in th
 ### Finding Validation
 1. **Finding ID**: Must match `finding.YYYY-MM-DD.NNN`.
 2. **Created At**: Must be a valid ISO 8601/Atom timestamp string.
-3. **Task ID**: Must match the configured task ID pattern (passed via `$taskIdPattern` to the [FindingValidator](src/FindingValidator.php) constructor; defaults to `'/^(?:[A-Z][A-Z0-9_-]*-\d+|TODO@[\w:\/.-]+)$/'`).
+3. **Task ID**: Must match the configured task ID pattern (passed via `$taskIdPattern` to the [FindingValidator](src/FindingValidator.php) constructor; defaults to `FindingValidator::DEFAULT_TASK_ID_PATTERN`: any id that starts with a letter or digit and continues with letters, digits, `.`, `_` or `-`, in any letter case, plus `TODO@<ref>`).
 4. **Observation/Hypothesis Separation**: Both must be non-empty strings and cannot be identical.
 5. **Confidence**: Must be one of `low`, `medium`, or `high`.
 6. **Validation Status**: Must be one of `unverified`, `validated`, or `invalidated`.

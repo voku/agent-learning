@@ -45,7 +45,7 @@ final class FindingValidatorTest extends TestCase
     public function testDefaultTaskIdPatternThrowsOnInvalidPrefix(): void
     {
         $validator = new FindingValidator();
-        $finding = $this->createFinding('project-123');
+        $finding = $this->createFinding('-project-123');
 
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('missing task references');
@@ -75,11 +75,19 @@ final class FindingValidatorTest extends TestCase
         yield 'shortest real id' => ['roles-v2-foundation'];
         yield 'mixed case prefix' => ['LOCAL-m365-external-mail-suffix-employee-flag'];
         yield 'dotted segment' => ['init.instructions-symlink-safety-001'];
+        // Ids agents give their own governed tasks, in any letter case (#1123).
+        yield 'two uppercase segments with mixed suffix' => ['OBS-5E1F07'];
+        yield 'two uppercase word segments' => ['PROBE-POINTER'];
+        yield 'two lowercase segments' => ['some-task'];
+        yield 'lowercase ticket-style key' => ['project-123'];
+        yield 'single word' => ['refactor'];
+        yield 'numeric prefix with suffix' => ['805-task'];
+        yield 'underscore' => ['task_1'];
     }
 
     /**
-     * Two segments stay reserved for ticket keys, so a malformed one is still a
-     * missing task reference rather than an accidental workflow id.
+     * A task id keeps records of parallel branches apart, so only what cannot be
+     * a reference at all is a missing task reference.
      */
     #[DataProvider('stillInvalidTaskIds')]
     public function testDefaultTaskIdPatternStillRejectsNonReferences(string $taskId): void
@@ -95,12 +103,11 @@ final class FindingValidatorTest extends TestCase
     /** @return iterable<string, array{string}> */
     public static function stillInvalidTaskIds(): iterable
     {
-        yield 'lowercase ticket key' => ['project-123'];
-        yield 'single word' => ['refactor'];
-        yield 'two segments only' => ['some-task'];
-        yield 'numeric prefix with suffix' => ['805-task'];
         yield 'leading hyphen' => ['-roles-impact-001'];
+        yield 'leading dot' => ['.hidden-task'];
         yield 'whitespace' => ['roles impact 001'];
+        yield 'trailing newline' => ["roles-impact-001\n"];
+        yield 'path separator' => ['roles/impact-001'];
     }
 
     public function testCustomTaskIdPatternMatchesConfiguredValue(): void
